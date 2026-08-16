@@ -1,5 +1,25 @@
 # Daijin build state (authoritative)
 
+## 2026-08-16 17:40 - D-0031 audited: invariant 1 true, unguarded, and a race
+
+The verifier audited the one invariant D-0031 claims already holds, and
+named WHY it holds: two incidental mechanisms, neither a rule (the
+generate path constructs units rather than collecting files, so there
+is nothing to exclude; the adopt filter's prefix cannot reach
+.daijin/agents because contract and brain are currently SIBLINGS). The
+mandated refusal test has not landed, so the invariant is true and
+unguarded, exactly the state the ADR calls the problem, and invariant
+3's canonical-artifacts work is what ends the incidental safety by
+putting contract and brain under one root. RULED into init-miner's
+in-flight round: the guard is a property of the INGEST BOUNDARY (no
+unit's source path under agents/ or equal to manifest.json, driven by a
+plant), not of the adopt filter; and the delete-and-regenerate test
+asserts the PERMUTED CONTROL scores identically too, since a subtle
+retrieval change could hold a saturated 1.0 while moving what the gauge
+discriminates. The corpus-expansion deferral is now a standing
+tripwire in the verifier's words: any widening invalidates every
+measured number in the build until re-measured, however good the idea.
+
 ## 2026-08-16 17:37 addendum - The principle sharpened, with its honest bound
 
 The verifier sharpened unrepresentability's mechanism: a refusal HAS TO

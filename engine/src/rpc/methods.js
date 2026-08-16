@@ -227,6 +227,11 @@ export function ungradedExplanation(attempt) {
  *
  * What each field is for, since a wire shape should be able to justify itself:
  *  - `id`, `at`, `status`, `verdict`: what the attempt IS, and what a list renders.
+ *  - `mode`: whether this attempt is part of the SCORED record or a harness-debug run.
+ *    Removed in the D-0035 batch with a comeback path written into the reason, and the
+ *    path fired the same day: an evaluation attempt and a debug attempt are different
+ *    claims about the record, and a chart that renders them identically invites reading a
+ *    debug run as a scored one.
  *  - `tokens` and `tokenCap`: what it cost against what it was allowed. The cap travels
  *    with the count for the same reason `max` travels with an axis score: 41,200 means
  *    nothing without the 450,000 beside it.
@@ -236,16 +241,18 @@ export function ungradedExplanation(attempt) {
  *    top level already speaks of axes and a reader should not have to learn that two names
  *    mean one thing at two levels.
  *
- * Deliberately NOT on the wire: `cycle_id` (a client cannot ask for a cycle), `mode` (a
- * scored-versus-debug distinction the ledger enforces and no screen renders),
+ * Deliberately NOT on the wire: `cycle_id` (a client cannot ask for a cycle),
  * `result_file` (a path into a directory the client does not read), `sealed_state` and
  * `extensions_granted` (harness internals). Any of them can be added when something needs
- * them, which is cheaper than removing a field a client started using.
+ * them, which is cheaper than removing a field a client started using, and `mode` above is
+ * that principle collecting: it came off for want of a reader and came back the day one
+ * appeared.
  */
 export function attemptForWire(attempt, { axes, ungradedCode, ungradedReason }) {
   return {
     id: attempt.id,
     at: attempt.at,
+    mode: attempt.mode,
     status: attempt.status,
     verdict: attempt.verdict ?? null,
     tokens: attempt.work_tokens ?? null,

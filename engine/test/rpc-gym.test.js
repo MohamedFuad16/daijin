@@ -573,7 +573,10 @@ test('an attempt on the wire carries the contract\'s names, not the ledger\'s co
     // and the one that keeps a schema the daemon does not own off a frozen surface.
     const leaked = Object.keys(attempt).filter((key) => key.includes('_'));
     assert.deepEqual(leaked, [], `ledger column names reached the wire: ${leaked.join(', ')}`);
-    for (const internal of ['cycle_id', 'exam_id', 'mode', 'result_file', 'sealed_state', 'extensions_granted', 'rubric']) {
+    // `mode` is DELIBERATELY not in this list any more: it is on the wire so a client can
+    // tell a scored attempt from a harness-debug one.
+    assert.equal(attempt.mode, 'evaluation');
+    for (const internal of ['cycle_id', 'exam_id', 'result_file', 'sealed_state', 'extensions_granted', 'rubric']) {
       assert.equal(Object.hasOwn(attempt, internal), false, `${internal} is a storage detail, not a wire field`);
     }
 
@@ -595,6 +598,39 @@ test('an attempt on the wire carries the contract\'s names, not the ledger\'s co
     assert.ok(documented, 'the contract must document this shape; an unparseable row is a failure, not a skip');
     assert.deepEqual(Object.keys(attempt).sort(), documented,
       'the wire row and the documented row must be the same key set, in both directions');
+  } finally {
+    await kit.cleanup();
+  }
+});
+
+test('an attempt says which MODE it belongs to, so a debug run cannot read as a scored one', async () => {
+  // tui-builder's need, and the reason is theirs: an evaluation attempt and a harness-debug
+  // attempt are different claims about the record, and a chart that renders them
+  // identically invites reading a debug run as a scored one. The field came off the wire in
+  // the D-0035 batch for want of a reader and came back the day one appeared, which is the
+  // removal rule working rather than being overturned.
+  const kit = await harness({ exams: [exam()] });
+  try {
+    await kit.attach();
+    const ledger = GymLedger.open(gymDatabasePath(kit.repoPath));
+    const scored = ledger.startCycle({ mode: 'evaluation' });
+    const debug = ledger.startCycle({ mode: 'harness-debug' });
+    ledger.recordRun({
+      cycleId: scored, examId: 'exam-0001', mode: 'evaluation', status: 'completed', verdict: 'pass',
+      resultFile: 'runs/scored.json', applied: true, at: '2026-08-14T00:00:00.000Z',
+    });
+    ledger.recordRun({
+      cycleId: debug, examId: 'exam-0001', mode: 'harness-debug', status: 'completed', verdict: 'fail',
+      resultFile: 'runs/debug.json', applied: true, at: '2026-08-16T00:00:00.000Z',
+    });
+    ledger.close?.();
+
+    const detail = await kit.server.methods.examDetail({ repoPath: kit.repoPath, examId: 'exam-0001' });
+    assert.deepEqual(detail.attempts.map((row) => row.mode), ['harness-debug', 'evaluation'],
+      'newest first, and each says which record it belongs to');
+    // The distinction is USABLE without the client knowing the ledger's rules: it reads the
+    // field rather than inferring the mode from a cycle it cannot see.
+    assert.equal(detail.attempts.filter((row) => row.mode === 'evaluation').length, 1);
   } finally {
     await kit.cleanup();
   }

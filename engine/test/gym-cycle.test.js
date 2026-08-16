@@ -336,6 +336,99 @@ test('a cycle of two exams writes one row for the graded run, none for the casua
   });
 });
 
+test('the gold-provenance exclusion reaches retrieval and rides in the artifact', async () => {
+  // D-0020: the retrieval-side half of "the student never sees gold". The exclusion is
+  // computed BEFORE retrieval, handed to the retrieval callback as excludeDocumentIds, and
+  // recorded in the artifact, which is what makes certification able to refuse without it.
+  await withGym(async (context) => {
+    await openGate(context.gateFile);
+    const retrievalCalls = [];
+    const documents = [
+      // Downstream of gold: an evaluation record naming the exam.
+      { id: 'eval-0009', type: 'evaluation', path: 'brain/eval.md', meta: {}, content: 'the run of exam-0009 scored 3' },
+      // Innocent: ordinary context the student is meant to have.
+      { id: 'conventions', type: 'convention', path: 'brain/conventions.md', meta: {}, content: 'name things clearly' },
+    ];
+
+    const result = await runExamAttempt({
+      exam: exam('exam-0009', context.baseCommit, context.goldCommit),
+      mode: 'evaluation',
+      gates: GATES,
+      engineer: fileEngineer([
+        { kind: 'edit', tokens: 10, write: { file: 'app.js', content: 'const value = 1;\nexport const wired = true;\n' } },
+        { kind: 'submit', tokens: 10, explanation: 'CRITERIA AUDIT: wired flag exported. MET at app.js:2.' },
+      ]),
+      rules: context.rules,
+      documents,
+      retrieveContext: async (request) => {
+        retrievalCalls.push(request);
+        return '<brain-context>only what survived the exclusion</brain-context>';
+      },
+      repoPath: context.repoPath,
+      sourceRepo: context.repo,
+      engineRoot: context.root,
+      sandboxesRoot: context.sandboxesRoot,
+      resultDir: context.resultDir,
+    }, { gateFile: context.gateFile });
+
+    // Retrieval was called ONCE, with the exam task as the query and the exclusion applied.
+    assert.equal(retrievalCalls.length, 1);
+    assert.equal(retrievalCalls[0].query, exam('exam-0009', context.baseCommit, context.goldCommit).task);
+    assert.deepEqual(retrievalCalls[0].excludeDocumentIds, ['eval-0009'],
+      'the document naming the exam is withheld; ordinary context is not');
+
+    // The context retrieval returned is what the student actually saw.
+    assert.match(result.student.diff, /export const wired/);
+    const record = result.provenance.goldExclusion;
+    assert.equal(record.computed, true);
+    assert.equal(record.count, 1);
+    assert.deepEqual(record.ids, ['eval-0009']);
+    assert.equal(record.reasons['eval-0009'], 'evaluation-content-exam');
+    assert.equal(record.goldCommit, context.goldCommit);
+  });
+});
+
+test('a run with no brain is runnable and NOT certifiable', async () => {
+  // A repo whose brain does not exist yet must still be able to run the gym; what it cannot
+  // do is earn a certification, because there is no exclusion record behind the claim.
+  await withGym(async (context) => {
+    await openGate(context.gateFile);
+    const ledger = GymLedger.open(':memory:');
+    const drawn = exam('exam-0010', context.baseCommit, context.goldCommit);
+    ledger.putExam(drawn);
+
+    const result = await runExamAttempt({
+      exam: drawn,
+      mode: 'evaluation',
+      gates: GATES,
+      engineer: fileEngineer([
+        { kind: 'edit', tokens: 10, write: { file: 'app.js', content: 'const value = 1;\nexport const wired = true;\n' } },
+        { kind: 'submit', tokens: 10, explanation: 'CRITERIA AUDIT: MET at app.js:2.' },
+      ]),
+      rules: context.rules,
+      // No documents: nothing to exclude from, and nothing to prove was excluded.
+      repoPath: context.repoPath,
+      sourceRepo: context.repo,
+      engineRoot: context.root,
+      sandboxesRoot: context.sandboxesRoot,
+      resultDir: context.resultDir,
+    }, { gateFile: context.gateFile });
+
+    assert.equal(result.status, 'completed', 'the run itself is fine');
+    assert.equal(result.provenance.goldExclusion, null, 'and it honestly records that nothing was computed');
+
+    const runId = ledger.recordRun({
+      examId: drawn.examId, mode: 'evaluation', status: result.status, applied: true, resultFile: result.resultFile,
+    });
+    assert.throws(
+      () => ledger.certify({ runId, verdict: 'pass', harness: { policy: 'adr-0167' }, artifact: result }),
+      /carries no gold-provenance exclusion record/,
+    );
+
+    ledger.close();
+  });
+});
+
 test('mode quarantine is falsifiable on the artifacts, not just in the code', async () => {
   // The acceptance clause, checked the way a verifier would check it: run a harness-debug
   // cycle, then interrogate what it left on disk and in the ledger.

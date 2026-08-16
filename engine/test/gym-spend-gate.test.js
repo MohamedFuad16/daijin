@@ -417,6 +417,51 @@ test('MUTATION GUARD: no code path in the engine can open the gate, runner or da
   assert.deepEqual(gateWriterOffenders([realDaemon]), []);
 });
 
+test('the scanned set covers every engine source directory', async () => {
+  // The residual I reported and you approved closing: the scanner is only as good as what it
+  // is pointed at, and nothing enforced that the pointed-at set was the whole engine. A new
+  // directory that reaches the gate would have been outside the scan with no test failing,
+  // which is the silence the whole rule exists to prevent.
+  const srcRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src');
+  const entries = await readdir(srcRoot, { withFileTypes: true });
+  const directories = entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort();
+
+  // The scanned set is declared here rather than derived, so ADDING a directory to the
+  // engine forces a decision about whether the gate scan should cover it. Deriving it would
+  // make this test pass by construction and prove nothing.
+  const SCANNED = ['gym', 'rpc'];
+  const UNSCANNED = [
+    // Each exemption states why it cannot reach the gate. An exemption is a claim someone
+    // has to defend, exactly like an allowlist entry.
+    ['init', 'repo analysis and the gold-set miner; reads history, writes brain artifacts, never the gate'],
+    ['mcp', 'the MCP server surface; read-only over the brain'],
+    ['rag', 'retrieval primitives; pure functions over the store'],
+    ['runtime', 'logger and embedding identity; no gate concept'],
+    ['store', 'the brain store backends; refuse foreign ledgers and never see the gate'],
+  ];
+
+  const declared = [...SCANNED, ...UNSCANNED.map(([name]) => name)].sort();
+  assert.deepEqual(
+    directories,
+    declared,
+    'an engine source directory is neither scanned nor exempted; decide which, and if it can reach the gate add it to engineSources()',
+  );
+
+  // And the exemptions are checked rather than trusted: an exempt directory that starts
+  // naming the gate has stopped being exempt.
+  for (const [name, why] of UNSCANNED) {
+    assert.ok(why.length > 20, `${name} needs a real exemption reason`);
+    const root = path.join(srcRoot, name);
+    for (const file of (await readdir(root)).filter((entry) => entry.endsWith('.js'))) {
+      const source = await readFile(path.join(root, file), 'utf8');
+      assert.ok(
+        !/gymSpendGatePath|['"`][^'"`]*\/GATE['"`]/.test(source),
+        `${name}/${file} names the gate while sitting outside the scanned set`,
+      );
+    }
+  }
+});
+
 test('no gym source writes an open gate', async () => {
   const names = (await readdir(gymRoot)).filter((name) => name.endsWith('.js'));
   assert.ok(names.length >= 8, 'the scan must actually see the gym sources');

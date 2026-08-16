@@ -1,6 +1,7 @@
 #!/bin/bash
 # P4 mutation evidence: each mutation must turn a green test red, and the named test must be
-# the one that catches it. 26 mutations, 26 killed as of 2026-08-16 08:31 JST.
+# the one that catches it. 35 mutations, 35 killed as of 2026-08-16 (see mutate-output.txt
+# for the run this claim comes from).
 #
 # Usage:  bash docs/verification/p4-mutations/mutate.sh
 # Expect: every line reads KILLED. A SURVIVED line is a real coverage gap, and two of them
@@ -166,3 +167,50 @@ run_mutation "the gauge and the seam rule swap order in the shipped student file
   src/gym/agents-defaults/student.md \
   's/(## Completion gauge.*?)(## Integration seam first.*)$/$2\n$1/s' \
   "test/gym-agent-files.test.js"
+
+# ---- gold-provenance exclusion (D-0020) -------------------------------------------------
+
+run_mutation "the exclusion is computed but never reaches retrieval" \
+  src/gym/cycle.js \
+  's/      excludeDocumentIds: goldExclusion \? goldExclusion\.ids : \[\],/      excludeDocumentIds: [],/' \
+  "test/gym-cycle.test.js"
+
+run_mutation "the artifact carries no exclusion record" \
+  src/gym/cycle.js \
+  's/      goldExclusion: goldExclusion \? exclusionRecord\(goldExclusion, exam\) : null,/      goldExclusion: null,/' \
+  "test/gym-cycle.test.js"
+
+run_mutation "certification stops requiring an exclusion record" \
+  src/gym/ledger.js \
+  's/    if \(!hasExclusionRecord\(artifact\)\) \{/    if (false) {/' \
+  "test/gym-ledger.test.js test/gym-cycle.test.js"
+
+run_mutation "an absent exclusion record reads as present" \
+  src/gym/provenance.js \
+  's/  return Boolean\(record && record\.computed === true && Array\.isArray\(record\.ids\)\);/  return true;/' \
+  "test/gym-provenance.test.js test/gym-ledger.test.js"
+
+run_mutation "rule 2 excludes on file change rather than section change" \
+  src/gym/provenance.js \
+  's/    if \(afterSection !== null && beforeSection !== afterSection\) exclude\(document, .source-section-changed-by-gold.\);/    exclude(document, "source-section-changed-by-gold");/' \
+  "test/gym-provenance.test.js"
+
+run_mutation "rule 3 dropped: a document the gold commit ADDED is retrievable" \
+  src/gym/provenance.js \
+  "s/    if \(introduced && introduced === exam\.goldCommit\) exclude\(document, 'brain-commit-introduced-by-gold'\);//" \
+  "test/gym-provenance.test.js"
+
+run_mutation "an oversized exclusion is truncated instead of refused" \
+  src/gym/provenance.js \
+  's/  if \(truncated\) \{/  if (false) {/' \
+  "test/gym-provenance.test.js"
+
+run_mutation "an unknown gold commit fails OPEN instead of loud" \
+  src/gym/provenance.js \
+  "s/  const changed = new Set\(\(await run\(\['diff-tree', '--no-commit-id', '--name-only', '-r', exam\.goldCommit\]\)\)/  const changed = new Set(((await run(['diff-tree', '--no-commit-id', '--name-only', '-r', exam.goldCommit], { allowFailure: true })) || '')/" \
+  "test/gym-provenance.test.js"
+
+run_mutation "the scanned set stops covering the engine" \
+  test/gym-spend-gate.test.js \
+  "s/  const SCANNED = \['gym', 'rpc'\];/  const SCANNED = ['gym'];/" \
+  "test/gym-spend-gate.test.js"

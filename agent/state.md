@@ -1,5 +1,36 @@
 # Daijin build state (authoritative)
 
+## 2026-08-17 13:20 - The class was five, closed at the seam; both passes were necessary
+
+The extractor probed every method on a bare repo and the driver-string
+class was FIVE (examList, examDetail, examVeto, examUpdate, gymStatus)
+- all sharing ONE callsite, withLedger, where the single guard went:
+five per-method guards would have closed five instances and left the
+next caller to rediscover the class (4baeab6, 626/626 + 18/18). The
+hint follows the family's form (what is missing, what action creates
+it). THE REFUSAL IS NARROW with a test for the other half: only
+not-yet-initialized translates; a ledger that EXISTS and cannot open
+keeps its internal error, because dressing a corrupt file as "run
+init" sends a user to rebuild a repo whose real problem is damage.
+The leak assertion targets the SHAPE of a leak (no implementation
+detail reaches a hint), not one sentence.
+
+A tidy story corrected BEFORE landing: gymStart written up as a sixth
+caller masked by its spend refusal - probed with the gate open, it is
+clean, and the reason is a COINCIDENCE (its gate file lives inside the
+same .daijin/ whose absence causes the error); "move the gate file and
+gymStart joins the class" is now a comment at the guard and the test,
+because coincidences stop holding.
+
+THE METHOD LESSON, kept: tui-builder probed thirty methods against one
+condition and found two; the engine probed the same condition from
+inside and found five - from outside only the symptom is visible, from
+inside the shared seam is. Both passes were necessary: THE CLIENT
+FOUND THE CLASS EXISTED; THE ENGINE FOUND ITS SIZE.
+
+tui-builder's follow-up: sync the mock to 4baeab6 (five refusing
+methods, -32602, the new hint wording; the corrupt-ledger -32603 case
+stays unmocked as a state nobody expected).
 ## 2026-08-17 13:00 - The fifth double is three methods; a probe's bound stated; tip ec1d048
 
 tui-builder swept all thirty mock handlers rather than letting the

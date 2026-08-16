@@ -58,7 +58,11 @@ function exam(examId, baseCommit, goldCommit, overrides = {}) {
     baseCommit,
     goldCommit,
     task: 'Export a wired flag from app.js so the consumer can read one real datum across the seam.',
-    provenance: { source: 'auditor-selection', commit: goldCommit },
+    provenance: {
+      source: 'auditor-selection',
+      commit: goldCommit,
+      authoredBy: { role: 'auditor', model: 'auditor-model', endpoint: 'https://provider.invalid' },
+    },
     ...overrides,
   });
 }

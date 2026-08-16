@@ -33,7 +33,12 @@ function exam(id, overrides = {}) {
     baseCommit: SHA_BASE,
     goldCommit: SHA_GOLD,
     task: 'Wire the sync endpoint through to the client so one real datum crosses the seam.',
-    provenance: { source: 'auditor-selection', commit: SHA_GOLD },
+    provenance: {
+      source: 'auditor-selection',
+      commit: SHA_GOLD,
+      // P7 clause 4: an exam a model authored records which model.
+      authoredBy: { role: 'auditor', model: 'auditor-model', endpoint: 'https://provider.invalid' },
+    },
     ...overrides,
   });
 }

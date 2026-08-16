@@ -34,6 +34,58 @@ export const EXAM_PROVENANCE_SOURCES = Object.freeze([
   'commit-mining', 'auditor-selection', 'auditor-override', 'imported',
 ]);
 
+/** Sources whose exam was AUTHORED BY A MODEL, and therefore must record which one.
+ *  `commit-mining` is deterministic: a filter and a diff have no author, so there is no
+ *  independence question to answer. */
+export const AUTHORED_SOURCES = Object.freeze(['auditor-selection', 'auditor-override']);
+
+/**
+ * The identity of an agent that authored or graded something (P7 clause 4).
+ *
+ * Keyed on MODEL AND ENDPOINT rather than on role, and that choice is the whole clause.
+ * Keying on role would make the check unfalsifiable: the auditor authors and the teacher
+ * grades, so the roles differ by construction and the refusal would never fire, which is a
+ * gate that cannot fail. The realistic failure is a user with one API key configuring the
+ * auditor and the teacher to the SAME model, at which point one model writes the exam and
+ * grades the answer, and role separation is a diagram rather than a fact.
+ */
+export function agentIdentity(agent) {
+  const role = typeof agent?.role === 'string' ? agent.role.trim() : '';
+  const model = typeof agent?.model === 'string' ? agent.model.trim() : '';
+  if (!model) throw new Error('An agent identity needs a model id; role alone cannot establish independence.');
+  const endpoint = typeof agent?.endpoint === 'string' && agent.endpoint.trim() ? agent.endpoint.trim() : 'default';
+  return { role: role || null, model, endpoint, key: `${model}@${endpoint}` };
+}
+
+/**
+ * May this grader grade this exam?
+ *
+ * Returns a reason string when it may not, null when it may. Three cases, and the middle one
+ * is the one people expect to be missing:
+ *  - The exam has no model author (deterministic mining): independence holds by construction.
+ *  - The grader's identity equals the author's: REFUSED. An author grading its own exam
+ *    calibrates its own instrument.
+ *  - An authored exam whose author was never recorded: REFUSED. Absent is not empty; without
+ *    the record we cannot show independence, and a certification-grade claim cannot rest on
+ *    an absence of evidence. `parseExamRecord` refuses to store such an exam in the first
+ *    place, so reaching this branch means a record arrived from somewhere else.
+ */
+export function graderIndependenceRefusal(exam, grader) {
+  const author = exam?.provenance?.authoredBy ?? null;
+  if (!author) {
+    if (AUTHORED_SOURCES.includes(exam?.provenance?.source)) {
+      return `${exam.examId} was authored by a model (${exam.provenance.source}) but records no authoring identity, so independence cannot be shown.`;
+    }
+    return null;
+  }
+  const graderIdentity = agentIdentity(grader);
+  if (author.key === graderIdentity.key) {
+    return `${exam.examId} was authored by ${author.key} and cannot be graded by the same identity; `
+      + 'configure a different model for the teacher role so the author is not the grader.';
+  }
+  return null;
+}
+
 function requireString(value, field, source, { min = 1 } = {}) {
   const text = typeof value === 'string' ? value.trim() : '';
   if (text.length < min) throw new Error(`${source}: ${field} is required (at least ${min} characters).`);
@@ -124,6 +176,18 @@ export function parseExamRecord(raw, source = 'exam') {
   if (!EXAM_PROVENANCE_SOURCES.includes(provenance.source)) {
     throw new Error(`${source}: provenance.source must be one of ${EXAM_PROVENANCE_SOURCES.join(', ')}.`);
   }
+  // P7 clause 4: an exam a model authored records WHICH model, at write time, because the
+  // grading refusal is only as good as the field it compares against. Refusing here rather
+  // than at grading time means the unusable record never enters the bank.
+  let authoredBy = null;
+  if (provenance.authoredBy) {
+    authoredBy = agentIdentity(provenance.authoredBy);
+  } else if (AUTHORED_SOURCES.includes(provenance.source)) {
+    throw new Error(
+      `${source}: provenance.authoredBy is required when the source is ${provenance.source}; `
+      + 'an exam a model wrote must record which model, or author-grader independence cannot be shown.',
+    );
+  }
   if (status === 'vetoed') requireString(raw.vetoReason, 'vetoReason', source, { min: MIN_QUARANTINE_REASON });
 
   return {
@@ -146,6 +210,7 @@ export function parseExamRecord(raw, source = 'exam') {
     vetoReason: status === 'vetoed' ? String(raw.vetoReason).trim() : null,
     provenance: {
       source: provenance.source,
+      authoredBy,
       commit: provenance.commit ?? null,
       supersedes: Array.isArray(provenance.supersedes) ? [...provenance.supersedes] : [],
       supersededBy: provenance.supersededBy ?? null,

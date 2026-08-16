@@ -8,7 +8,8 @@ import {
   DEFAULT_RUN_MODE, RUN_MODES, assertRunMode, assertScoredWrite, isGradableRun, isScoreableRun,
 } from '../src/gym/run-mode.js';
 import {
-  MIN_QUARANTINE_REASON, examDrawRefusal, examListRow, parseExamRecord, quarantineExam, vetoExam,
+  MIN_QUARANTINE_REASON, examDrawRefusal, examListRow, graderIndependenceRefusal, parseExamRecord,
+  quarantineExam, vetoExam,
 } from '../src/gym/exams.js';
 
 const SHA_BASE = 'a'.repeat(40);
@@ -26,7 +27,12 @@ function exam(overrides = {}) {
     baseCommit: SHA_BASE,
     goldCommit: SHA_GOLD,
     task: 'Add the missing route registration so the sync endpoint is reachable end to end.',
-    provenance: { source: 'auditor-selection', commit: SHA_GOLD },
+    provenance: {
+      source: 'auditor-selection',
+      commit: SHA_GOLD,
+      // P7 clause 4: an exam a model authored records which model.
+      authoredBy: { role: 'auditor', model: 'auditor-model', endpoint: 'https://provider.invalid' },
+    },
     ...overrides,
   });
 }
@@ -139,6 +145,65 @@ test('an exam record without provenance, a real base and gold, or an actionable 
   assert.throws(() => parseExamRecord({ ...exam(), task: 'fix it' }, 'x'), /task is required/);
   assert.throws(() => parseExamRecord({ ...exam(), examId: 'exam-1' }, 'x'), /invalid exam id/);
   assert.throws(() => parseExamRecord({ ...exam(), scopeTier: 'XL' }, 'x'), /invalid scopeTier/);
+});
+
+test('P7 clause 4: an exam a model authored records WHICH model, at write time', () => {
+  // Refusing at write time rather than at grading time means the unusable record never
+  // enters the bank, so the grading refusal is never the first thing to notice the gap.
+  assert.throws(
+    () => parseExamRecord({ ...exam(), provenance: { source: 'auditor-selection', commit: SHA_GOLD } }, 'x'),
+    /provenance.authoredBy is required when the source is auditor-selection/,
+  );
+  assert.throws(
+    () => parseExamRecord({ ...exam(), provenance: { source: 'auditor-override', commit: SHA_GOLD } }, 'x'),
+    /provenance.authoredBy is required when the source is auditor-override/,
+  );
+  // A DETERMINISTICALLY mined exam has no model author, so there is no independence question
+  // to answer and no field to demand.
+  const mined = parseExamRecord({ ...exam(), provenance: { source: 'commit-mining', commit: SHA_GOLD } }, 'x');
+  assert.equal(mined.provenance.authoredBy, null);
+  // An identity needs a model: a role alone cannot establish independence, because the roles
+  // differ by construction and would make the check unfalsifiable.
+  assert.throws(
+    () => parseExamRecord({ ...exam(), provenance: { source: 'auditor-selection', authoredBy: { role: 'auditor' } } }, 'x'),
+    /needs a model id/,
+  );
+  assert.equal(exam().provenance.authoredBy.key, 'auditor-model@https://provider.invalid');
+});
+
+test('P7 clause 4: the author cannot grade its own exam, and the check can fire', () => {
+  const authored = exam();
+  const auditor = { role: 'auditor', model: 'auditor-model', endpoint: 'https://provider.invalid' };
+  const teacher = { role: 'teacher', model: 'teacher-model', endpoint: 'https://provider.invalid' };
+
+  assert.equal(graderIndependenceRefusal(authored, teacher), null, 'a different model may grade');
+  assert.match(
+    graderIndependenceRefusal(authored, auditor),
+    /was authored by auditor-model@https:\/\/provider.invalid and cannot be graded by the same identity/,
+  );
+  // THE REALISTIC FAILURE, and the reason identity is keyed on model rather than role: a user
+  // with one API key configures both roles to the same model. Role separation is then a
+  // diagram, and the refusal is what makes it a fact.
+  assert.match(
+    graderIndependenceRefusal(authored, { role: 'teacher', model: 'auditor-model', endpoint: 'https://provider.invalid' }),
+    /cannot be graded by the same identity/,
+  );
+  // The same model at a different endpoint is a different deployment and is allowed; keying
+  // on the pair is what makes that distinction expressible.
+  assert.equal(
+    graderIndependenceRefusal(authored, { role: 'teacher', model: 'auditor-model', endpoint: 'https://other.invalid' }),
+    null,
+  );
+
+  // A deterministically mined exam has no author, so independence holds by construction.
+  const mined = parseExamRecord({ ...exam(), provenance: { source: 'commit-mining', commit: SHA_GOLD } }, 'x');
+  assert.equal(graderIndependenceRefusal(mined, auditor), null);
+
+  // ABSENT IS NOT EMPTY: a record claiming a model author while recording none is refused,
+  // even though parseExamRecord would never have stored it. Reaching this branch means the
+  // record arrived from somewhere else, and that is exactly when a check should be loudest.
+  const smuggled = { examId: 'exam-0002', provenance: { source: 'auditor-selection', authoredBy: null } };
+  assert.match(graderIndependenceRefusal(smuggled, teacher), /records no authoring identity, so independence cannot be shown/);
 });
 
 test('a raised per-exam cap carries its reason, exactly like a quarantine', () => {

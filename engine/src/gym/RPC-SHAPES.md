@@ -124,8 +124,26 @@ const attempts = ledger.database.prepare(
 return { exam, attempts, provenance: exam.provenance, axes: gradesFor(attempts) };
 ```
 
-`axes` comes from grading, which is not built yet: return an empty axes object until the
-grading round lands rather than inventing one.
+[REVISED 2026-08-16, after P7 landed. The previous text said grading was not built and told
+you to return an empty axes object. Grading exists now; what follows replaces that.]
+
+`axes` is populated from RUBRICS, and a rubric exists only for an attempt a teacher graded.
+Three states, and the distinction is the whole point of the field:
+
+| state | `axes` | why |
+| --- | --- | --- |
+| the attempt has a rubric | the five axis scores with their citations | graded |
+| the attempt produced a diff but has no rubric yet | `null` | awaiting grading, which is a real state a TUI should show as such |
+| the attempt produced NO diff (`unsubmitted`) | `null`, with the attempt's status saying why | P7 clause 5: no rubric may be written for a run that never answered, so an empty axes object here would imply a grade of zero where there is no grade at all |
+
+Render `null` as "not graded" and never as zeroed axes. The shapes come from
+`engine/src/gym/grading.js`: `AXES` is the fixed five, and a stored rubric carries
+`{ runId, axes: { <axis>: { score, citations } }, verdict, gaps, author, reportedAuthor? }`.
+
+The rubric and batch TABLES are not in the ledger yet, by ruling: they land with this wiring,
+and their shape is specified jointly by the daemon and the gym rather than invented ahead of
+the consumer. Until they exist, `examDetail` returns `axes: null` for every attempt, which is
+honest rather than empty.
 
 ## `examVeto({ examId, reason })` and `examUpdate({ examId, patch })`
 
@@ -154,8 +172,11 @@ way would carry "broken" as its whole audit trail.
 
 ## What is deliberately NOT here
 
-- Grading, rubric import, and harvest. Queued as their own round with their own
-  pre-registered acceptance; `examDetail.axes` stays empty until then.
+- [SUPERSEDED 2026-08-16: this bullet said grading, rubric import and harvest were queued.
+  They landed as P7, registered at docs/verification/p7-grading-harvest-acceptance.md, commit
+  1cdc2b8. The modules are `grading.js` and `harvest.js`; what remains unwired is their
+  STORAGE, per the row above.] Rubric and harvest-batch persistence: the tables land with this
+  wiring, specified jointly rather than ahead of the consumer.
 - The auditor's exam selection. `selectBankWithAuditor` refuses without an injected auditor
   rather than approximating one, and hands back the completed deterministic funnel so the
   TUI can show the work without the judgment.

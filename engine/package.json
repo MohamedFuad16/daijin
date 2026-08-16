@@ -1,0 +1,27 @@
+{
+  "name": "daijin-engine",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Daijin engine daemon: brain store, retrieval, MCP, gym, RPC",
+  "scripts": {
+    "test": "node --test \"test/*.test.js\" \"test/**/*.test.js\"",
+    "test:live": "node --test \"test-live/**/*.test.js\"",
+    "rpc": "node src/rpc/daemon.js",
+    "retrieval-score": "node src/init/retrieval-score.js",
+    "retrieval-score:platform": "node src/init/retrieval-score.js --corpus=platform --enforce",
+    "compare-runs": "node src/init/compare-runs.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "better-sqlite3": "^13.0.3",
+    "dotenv": "^17.4.2",
+    "pg": "^8.22.0",
+    "sqlite-vec": "^0.1.9",
+    "yaml": "^2.9.0",
+    "zod": "^4.4.3"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

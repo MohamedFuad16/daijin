@@ -1,0 +1,10 @@
+{
+  "caseRate": 0.6666666666666666,
+  "caseRateCases": "2 of 3",
+  "violations": 0,
+  "mrr": 0.6666666666666666,
+  "cases": 3,
+  "k": 8,
+  "measuredAt": "2026-08-16",
+  "note": "Fixture baseline for the harness tests. Values are the exact measured fractions, never transcriptions of a displayed percentage."
+}

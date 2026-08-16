@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "daijin-tui"
+version = "0.1.0"
+description = "Daijin terminal client. A pure client of the frozen engine RPC contract."
+requires-python = ">=3.10"
+dependencies = [
+    "textual>=0.79",
+    "plotext>=5.2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4",
+]
+
+[project.scripts]
+daijin = "daijin_tui.app:main"
+
+[tool.setuptools.packages.find]
+include = ["daijin_tui*"]
+
+[tool.setuptools.package-data]
+daijin_tui = ["*.tcss"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

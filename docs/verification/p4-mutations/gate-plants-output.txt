@@ -1,0 +1,38 @@
+# Captured 2026-08-15T23:44:36Z (UTC)
+# Command: node docs/verification/p4-mutations/gate-plants.mjs
+
+PLANTS (every one must be CAUGHT)
+  CAUGHT  [verifier] direct write to the gate helper
+           only spend-gate.js may write the gate file; this module writes files and names the gate, and holds no allowlist entry
+  CAUGHT  [verifier] concatenated path, no helper anywhere
+           only spend-gate.js may write the gate file; this module writes files and names the gate, and holds no allowlist entry
+  CAUGHT  [verifier] template-literal demo helper
+           only spend-gate.js may write the gate file; this module writes files and names the gate, and holds no allowlist entry
+  CAUGHT  [verifier] owner-style write to a variable target
+           a write in the gate module cannot be shown to write a blocked gate
+  CAUGHT  [gym-porter] owner write whose open payload is built far above it
+           a write in the gate module carries an open-status payload
+  CAUGHT  [gym-porter] synchronous write
+           only spend-gate.js may write the gate file; this module writes files and names the gate, and holds no allowlist entry
+  CAUGHT  [gym-porter] append rather than write
+           only spend-gate.js may write the gate file; this module writes files and names the gate, and holds no allowlist entry
+  CAUGHT  [gym-porter] namespaced call through the fs module object
+           only spend-gate.js may write the gate file; this module writes files and names the gate, and holds no allowlist entry
+  CAUGHT  [gym-porter] path assembled from a module constant
+           only spend-gate.js may write the gate file; this module writes files and names the gate, and holds no allowlist entry
+  CAUGHT  [gym-porter] shell redirection, which no file-write regex would ever see
+           a shell command redirects into the gate file
+  CAUGHT  [gym-porter] a stream opened on the gate
+           only spend-gate.js may write the gate file; this module writes files and names the gate, and holds no allowlist entry
+  CAUGHT  [gym-porter] allowlisted module writing an aliased gate path at a distance
+           methods.js is allowlisted to name the gate, but it writes to a variable holding the gate path
+
+CONTROLS (every one must be CLEAN)
+  CLEAN      a result-file writer, which is most of what the gym does
+  CLEAN      an instruction-file writer
+  CLEAN      a module that discusses the gate in prose and writes something else
+  CLEAN      a module that names the gate and writes nothing at all
+
+12 plants, 4 controls, 0 failure(s).
+
+# exit=0

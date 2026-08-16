@@ -1,0 +1,75 @@
+name: ci
+on:
+  push:
+  pull_request:
+jobs:
+  engine:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+        working-directory: engine
+      - name: live suite disclosure
+        run: echo "engine/test-live (parity, pgvector conformance) is NOT run in CI; it needs the owner's Postgres and local Ollama. Run 'npm run test:live' locally. Green here does not cover it."
+      - name: npm test, failing on a zero-test, failing, or non-zero-exit run
+        shell: bash
+        run: |
+          set -o pipefail
+          set +e
+          npm test 2>&1 | tee test-output.log
+          npm_status=${PIPESTATUS[0]}
+          set -e
+          if [ "$npm_status" -ne 0 ]; then
+            echo "npm test exited $npm_status"; exit 1
+          fi
+          if grep -qE "tests 0$" test-output.log; then
+            echo "the suite collected zero tests; a glob miss is a silent pass"; exit 1
+          fi
+          grep -qE "tests [1-9][0-9]*$" test-output.log
+          grep -qE "fail 0$" test-output.log
+        working-directory: engine
+  tui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e .[dev]
+        working-directory: tui
+      - run: python -m pytest
+        working-directory: tui
+  install-dry-run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: install dry run (fails loudly, never skips)
+        run: bash install/dry-run.sh
+  hygiene:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: gate-writer scanner acceptance (verifier's plants)
+        run: node docs/verification/p4-mutations/gate-scanner-plants.mjs
+      - name: forbid em and en dashes
+        run: |
+          set +e
+          grep -rnP '[\x{2013}\x{2014}]' . --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=.venv
+          status=$?
+          set -e
+          if [ "$status" -eq 1 ]; then
+            echo "clean"; exit 0
+          elif [ "$status" -eq 0 ]; then
+            echo "em or en dash found"; exit 1
+          else
+            echo "grep itself failed with exit $status; the gate cannot report coverage"; exit 1
+          fi

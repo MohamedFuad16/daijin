@@ -1,0 +1,315 @@
+// The retrieval floor, measured per repo, and the budget sweep that chooses the number.
+//
+// D-0003, and the plan's retrieval budget policy: "4,000 stays the anchor (the only
+// measured point, 91.2%) but the shipped number is MEASURED PER REPO: init sweeps the
+// floor at 3k, 4k, 6k, 8k (zero-spend, local) and picks the smallest budget within one
+// case of the best score, curve displayed with the auditor's one-line rationale."
+//
+// Why SMALLEST within one case rather than best: the initial context rides in every
+// round's prompt, so 4k times 44 rounds is about 176k per exam, and the measured failures
+// were work-budget and ordering bound with retrieval already correct. A budget raised for
+// a tie buys nothing and is paid for on every round of every run. The content-survival
+// gate is the mechanical signal that says raise it anyway.
+//
+// Every number here is an exact rational carried with its case counts. `caseRate.exact` is
+// the fraction, `caseRate.cases` is "31 of 34". Nothing is stored rounded, which is this
+// repo's oldest correction: a floor typed from a rounded display sits above the
+// measurement it came from and fails on a healthy tree.
+//
+// Zero-spend: scoring runs through the extractor's harness over an injected Store, and
+// embeddings come from the local Ollama adapter. Nothing here calls a paid API.
+import { tokens } from '../rag/tokens.js';
+import { chunkUnits } from './ingest.js';
+import { scoreGoldset } from './retrieval-score.js';
+
+/** The four sweep points. Fixed by D-0003; 4000 is the anchor and stays in the list. */
+export const BUDGET_SWEEP = Object.freeze([3000, 4000, 6000, 8000]);
+
+/** Case rate at or above this unlocks the MCP snippet (RPC v4 mcpSnippet). */
+export const MCP_UNLOCK_THRESHOLD = 0.75;
+
+/**
+ * A case rate in the only form this project stores it.
+ *
+ * `exact` is the rational; `cases` is the readable form WITH the denominator. Both, always,
+ * because the display alone is unfalsifiable and the fraction alone is unreadable.
+ */
+export function caseRateOf(summary, results) {
+  const total = summary.cases;
+  const hits = results.filter((entry) => entry.complete).length;
+  return { exact: summary.caseRate, cases: `${hits} of ${total}`, hits, total };
+}
+
+/**
+ * Build a corpus descriptor for a local, already-open store.
+ *
+ * The harness's scoreGoldset resolves an environment before it scores (retrieval-score.js
+ * loadCorpusEnvironment), and it does so even when a store is injected, so a corpus that
+ * measures over SQLite still has to name a database-url variable. Rather than edit that
+ * file (it belongs to the extractor), this names a variable of its own and sets it to a
+ * value that is obviously not a connection string. Flagged to the leader as a one-line
+ * fix in retrieval-score.js: skip the environment resolution when a store is injected.
+ */
+export const INJECTED_STORE_ENV = 'DAIJIN_INJECTED_STORE';
+
+export function localCorpus({
+  id, project = null, goldsetPath, baselinePath = null, standingPrefix = 'global.',
+  pathGrammar = null, retrieveOptions = {}, environment = process.env,
+}) {
+  if (!environment[INJECTED_STORE_ENV]) {
+    environment[INJECTED_STORE_ENV] = 'injected-store://no-connection-string';
+  }
+  return {
+    id,
+    project,
+    root: null,
+    goldsetPath,
+    retrievalFixesPath: null,
+    baselinePath,
+    envFiles: [],
+    databaseUrlEnv: INJECTED_STORE_ENV,
+    pathGrammar,
+    standingPrefix,
+    retrieveOptions,
+    storeOptions: {},
+    note: 'Local per-repo corpus measured over an injected Store. No database URL is used.',
+  };
+}
+
+/**
+ * Run fn with the embedding configuration visible on process.env, then restore it.
+ *
+ * The harness resolves its environment itself (`loadCorpusEnvironment` returns
+ * `process.env`) and hands that to retrieve(), so an environment passed into init never
+ * reaches the embedding identity. In the product that is correct, because the user's .env
+ * IS process.env. It is wrong for a caller that injects a configuration, which is every
+ * test and every second repo in one process. Rather than edit retrieval-score.js, which
+ * belongs to the extractor, the keys are lent for the duration and put back exactly as
+ * they were, including keys that were absent.
+ *
+ * Flagged to the leader as a one-line fix in the harness: thread `environment` and
+ * `fetchImpl` from scoreGoldset's options into retrieve's dependencies. This wrapper goes
+ * away when it lands.
+ */
+export async function withEmbeddingEnvironment(environment, fn) {
+  if (!environment || environment === process.env) return fn();
+  const keys = Object.keys(environment).filter((key) => /^(EMBEDDING_|OLLAMA_)/.test(key));
+  const saved = keys.map((key) => [key, Object.hasOwn(process.env, key) ? process.env[key] : undefined]);
+  for (const key of keys) process.env[key] = environment[key];
+  try {
+    return await fn();
+  } finally {
+    for (const [key, value] of saved) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+}
+
+/**
+ * Run the gold set at one budget.
+ */
+export async function scoreAtBudget({ corpus, store, tokenBudget, k = 8, score = scoreGoldset }) {
+  const { summary, results, record } = await score({
+    corpus,
+    store,
+    k,
+    label: `budget-${tokenBudget}`,
+    retrieveOptions: { ...(corpus.retrieveOptions || {}), tokenBudget },
+  });
+  return {
+    tokenBudget,
+    caseRate: caseRateOf(summary, results),
+    mrr: summary.mrr,
+    violations: summary.violations,
+    hitRate: summary.hitRate,
+    identifierCases: summary.identifierCases,
+    identifierCaseRate: summary.identifierCaseRate,
+    summary,
+    results,
+    record,
+  };
+}
+
+/**
+ * Pick the shipped budget from a measured curve.
+ *
+ * "Within one case of the best" is a COUNT comparison, not a rate comparison: at n cases
+ * one case is 1/n, and comparing rates with a tolerance re-introduces the rounding this
+ * project keeps getting bitten by. Ties break toward the smaller budget by construction,
+ * since the curve is scanned in ascending budget order.
+ */
+export function chooseBudget(curve) {
+  if (!curve.length) throw new Error('chooseBudget needs at least one measured point.');
+  const ascending = [...curve].sort((left, right) => left.tokenBudget - right.tokenBudget);
+  const best = ascending.reduce(
+    (winner, point) => (point.caseRate.hits > winner.caseRate.hits ? point : winner),
+    ascending[0],
+  );
+  const chosen = ascending.find((point) => best.caseRate.hits - point.caseRate.hits <= 1);
+  const rationale = chosen.tokenBudget === best.tokenBudget
+    ? `${chosen.tokenBudget} tokens: the best measured score on this repo (${chosen.caseRate.cases}); no smaller budget came within one case.`
+    : `${chosen.tokenBudget} tokens: ${chosen.caseRate.cases}, within one case of the best (${best.caseRate.cases} at ${best.tokenBudget}), `
+      + 'and the smaller budget is paid on every round of every run.';
+  return { chosen, best, rationale };
+}
+
+/**
+ * Sweep the budgets and choose. Zero-spend end to end.
+ */
+export async function sweepBudgets({
+  corpus, store, budgets = BUDGET_SWEEP, k = 8, score = scoreGoldset, environment = null, onStep = null,
+} = {}) {
+  const curve = [];
+  for (const tokenBudget of [...budgets].sort((left, right) => left - right)) {
+    const point = await withEmbeddingEnvironment(
+      environment,
+      () => scoreAtBudget({ corpus, store, tokenBudget, k, score }),
+    );
+    curve.push(point);
+    if (onStep) {
+      await onStep({
+        step: 'budget-measured',
+        detail: `${tokenBudget} tokens: ${point.caseRate.cases}, ${point.violations} violations`,
+        counts: { tokenBudget, hits: point.caseRate.hits, cases: point.caseRate.total },
+      });
+    }
+  }
+  const { chosen, best, rationale } = chooseBudget(curve);
+  return {
+    curve: curve.map((point) => ({
+      tokenBudget: point.tokenBudget,
+      caseRate: point.caseRate,
+      mrr: point.mrr,
+      violations: point.violations,
+      identifierCaseRate: point.identifierCaseRate,
+      identifierCases: point.identifierCases,
+    })),
+    chosen: chosen.tokenBudget,
+    chosenPoint: chosen,
+    best: best.tokenBudget,
+    rationale,
+    k,
+    points: curve,
+  };
+}
+
+/** RPC v4 mcpSnippet: unlocked at or above the threshold, locked below it. */
+export function mcpUnlock(caseRate, { threshold = MCP_UNLOCK_THRESHOLD } = {}) {
+  const unlocked = caseRate.exact >= threshold;
+  return {
+    unlocked,
+    threshold,
+    caseRate,
+    reason: unlocked
+      ? `${caseRate.cases} is at or above the ${threshold} threshold, so the brain is fit to serve over MCP.`
+      : `${caseRate.cases} is below the ${threshold} threshold. The mechanical diagnosis names which cases missed; MCP stays locked until the floor is earned.`,
+  };
+}
+
+// ---------------------------------------------------------------------------------
+// Content survival
+// ---------------------------------------------------------------------------------
+
+/**
+ * The untrimmed text an entry was cut from.
+ *
+ * For an architecture document the retrieval path substitutes the winning CHUNK for the
+ * document content (rank.js:126), so the untrimmed source is that chunk. For every other
+ * type it is the whole document. Getting this wrong in either direction would make the
+ * instrument report the wrong cause: a window that never held the core is a CHUNKING
+ * outcome, and a core cut by the allowance is a BUDGET outcome, and the two have different
+ * fixes.
+ */
+export function sourceContentFor(unit, entry, chunksByUnit) {
+  if (unit.type !== 'architecture' || entry.ordinal === null || entry.ordinal === undefined) return unit.content;
+  const chunks = chunksByUnit.get(unit.id) || [];
+  // Ordinal -1 is the identity beacon, which resolves to ordinal 0 content on the query
+  // path (store.d.ts CandidateRow), so the untrimmed source for it is chunk 0.
+  const wanted = entry.ordinal === -1 ? 0 : entry.ordinal;
+  return chunks.find((chunk) => chunk.ordinal === wanted)?.content ?? unit.content;
+}
+
+/**
+ * Did every delivered unit's type core survive the trim, verbatim.
+ *
+ * Two distinct findings, deliberately not merged into one number:
+ *   truncatedAway  the source held the core and the delivered text does not. This is the
+ *                  budget trim beheading a unit, and it FAILS the gate: it is the plan's
+ *                  "mechanical raise signal".
+ *   windowMissed   the source never held the core, because a different window of the
+ *                  document won retrieval. That is a chunking outcome, reported and not
+ *                  failed, because raising the budget would not fix it.
+ *
+ * @param {object[]} deliveries [{ caseId, entries: [{ id, content, ordinal }] }]
+ */
+export function checkContentSurvival(deliveries, { units, tokenBudget, perCandidateCapRatio = 0.22 }) {
+  const unitsById = new Map(units.map((unit) => [unit.id, unit]));
+  const chunksByUnit = new Map(chunkUnits(units).map((plan) => [plan.unit.id, plan.chunks]));
+  const truncatedAway = [];
+  const windowMissed = [];
+  let checked = 0;
+  let survived = 0;
+
+  for (const delivery of deliveries) {
+    for (const entry of delivery.entries) {
+      const unit = unitsById.get(entry.id);
+      if (!unit?.core) continue;
+      checked += 1;
+      const delivered = String(entry.content || '');
+      if (delivered.includes(unit.core)) {
+        survived += 1;
+        continue;
+      }
+      const source = sourceContentFor(unit, entry, chunksByUnit);
+      const record = {
+        caseId: delivery.caseId,
+        id: unit.id,
+        type: unit.type,
+        ordinal: entry.ordinal ?? null,
+        coreTokens: tokens(unit.core).length,
+        deliveredTokens: tokens(delivered).length,
+        allowance: Math.max(64, Math.floor(tokenBudget * perCandidateCapRatio)),
+      };
+      if (source.includes(unit.core)) truncatedAway.push(record);
+      else windowMissed.push(record);
+    }
+  }
+
+  return {
+    status: truncatedAway.length === 0 ? 'pass' : 'fail',
+    tokenBudget,
+    perCandidateCap: Math.max(64, Math.floor(tokenBudget * perCandidateCapRatio)),
+    checked,
+    survived,
+    // Exact counts, no percentage: the denominator is the point.
+    survival: `${survived} of ${checked}`,
+    truncatedAway,
+    windowMissed,
+    raiseSignal: truncatedAway.length > 0
+      ? `${truncatedAway.length} delivered unit(s) lost their type core to the per-candidate cap of `
+        + `${Math.max(64, Math.floor(tokenBudget * perCandidateCapRatio))} tokens at a ${tokenBudget} token budget. `
+        + 'This is the mechanical signal to raise the budget or shorten the cards.'
+      : null,
+  };
+}
+
+/**
+ * Collect what retrieval actually delivered for each case, for the survival check.
+ *
+ * Runs the same retrieval the score just ran, at the chosen budget, and keeps the entry
+ * texts. Separate from scoring on purpose: the score harness reports ids, and survival is
+ * a question about BYTES, so it needs the content the engineer would have received.
+ */
+export async function collectDeliveries({ cases, retrieveFn, tokenBudget }) {
+  const deliveries = [];
+  for (const entry of cases) {
+    const result = await retrieveFn({ query: entry.query, tokenBudget });
+    const entries = [
+      ...(result.decisions || []), ...(result.lessons || []), ...(result.exemplars || []),
+      ...(result.chunks || []), ...(result.standing || []),
+    ].map((item) => ({ id: item.id, content: item.content, ordinal: item.ordinal ?? null }));
+    deliveries.push({ caseId: entry.id, entries });
+  }
+  return deliveries;
+}

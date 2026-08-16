@@ -1,0 +1,29 @@
+# Captured 2026-08-15T23:44:10Z (UTC) / 2026-08-16T08:44:10+0900 local
+# Command: bash docs/verification/p4-mutations/mutate.sh
+
+KILLED   (3 failing): boundary check never fires (condition inverted)
+KILLED   (1 failing): extension no longer requires edits since the boundary
+KILLED   (3 failing): extension no longer requires a passing check
+KILLED   (2 failing): hard outer bound is not enforced at configuration time
+KILLED   (2 failing): the seal keeps the unverified state instead of rolling back
+KILLED   (1 failing): the submit rehearsal fires on every submission, not once
+KILLED   (3 failing): a missing gate reads as open
+KILLED   (3 failing): the automatic closure writes open instead of blocked
+KILLED   (1 failing): quarantine no longer requires a substantive reason
+KILLED   (2 failing): a quarantined exam may be drawn in harness-debug
+KILLED   (2 failing): the ledger accepts a row for a run with no applied diff
+KILLED   (1 failing): certification no longer checks the run mode
+KILLED   (2 failing): cycleRuns defaults to every mode instead of the scored view
+KILLED   (2 failing): the drawn cohort is denominated on rows
+KILLED   (3 failing): result files count every mode, harness-debug included
+KILLED   (2 failing): the deterministic filter keeps lockfile-only commits
+KILLED   (1 failing): an auditor override can resurrect a reverted gold
+KILLED   (1 failing): the auditor may select a commit the funnel dropped
+KILLED   (2 failing): the prompt audit always reports complete
+KILLED   (2 failing): the cycle runner skips the spend gate
+KILLED   (1 failing): ensureAgentFiles overwrites the user's edited instructions
+KILLED   (1 failing): the boundary verdict is delivered, so condemned work ships as student-owned
+KILLED   (2 failing): extension constants drift (step 300k, limit 6)
+KILLED   (2 failing): step 0 no longer disables the boundary check
+KILLED   (2 failing): the integration-seam-first section is dropped from the shipped student file
+KILLED   (1 failing): the gauge and the seam rule swap order in the shipped student file

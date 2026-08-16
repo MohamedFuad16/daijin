@@ -1,0 +1,15 @@
+{
+  "id": "platform",
+  "project": "internship-portal",
+  "rootEnv": "DAIJIN_PLATFORM_ROOT",
+  "root": "/Users/mfuad16/Documents/Codex/2026-07-21/hand-ai-brain-build-instructions-md/ai-brain-platform",
+  "goldset": "{{root}}/ai-brain/projects/internship-portal/retrieval-goldset.yaml",
+  "retrievalFixes": "{{root}}/platform/rag/curated-retrieval-fixes.json",
+  "baseline": "{{root}}/platform/rag/retrieval-baseline.json",
+  "envFiles": ["{{root}}/.env.local", "{{root}}/.env"],
+  "databaseUrlEnv": "DATABASE_URL",
+  "pathGrammar": "platform",
+  "standingPrefix": "global.",
+  "storeOptions": { "parityMode": true },
+  "note": "The extraction parity fixture, not a shipped corpus. P1 reproduces the platform's committed floor byte for byte on this corpus with the ported engine, which is the acceptance check for the extraction. Read only: the harness opens the platform database and its gold set, and writes nothing back to that repository. parityMode makes the store emit the platform's exact statements, including the document inventory query that leaves row order to the planner; src/store/pgvector.js allDocuments records what that costs and why the shipped default differs."
+}

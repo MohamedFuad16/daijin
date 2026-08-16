@@ -1,0 +1,1066 @@
+"""JSON-RPC 2.0 client for the Daijin engine, plus a bundled mock engine.
+
+Wire format follows engine/src/rpc/methods.md v3: JSON-RPC 2.0 over stdio using
+the MCP stdio framing, which is one JSON object per line, UTF-8, newline
+terminated.
+
+Two server initiated notification channels:
+
+- `step`, the jsonl step event, job scoped, powering the init feed, the gym
+  live view, and gates discovery.
+- `boardFinding`, NOT job scoped, arriving with no job running. Severity
+  critical is surfaced immediately by the app, not by whichever screen happens
+  to be open.
+
+The contract names the boardFinding payload but not the step notification
+method name, so this client uses "step" and accepts a small set of aliases.
+
+Spend discipline. The contract enumerates the spend-touching methods
+exhaustively: gymStart, rolePing, initBrain with mode layer1+layer2, and
+diagnoseNarrate. Everything else is zero-spend by construction. This module
+carries that list as SPEND_TOUCHING and the mock refuses an unconfirmed call
+with -32050, so every refusal path is reachable in the shell. Nothing here
+reaches the network.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import copy
+import inspect
+import json
+import sys
+from collections import deque
+from typing import Any, Awaitable, Callable, Iterable, Sequence
+
+from . import mock_data
+
+CLIENT_VERSION = "0.1.0"
+# How much of a failing engine's stderr to carry into the error we raise.
+STDERR_TAIL_LINES = 20
+# The contract version this client is built against. A mismatch is an upgrade
+# screen, not a method error.
+SUPPORTED_CONTRACT_VERSION = "5"
+
+# Notification method the engine uses to push one jsonl step event.
+EVENT_METHOD = "step"
+EVENT_METHOD_ALIASES = frozenset({"step", "event", "stepEvent", "notifications/step"})
+# Board findings ride their own channel because they are not job scoped.
+BOARD_FINDING_METHOD = "boardFinding"
+BOARD_FINDING_ALIASES = frozenset({"boardFinding", "notifications/boardFinding"})
+
+# Error codes. -32050 is fixed by the contract; the rest follow JSON-RPC.
+ERR_INVALID_REQUEST = -32600
+ERR_METHOD_NOT_FOUND = -32601
+ERR_INVALID_PARAMS = -32602
+ERR_INTERNAL = -32603
+ERR_SPEND_GATE = -32050
+# A method that IS in the contract but whose engine capability has not shipped
+# yet. Distinct from -32601, which for a frozen surface should never happen and
+# means the method is not in the contract at all. Carries data.phase.
+ERR_NOT_IMPLEMENTED = -32001
+
+# Exhaustive per the error convention. Adding to this set is a contract change,
+# not an implementation detail. Since v5 EVERY member requires confirm: true in
+# its params; the engine never infers consent, not even from an open gate.
+SPEND_TOUCHING = frozenset({"gymStart", "rolePing", "initBrain:layer1+layer2", "diagnoseNarrate"})
+
+# documents filter keys, fixed by v5.
+DOCUMENT_FILTER_KEYS = frozenset({"q", "type", "area"})
+
+EventHandler = Callable[[dict[str, Any]], None]
+
+
+def is_spend_touching(method: str, params: dict[str, Any] | None = None) -> bool:
+    """True when this exact call spends. initBrain only spends on layer1+layer2."""
+    if method == "initBrain":
+        return f"initBrain:{(params or {}).get('mode')}" in SPEND_TOUCHING
+    return method in SPEND_TOUCHING
+
+
+class RpcError(Exception):
+    """A JSON-RPC error response.
+
+    data.hint is written by the engine for the TUI to display verbatim, so
+    screens show self.hint and never a paraphrase of it.
+    """
+
+    def __init__(self, code: int, message: str, data: Any = None) -> None:
+        super().__init__(f"{code}: {message}")
+        self.code = code
+        self.message = message
+        self.data = data if isinstance(data, dict) else {}
+
+    @property
+    def hint(self) -> str:
+        return str(self.data.get("hint") or self.message)
+
+    @property
+    def gate(self) -> str | None:
+        gate = self.data.get("gate")
+        return str(gate) if gate else None
+
+    @property
+    def is_spend_gate(self) -> bool:
+        return self.code == ERR_SPEND_GATE
+
+    @property
+    def is_not_implemented(self) -> bool:
+        """A contract method whose engine capability ships in a later phase."""
+        return self.code == ERR_NOT_IMPLEMENTED
+
+    @property
+    def phase(self) -> str | None:
+        """Which build phase ships this capability, when the engine says."""
+        phase = self.data.get("phase")
+        return str(phase) if phase else None
+
+
+class RpcClient:
+    """Base client. Subclasses provide a transport."""
+
+    def __init__(self) -> None:
+        self._handlers: list[EventHandler] = []
+        self._finding_handlers: list[EventHandler] = []
+        self._next_id = 0
+        self.contract_version: str | None = None
+        self.engine_version: str | None = None
+
+    # Event fan out ------------------------------------------------------
+
+    def on_event(self, handler: EventHandler) -> EventHandler:
+        self._handlers.append(handler)
+        return handler
+
+    def off_event(self, handler: EventHandler) -> None:
+        if handler in self._handlers:
+            self._handlers.remove(handler)
+
+    def on_board_finding(self, handler: EventHandler) -> EventHandler:
+        self._finding_handlers.append(handler)
+        return handler
+
+    def off_board_finding(self, handler: EventHandler) -> None:
+        if handler in self._finding_handlers:
+            self._finding_handlers.remove(handler)
+
+    def dispatch_event(self, payload: dict[str, Any]) -> None:
+        for handler in list(self._handlers):
+            handler(payload)
+
+    def dispatch_board_finding(self, payload: dict[str, Any]) -> None:
+        for handler in list(self._finding_handlers):
+            handler(payload)
+
+    def dispatch_notification(self, method: str, payload: dict[str, Any]) -> None:
+        if method in BOARD_FINDING_ALIASES:
+            self.dispatch_board_finding(payload)
+        elif method in EVENT_METHOD_ALIASES:
+            self.dispatch_event(payload)
+
+    # Transport ----------------------------------------------------------
+
+    def _request_id(self) -> int:
+        self._next_id += 1
+        return self._next_id
+
+    async def start(self) -> None:  # pragma: no cover - trivial default
+        return None
+
+    async def aclose(self) -> None:  # pragma: no cover - trivial default
+        return None
+
+    async def call(self, method: str, params: dict[str, Any] | None = None) -> Any:
+        raise NotImplementedError
+
+    async def handshake(self) -> dict[str, Any]:
+        """First call on connect. Records the contract version for the app."""
+        result = await self.call("hello", {"clientVersion": CLIENT_VERSION})
+        self.contract_version = str(result.get("contractVersion"))
+        self.engine_version = str(result.get("engineVersion"))
+        return result
+
+    @property
+    def contract_matches(self) -> bool:
+        return self.contract_version == SUPPORTED_CONTRACT_VERSION
+
+    async def __aenter__(self) -> "RpcClient":
+        await self.start()
+        return self
+
+    async def __aexit__(self, *exc: object) -> None:
+        await self.aclose()
+
+
+def _unwrap(response: dict[str, Any]) -> Any:
+    if "error" in response:
+        err = response["error"] or {}
+        raise RpcError(
+            int(err.get("code", ERR_INTERNAL)),
+            str(err.get("message", "engine error")),
+            err.get("data"),
+        )
+    return response.get("result")
+
+
+class StdioRpcClient(RpcClient):
+    """Talks to an engine process over its stdin and stdout."""
+
+    def __init__(self, command: Sequence[str], *, cwd: str | None = None) -> None:
+        super().__init__()
+        self.command = list(command)
+        self.cwd = cwd
+        self._proc: asyncio.subprocess.Process | None = None
+        self._reader: asyncio.Task[None] | None = None
+        self._pending: dict[int, asyncio.Future[Any]] = {}
+        self._stderr_reader: asyncio.Task[None] | None = None
+        self._stderr: deque[str] = deque(maxlen=STDERR_TAIL_LINES)
+
+    async def start(self) -> None:
+        if self._proc is not None:
+            return
+        self._proc = await asyncio.create_subprocess_exec(
+            *self.command,
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            # NOT DEVNULL. A daemon that refuses to start writes one careful
+            # sentence to stderr naming the holding PID and the lock path, and
+            # discarding it turns a diagnosable refusal into a bare
+            # ConnectionError. The contract's own convention is that engine
+            # text written for the user is displayed verbatim.
+            stderr=asyncio.subprocess.PIPE,
+            cwd=self.cwd,
+        )
+        self._reader = asyncio.create_task(self._read_loop())
+        self._stderr_reader = asyncio.create_task(self._drain_stderr())
+
+    async def _drain_stderr(self) -> None:
+        """Keep the tail of the engine's stderr for the failure message."""
+        assert self._proc is not None and self._proc.stderr is not None
+        while True:
+            line = await self._proc.stderr.readline()
+            if not line:
+                break
+            text = line.decode("utf-8", errors="replace").rstrip()
+            if text:
+                self._stderr.append(text)
+
+    @property
+    def stderr_tail(self) -> str:
+        return "\n".join(self._stderr)
+
+    def _startup_error(self, summary: str) -> ConnectionError:
+        """Raise with the engine's own words attached, when it wrote any."""
+        tail = self.stderr_tail
+        if tail:
+            return ConnectionError(f"{summary}\n\nThe engine said:\n{tail}")
+        return ConnectionError(summary)
+
+    async def _read_loop(self) -> None:
+        assert self._proc is not None and self._proc.stdout is not None
+        stream = self._proc.stdout
+        while True:
+            line = await stream.readline()
+            if not line:
+                break
+            text = line.decode("utf-8", errors="replace").strip()
+            if not text:
+                continue
+            try:
+                message = json.loads(text)
+            except json.JSONDecodeError:
+                continue
+            self._on_message(message)
+        # Let the stderr drain finish so a refusal written just before exit is
+        # not lost to a race with the stdout EOF.
+        if self._stderr_reader is not None:
+            try:
+                await asyncio.wait_for(asyncio.shield(self._stderr_reader), timeout=1.0)
+            except (asyncio.TimeoutError, Exception):
+                pass
+        self._fail_pending(self._startup_error("The engine exited without answering."))
+
+    def _on_message(self, message: dict[str, Any]) -> None:
+        if not isinstance(message, dict):
+            return
+        if "method" in message and "id" not in message:
+            self.dispatch_notification(str(message["method"]), message.get("params") or {})
+            return
+        request_id = message.get("id")
+        future = self._pending.pop(request_id, None) if request_id is not None else None
+        if future is None or future.done():
+            return
+        try:
+            future.set_result(_unwrap(message))
+        except RpcError as error:
+            future.set_exception(error)
+
+    def _fail_pending(self, error: BaseException) -> None:
+        for future in self._pending.values():
+            if not future.done():
+                future.set_exception(error)
+        self._pending.clear()
+
+    async def call(self, method: str, params: dict[str, Any] | None = None) -> Any:
+        if self._proc is None:
+            await self.start()
+        assert self._proc is not None and self._proc.stdin is not None
+        request_id = self._request_id()
+        payload = {
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "method": method,
+            "params": params or {},
+        }
+        future: asyncio.Future[Any] = asyncio.get_running_loop().create_future()
+        self._pending[request_id] = future
+        self._proc.stdin.write((json.dumps(payload) + "\n").encode("utf-8"))
+        await self._proc.stdin.drain()
+        return await future
+
+    async def aclose(self) -> None:
+        if self._stderr_reader is not None:
+            self._stderr_reader.cancel()
+            try:
+                await self._stderr_reader
+            except (asyncio.CancelledError, Exception):
+                pass
+            self._stderr_reader = None
+        if self._reader is not None:
+            self._reader.cancel()
+            try:
+                await self._reader
+            except (asyncio.CancelledError, Exception):
+                pass
+            self._reader = None
+        if self._proc is not None:
+            if self._proc.stdin is not None and not self._proc.stdin.is_closing():
+                self._proc.stdin.close()
+            try:
+                self._proc.terminate()
+            except ProcessLookupError:
+                pass
+            try:
+                await asyncio.wait_for(self._proc.wait(), timeout=2)
+            except (asyncio.TimeoutError, Exception):
+                pass
+            self._proc = None
+        self._fail_pending(ConnectionError("client closed"))
+
+
+class MockEngine:
+    """A local stand in for the Node engine, speaking RPC v3.
+
+    It accepts and returns JSON-RPC envelopes exactly as the real engine does,
+    so the same client code drives both. Every value it returns comes from
+    mock_data and is labelled as mock in the TUI chrome.
+
+    Spend behaviour mirrors the contract: the four spend-touching methods are
+    refused with -32050 unless the call carries the confirmation the TUI is
+    required to collect, and gymStart additionally requires the owner gate.
+    """
+
+    def __init__(
+        self,
+        *,
+        speed: float = 1.0,
+        gate_open: bool = False,
+        contract_version: str = mock_data.CONTRACT_VERSION,
+        deferred: dict[str, str] | None = None,
+        emit: Callable[[dict[str, Any]], Any] | None = None,
+    ) -> None:
+        self.speed = speed
+        self.gate_open = gate_open
+        self.contract_version = contract_version
+        # Methods whose engine capability has not shipped, mapped to the phase
+        # that ships them. The real daemon answers these with -32001; the mock
+        # can too, so the "not built yet" screen state is testable offline.
+        self.deferred = dict(deferred or {})
+        self.emit = emit
+        self.settings = copy.deepcopy(mock_data.SETTINGS)
+        self.exams = copy.deepcopy(mock_data.EXAMS)
+        self.exam_details = copy.deepcopy(mock_data.EXAM_DETAIL)
+        self.gates = copy.deepcopy(mock_data.GATES)
+        self.agent_files = copy.deepcopy(mock_data.AGENT_FILES)
+        self.repos = copy.deepcopy(mock_data.REPOS)
+        self.board_rows = copy.deepcopy(mock_data.BOARD_ROWS)
+        self.calls: list[tuple[str, dict[str, Any]]] = []
+        self.spend_calls: list[tuple[str, dict[str, Any]]] = []
+        # What each confirmed spend call echoed back, as the real engine records
+        # it for the audit trail.
+        self.recorded_budgets: list[tuple[str, Any]] = []
+        self._jobs: dict[str, asyncio.Task[None]] = {}
+        self._cancelled: set[str] = set()
+        self._job_seq = 0
+
+    # Protocol -----------------------------------------------------------
+
+    async def handle(self, message: dict[str, Any]) -> dict[str, Any] | None:
+        request_id = message.get("id")
+        method = message.get("method")
+        params = message.get("params") or {}
+        if not isinstance(method, str):
+            return self._error(request_id, ERR_INVALID_REQUEST, "missing method", "The request carried no method name.")
+        self.calls.append((method, params))
+        if is_spend_touching(method, params):
+            self.spend_calls.append((method, params))
+        if method in self.deferred:
+            phase = self.deferred[method]
+            return self._error(
+                request_id,
+                ERR_NOT_IMPLEMENTED,
+                f"{method} is not implemented yet",
+                f"{method} is part of the frozen RPC surface but its engine capability ships in {phase}.",
+                {"phase": phase},
+            )
+        handler = getattr(self, f"_rpc_{method}", None)
+        if handler is None:
+            return self._error(
+                request_id,
+                ERR_METHOD_NOT_FOUND,
+                f"unknown method {method}",
+                f"The engine has no method named {method}. The frozen surface is in engine/src/rpc/methods.md.",
+            )
+        try:
+            result = await handler(params)
+        except RpcError as error:
+            return self._error(request_id, error.code, error.message, error.hint, error.data)
+        if request_id is None:
+            return None
+        return {"jsonrpc": "2.0", "id": request_id, "result": result}
+
+    @staticmethod
+    def _error(
+        request_id: Any,
+        code: int,
+        message: str,
+        hint: str,
+        data: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        payload = dict(data or {})
+        payload["hint"] = hint
+        return {
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "error": {"code": code, "message": message, "data": payload},
+        }
+
+    def _refuse_spend(self, what: str, hint: str) -> None:
+        raise RpcError(
+            ERR_SPEND_GATE,
+            f"{what} is spend-touching and was not confirmed",
+            {"gate": mock_data.SPEND_GATE["path"], "hint": hint},
+        )
+
+    async def _push(self, event: dict[str, Any], method: str = EVENT_METHOD) -> None:
+        if self.emit is None:
+            return
+        result = self.emit({"method": method, "params": event})
+        if inspect.isawaitable(result):
+            await result
+
+    def _new_job_id(self, prefix: str) -> str:
+        self._job_seq += 1
+        return f"job-{prefix}-{self._job_seq:04d}"
+
+    def _start_stream(self, job_id: str, events: Iterable[dict[str, Any]]) -> None:
+        task = asyncio.create_task(self._stream(job_id, list(events)))
+        self._jobs[job_id] = task
+        task.add_done_callback(lambda _t: self._jobs.pop(job_id, None))
+
+    async def _stream(self, job_id: str, events: list[dict[str, Any]]) -> None:
+        previous = 0
+        for event in events:
+            if job_id in self._cancelled:
+                await self._push(
+                    {
+                        "ts": previous,
+                        "jobId": job_id,
+                        "phase": "done",
+                        "step": "cancelled",
+                        "detail": "job cancelled by the user",
+                        "level": "warn",
+                    }
+                )
+                return
+            delay = max(0.0, (event["ts"] - previous) / 1000.0) * self.speed
+            previous = event["ts"]
+            if delay > 0:
+                await asyncio.sleep(delay)
+            await self._push(event)
+
+    def start_board_findings(self) -> None:
+        """Push the standing watcher findings, including a critical one."""
+        task = asyncio.create_task(self._stream_findings())
+        self._jobs["board-findings"] = task
+        task.add_done_callback(lambda _t: self._jobs.pop("board-findings", None))
+
+    async def _stream_findings(self) -> None:
+        for index, finding in enumerate(mock_data.BOARD_FINDING_PUSHES):
+            if index and self.speed:
+                await asyncio.sleep(0.4 * self.speed)
+            row = dict(finding)
+            self.board_rows.insert(0, {"id": f"f-push-{index}", **row})
+            await self._push(row, BOARD_FINDING_METHOD)
+
+    async def aclose(self) -> None:
+        for task in list(self._jobs.values()):
+            task.cancel()
+        for task in list(self._jobs.values()):
+            try:
+                await task
+            except (asyncio.CancelledError, Exception):
+                pass
+        self._jobs.clear()
+
+    # Handshake and lifecycle ---------------------------------------------
+
+    async def _rpc_hello(self, params: dict[str, Any]) -> dict[str, Any]:
+        return {"engineVersion": mock_data.ENGINE_VERSION, "contractVersion": self.contract_version}
+
+    async def _rpc_repoAttach(self, params: dict[str, Any]) -> dict[str, Any]:
+        path = str(params.get("repoPath") or "").rstrip("/")
+        if not path:
+            raise RpcError(ERR_INVALID_PARAMS, "repoPath required", {"hint": "Attach needs a repo path."})
+        for repo in self.repos:
+            if repo["path"] == path:
+                return {"repo": copy.deepcopy(repo)}
+        known = mock_data.ANALYZE.get(path)
+        repo = {
+            "path": path,
+            "health": "ok" if known and known.get("hasBrainFolder") else "no-brain",
+            "floorScore": None,
+            "mcpActive": False,
+        }
+        self.repos.append(repo)
+        return {"repo": copy.deepcopy(repo)}
+
+    async def _rpc_repoDetach(self, params: dict[str, Any]) -> dict[str, Any]:
+        path = str(params.get("repoPath") or "")
+        before = len(self.repos)
+        self.repos = [repo for repo in self.repos if repo["path"] != path]
+        if len(self.repos) == before:
+            raise RpcError(ERR_INVALID_PARAMS, "unknown repoPath", {"hint": f"{path} is not attached."})
+        return {"ok": True}
+
+    async def _rpc_jobCancel(self, params: dict[str, Any]) -> dict[str, Any]:
+        job_id = str(params.get("jobId") or "")
+        if job_id not in self._jobs:
+            return {"cancelled": False}
+        self._cancelled.add(job_id)
+        return {"cancelled": True}
+
+    # Core -----------------------------------------------------------------
+
+    async def _rpc_serveStatus(self, params: dict[str, Any]) -> dict[str, Any]:
+        status = copy.deepcopy(mock_data.SERVE_STATUS)
+        status["repos"] = copy.deepcopy(self.repos)
+        status["spendGate"] = {"open": self.gate_open, "path": mock_data.SPEND_GATE["path"]}
+        return status
+
+    async def _rpc_analyze(self, params: dict[str, Any]) -> dict[str, Any]:
+        repo = params.get("repoPath")
+        record = mock_data.ANALYZE.get(repo)
+        if record is None:
+            raise RpcError(
+                ERR_INVALID_PARAMS,
+                "unknown repoPath",
+                {"hint": f"The mock engine knows nothing about {repo}. Attach it first."},
+            )
+        return copy.deepcopy(record)
+
+    async def _rpc_initBrain(self, params: dict[str, Any]) -> dict[str, Any]:
+        repo = params.get("repoPath")
+        mode = params.get("mode", "layer1")
+        if mode not in ("ingest", "layer1", "layer1+layer2"):
+            raise RpcError(
+                ERR_INVALID_PARAMS,
+                "unknown mode",
+                {"hint": "mode must be ingest, layer1, or layer1+layer2."},
+            )
+        if mode == "layer1+layer2":
+            if not params.get("confirm"):
+                self._refuse_spend(
+                    "initBrain layer1+layer2",
+                    "Layer 2 narration runs on your engineer key and spends. The estimated "
+                    "budget has to be shown and confirmed before the job starts.",
+                )
+            # The engine ACCEPTS a bare confirm and records whatever echo it
+            # was given; refusing here would invent a refusal condition on a
+            # spend path and train the client against an error that will never
+            # come. Sending the echo is the client's obligation, enforced by a
+            # client-side test, not by a stricter-than-real mock.
+            self.recorded_budgets.append((str(repo), params.get("budget")))
+        job_id = self._new_job_id("init")
+        self._start_stream(job_id, mock_data.init_script(job_id, str(repo), mode))
+        return {"jobId": job_id}
+
+    async def _rpc_diagnose(self, params: dict[str, Any]) -> dict[str, Any]:
+        repo = params.get("repoPath")
+        record = mock_data.DIAGNOSE.get(repo)
+        if record is None:
+            raise RpcError(
+                ERR_INVALID_PARAMS,
+                "no gold set",
+                {"hint": f"No gold set has been mined for {repo}, so there is nothing to diagnose."},
+            )
+        return copy.deepcopy(record)
+
+    async def _rpc_diagnoseNarrate(self, params: dict[str, Any]) -> dict[str, Any]:
+        if not params.get("confirm"):
+            self._refuse_spend(
+                "diagnoseNarrate",
+                "The auditor's recommendation is a paid generation. It needs your explicit "
+                "go ahead on every call. The mechanical clusters above are free and already shown.",
+            )
+        repo = params.get("repoPath")
+        narration = mock_data.DIAGNOSE_NARRATION.get(repo)
+        if narration is None:
+            raise RpcError(ERR_INVALID_PARAMS, "no diagnosis", {"hint": f"Nothing to narrate for {repo}."})
+        return {"recommendation": narration}
+
+    async def _rpc_retrievalScore(self, params: dict[str, Any]) -> dict[str, Any]:
+        repo = params.get("repoPath")
+        record = mock_data.RETRIEVAL_SCORE.get(repo)
+        if record is None:
+            raise RpcError(
+                ERR_INVALID_PARAMS,
+                "no measured floor",
+                {"hint": f"No gold set has been mined for {repo}, so there is no floor to report."},
+            )
+        result = copy.deepcopy(record)
+        if not params.get("sweep"):
+            result.pop("budgetSweep", None)
+        budget = params.get("tokenBudget")
+        if budget:
+            for point in record.get("budgetSweep", []):
+                if point["budget"] == budget:
+                    result["caseRate"] = copy.deepcopy(point["caseRate"])
+                    result["chosenBudget"] = budget
+                    result["rationale"] = "budget pinned by the user for this run"
+        return result
+
+    async def _rpc_search(self, params: dict[str, Any]) -> dict[str, Any]:
+        query = str(params.get("query") or "").strip()
+        options = params.get("options") or {}
+        limit = int(options.get("k") or 10)
+        budget = int(options.get("tokenBudget") or self.settings["retrieval"]["tokenBudget"])
+        terms = [t.lower() for t in query.split() if len(t) > 2]
+        scored: list[dict[str, Any]] = []
+        for chunk in copy.deepcopy(mock_data.SEARCH_CHUNKS):
+            haystack = f"{chunk['text']} {chunk['documentId']} {chunk['type']} {chunk['area'] or ''}".lower()
+            overlap = sum(1 for term in terms if term in haystack)
+            if terms and overlap == 0 and not chunk["standing"]:
+                continue
+            chunk["score"] = round(chunk["score"] + 0.03 * overlap, 4)
+            chunk["matchedTerms"] = overlap
+            scored.append(chunk)
+        scored.sort(key=lambda row: row["score"], reverse=True)
+        kept: list[dict[str, Any]] = []
+        used = 0
+        for chunk in scored[:limit]:
+            # Standing units ride outside the budget (platform standing.js).
+            if chunk["standing"]:
+                kept.append(chunk)
+                continue
+            if used + chunk["tokens"] > budget:
+                continue
+            used += chunk["tokens"]
+            kept.append(chunk)
+        return {"chunks": kept, "tokensUsed": used}
+
+    async def _rpc_documents(self, params: dict[str, Any]) -> Any:
+        repo = params.get("repoPath")
+        inventory = mock_data.DOCUMENTS.get(repo)
+        if inventory is None:
+            raise RpcError(
+                ERR_INVALID_PARAMS,
+                "no brain",
+                {"hint": f"No brain has been built for {repo}, so there is no inventory to browse."},
+            )
+        rows = copy.deepcopy(inventory)
+        filters = params.get("filters") or {}
+        # A misspelled filter that is silently ignored returns EVERYTHING, which
+        # reads as "no matches were filtered out" when the truth is "your filter
+        # never ran". v5 makes that an error.
+        unknown = sorted(set(filters) - DOCUMENT_FILTER_KEYS)
+        if unknown:
+            raise RpcError(
+                ERR_INVALID_PARAMS,
+                "unknown document filter",
+                {
+                    "hint": (
+                        f"documents accepts only {', '.join(sorted(DOCUMENT_FILTER_KEYS))}. "
+                        f"Unrecognised: {', '.join(unknown)}. An ignored filter would have "
+                        f"returned the whole inventory as though nothing matched it."
+                    )
+                },
+            )
+        for field in ("type", "area"):
+            wanted = filters.get(field)
+            if wanted and wanted != "all":
+                rows = [row for row in rows if row.get(field) == wanted]
+        query = str(filters.get("q") or "").strip().lower()
+        if query:
+            rows = [
+                row
+                for row in rows
+                if query in f"{row.get('title', '')} {row.get('id', '')} {row.get('path', '')}".lower()
+            ]
+        return rows
+
+    async def _rpc_budgetEstimate(self, params: dict[str, Any]) -> dict[str, Any]:
+        """Zero-spend. The dialog that shows this runs BEFORE consent."""
+        repo = params.get("repoPath")
+        mode = params.get("mode")
+        if mode not in ("layer1+layer2", "gym"):
+            raise RpcError(
+                ERR_INVALID_PARAMS,
+                "unknown mode",
+                {"hint": "budgetEstimate takes mode layer1+layer2 or gym."},
+            )
+        record = mock_data.BUDGET_ESTIMATE.get((repo, mode))
+        if record is None:
+            raise RpcError(
+                ERR_INVALID_PARAMS,
+                "no estimate",
+                {"hint": f"The engine cannot estimate a {mode} run for {repo}."},
+            )
+        result = copy.deepcopy(record)
+        scope = (params.get("scope") or {}).get("areas") or []
+        if scope:
+            # A scoped run narrates less, so the estimate has to move with it or
+            # the dialog would overstate what the user is agreeing to.
+            factor = min(1.0, 0.34 * len(scope))
+            result["estimatedTokens"] = int(result["estimatedTokens"] * factor)
+            result["basis"] = f"{result['basis']}, scoped to {', '.join(scope)}"
+        return result
+
+    async def _rpc_scoreHistory(self, params: dict[str, Any]) -> Any:
+        repo = params.get("repoPath")
+        history = mock_data.SCORE_HISTORY.get(repo)
+        if history is None:
+            raise RpcError(
+                ERR_INVALID_PARAMS,
+                "no measurements",
+                {"hint": f"No floor has ever been measured for {repo}."},
+            )
+        # Newest first, as the contract states.
+        return copy.deepcopy(history)
+
+    async def _rpc_mcpSnippet(self, params: dict[str, Any]) -> dict[str, Any]:
+        repo = params.get("repoPath")
+        record = mock_data.MCP_SNIPPET.get(repo)
+        if record is None:
+            return {"unlocked": False, "threshold": mock_data.MCP_THRESHOLD, "snippet": None}
+        return copy.deepcopy(record)
+
+    # Gates ----------------------------------------------------------------
+
+    async def _rpc_gatesDiscover(self, params: dict[str, Any]) -> dict[str, Any]:
+        repo = str(params.get("repoPath") or "")
+        job_id = self._new_job_id("gates")
+        self._start_stream(job_id, mock_data.gates_script(job_id, repo))
+        return {"jobId": job_id}
+
+    async def _rpc_gatesGet(self, params: dict[str, Any]) -> dict[str, Any]:
+        repo = params.get("repoPath")
+        record = self.gates.get(repo)
+        if record is None:
+            raise RpcError(
+                ERR_INVALID_PARAMS,
+                "no gates discovered",
+                {"hint": f"No gates.yaml exists for {repo}. Run discovery first."},
+            )
+        return copy.deepcopy(record)
+
+    async def _rpc_gatesSet(self, params: dict[str, Any]) -> dict[str, Any]:
+        repo = params.get("repoPath")
+        record = self.gates.get(repo)
+        if record is None:
+            raise RpcError(ERR_INVALID_PARAMS, "no gates discovered", {"hint": f"No gates.yaml exists for {repo}."})
+        for gate_patch in (params.get("patch") or {}).get("gates", []):
+            for gate in record["gates"]:
+                if gate["name"] == gate_patch.get("name"):
+                    gate.update({k: v for k, v in gate_patch.items() if k != "name"})
+        return copy.deepcopy(record)
+
+    # Gym and exams --------------------------------------------------------
+
+    async def _rpc_gymStart(self, params: dict[str, Any]) -> dict[str, Any]:
+        if not self.gate_open:
+            raise RpcError(
+                ERR_SPEND_GATE,
+                "spend gate is blocked",
+                {
+                    "gate": mock_data.SPEND_GATE["path"],
+                    "hint": (
+                        "The spend gate is blocked. A gym cycle calls a paid provider, "
+                        "so the gate is flipped by the owner's hand and re-blocked after."
+                    ),
+                },
+            )
+        if not params.get("confirm"):
+            self._refuse_spend(
+                "gymStart",
+                "A gym cycle spends. The open gate is the owner's permission to spend at "
+                "all; it is not consent to this particular cycle, so the engine still "
+                "needs an explicit confirmation on the call.",
+            )
+        self.recorded_budgets.append((str(params.get("repoPath")), params.get("budget")))
+        config = params.get("config") or {}
+        exam_id = config.get("examId") or self.exams[0]["examId"]
+        job_id = self._new_job_id("gym")
+        self._start_stream(job_id, mock_data.gym_script(job_id, str(exam_id)))
+        return {"jobId": job_id}
+
+    async def _rpc_gymStatus(self, params: dict[str, Any]) -> dict[str, Any]:
+        return copy.deepcopy(mock_data.GYM_STATUS)
+
+    async def _rpc_examList(self, params: dict[str, Any]) -> Any:
+        filters = params.get("filters") or {}
+        rows = copy.deepcopy(self.exams)
+        for field in ("status", "benchmarkStatus", "tier"):
+            wanted = filters.get(field)
+            if wanted and wanted != "all":
+                rows = [row for row in rows if row.get(field) == wanted]
+        if filters.get("heldOut") in (True, False):
+            rows = [row for row in rows if row.get("heldOut") is filters["heldOut"]]
+        return rows
+
+    async def _rpc_examDetail(self, params: dict[str, Any]) -> dict[str, Any]:
+        exam_id = params.get("examId")
+        record = self.exam_details.get(exam_id)
+        if record is None:
+            raise RpcError(ERR_INVALID_PARAMS, "unknown examId", {"hint": f"No exam named {exam_id} is in the bank."})
+        return copy.deepcopy(record)
+
+    def _find_exam(self, exam_id: Any) -> dict[str, Any]:
+        for exam in self.exams:
+            if exam["examId"] == exam_id:
+                return exam
+        raise RpcError(ERR_INVALID_PARAMS, "unknown examId", {"hint": f"No exam named {exam_id} is in the bank."})
+
+    async def _rpc_examVeto(self, params: dict[str, Any]) -> dict[str, Any]:
+        exam = self._find_exam(params.get("examId"))
+        reason = str(params.get("reason") or "").strip()
+        if not reason:
+            raise RpcError(
+                ERR_INVALID_PARAMS,
+                "veto reason required",
+                {"hint": "A veto without a written reason is not reviewable later. Say why."},
+            )
+        exam["status"] = "vetoed"
+        exam.setdefault("provenance", {})["vetoReason"] = reason
+        # examDetail carries its own provenance copy, so the veto has to land in
+        # both or the detail pane keeps showing a record that no longer exists.
+        detail = self.exam_details.get(exam["examId"])
+        if detail is not None:
+            detail.setdefault("provenance", {})["vetoReason"] = reason
+        return copy.deepcopy(exam)
+
+    async def _rpc_examUpdate(self, params: dict[str, Any]) -> dict[str, Any]:
+        exam = self._find_exam(params.get("examId"))
+        patch = params.get("patch") or {}
+        merged = {**exam, **patch}
+        # quarantineReason is required, minimum 20 characters, when quarantined.
+        if merged.get("benchmarkStatus") == "quarantined":
+            reason = str(merged.get("quarantineReason") or "")
+            if len(reason) < 20:
+                raise RpcError(
+                    ERR_INVALID_PARAMS,
+                    "quarantineReason too short",
+                    {
+                        "hint": (
+                            "A quarantined exam needs a quarantineReason of at least 20 "
+                            "characters. A bare flag with no reason is unreadable six weeks later."
+                        )
+                    },
+                )
+        if merged.get("benchmarkStatus") == "active":
+            merged.pop("quarantineReason", None)
+        exam.clear()
+        exam.update(merged)
+        return copy.deepcopy(exam)
+
+    # Settings, roles, board -----------------------------------------------
+
+    async def _rpc_settingsGet(self, params: dict[str, Any]) -> dict[str, Any]:
+        return copy.deepcopy(self.settings)
+
+    async def _rpc_settingsSet(self, params: dict[str, Any]) -> dict[str, Any]:
+        patch = params.get("patch") or {}
+        for role_patch in patch.get("roles", []) or []:
+            for role in self.settings["roles"]:
+                if role["role"] == role_patch.get("role"):
+                    role.update({k: v for k, v in role_patch.items() if k != "ping"})
+        for key in ("retrieval", "storage", "charts"):
+            if key in patch:
+                self.settings[key].update(patch[key])
+        return copy.deepcopy(self.settings)
+
+    async def _rpc_rolePing(self, params: dict[str, Any]) -> dict[str, Any]:
+        role_name = params.get("role")
+        if role_name not in ("engineer", "teacher", "auditor", "watcher"):
+            raise RpcError(ERR_INVALID_PARAMS, "unknown role", {"hint": "role must be engineer, teacher, auditor, or watcher."})
+        if not params.get("confirm"):
+            self._refuse_spend(
+                "rolePing",
+                "A role ping is a real provider generation and costs money. It only ever "
+                "runs when you ask for it, never on a screen opening.",
+            )
+        role = next(entry for entry in self.settings["roles"] if entry["role"] == role_name)
+        # The watcher's endpoint rate limits, which is the interesting case: a
+        # failed ping is still a completed call, not an error response.
+        if role_name == "watcher":
+            ping = {"httpStatus": 429, "ttftMs": None, "latencyMs": 812, "servedModelId": None}
+        else:
+            ping = {
+                "httpStatus": 200,
+                "ttftMs": 486,
+                "latencyMs": 2_014,
+                # The served id is the identity check. The auditor's endpoint
+                # answers with a dated build, which is a drift the TUI shows.
+                "servedModelId": "gpt-5.2-2026-05-01" if role_name == "auditor" else role.get("model"),
+            }
+        role["ping"] = {"ok": ping["httpStatus"] == 200, **ping, "at": "2026-08-16T09:30:00Z"}
+        return dict(ping)
+
+    async def _rpc_board(self, params: dict[str, Any]) -> dict[str, Any]:
+        filters = params.get("filters") or {}
+        rows = copy.deepcopy(self.board_rows)
+        for field in ("source", "severity", "status", "category"):
+            wanted = filters.get(field)
+            if wanted and wanted != "all":
+                rows = [row for row in rows if row.get(field) == wanted]
+        return {"rows": rows, "total": len(self.board_rows)}
+
+    async def _rpc_agentFileGet(self, params: dict[str, Any]) -> dict[str, Any]:
+        role = params.get("role")
+        record = self.agent_files.get(role)
+        if record is None:
+            raise RpcError(
+                ERR_INVALID_PARAMS,
+                "unknown role",
+                {"hint": "role must be student, teacher, auditor, or watcher."},
+            )
+        return copy.deepcopy(record)
+
+    async def _rpc_agentFileSet(self, params: dict[str, Any]) -> dict[str, Any]:
+        role = params.get("role")
+        record = self.agent_files.get(role)
+        if record is None:
+            raise RpcError(ERR_INVALID_PARAMS, "unknown role", {"hint": "role must be student, teacher, auditor, or watcher."})
+        content = str(params.get("content") or "")
+        record["content"] = content
+        # A stand in for the engine's real hash; only its stability matters here.
+        record["currentHash"] = f"sha256:{abs(hash(content)) % 0x1000000:06x}"
+        record["modified"] = record["currentHash"] != record["defaultHash"]
+        # settingsGet mirrors these files, so both views move together.
+        for entry in self.settings.get("instructionFiles", []):
+            if entry.get("name") == role:
+                entry["hash"] = record["currentHash"]
+                entry["modified"] = record["modified"]
+        return copy.deepcopy(record)
+
+
+class MockRpcClient(RpcClient):
+    """In process client over a MockEngine.
+
+    Requests and responses are serialized through JSON on the way in and out,
+    so the mock path exercises the same encoding the stdio path does and no
+    screen can accidentally hold a reference into the engine's own data.
+    """
+
+    def __init__(self, engine: MockEngine | None = None, **engine_kwargs: Any) -> None:
+        super().__init__()
+        self.engine = engine or MockEngine(**engine_kwargs)
+        self.engine.emit = self._on_engine_event
+
+    def _on_engine_event(self, envelope: dict[str, Any]) -> None:
+        message = json.loads(
+            json.dumps({"jsonrpc": "2.0", "method": envelope["method"], "params": envelope["params"]})
+        )
+        self.dispatch_notification(message["method"], message["params"])
+
+    async def call(self, method: str, params: dict[str, Any] | None = None) -> Any:
+        request = {
+            "jsonrpc": "2.0",
+            "id": self._request_id(),
+            "method": method,
+            "params": params or {},
+        }
+        response = await self.engine.handle(json.loads(json.dumps(request)))
+        if response is None:
+            return None
+        return _unwrap(json.loads(json.dumps(response)))
+
+    async def aclose(self) -> None:
+        await self.engine.aclose()
+
+
+async def serve_stdio(engine: MockEngine | None = None) -> None:
+    """Run a MockEngine as a real stdio server.
+
+    Lets the stdio client be exercised end to end without the Node engine:
+        python -m daijin_tui.rpc
+    """
+    engine = engine or MockEngine()
+    lock = asyncio.Lock()
+
+    async def write(message: dict[str, Any]) -> None:
+        async with lock:
+            sys.stdout.write(json.dumps(message) + "\n")
+            sys.stdout.flush()
+
+    def emit(envelope: dict[str, Any]) -> Awaitable[None]:
+        return write({"jsonrpc": "2.0", "method": envelope["method"], "params": envelope["params"]})
+
+    engine.emit = emit
+    while True:
+        line = await asyncio.to_thread(sys.stdin.readline)
+        if not line:
+            break
+        text = line.strip()
+        if not text:
+            continue
+        try:
+            message = json.loads(text)
+        except json.JSONDecodeError:
+            await write(
+                {
+                    "jsonrpc": "2.0",
+                    "id": None,
+                    "error": {
+                        "code": ERR_INVALID_REQUEST,
+                        "message": "parse error",
+                        "data": {"hint": "The engine could not parse that line as JSON."},
+                    },
+                }
+            )
+            continue
+        response = await engine.handle(message)
+        if response is not None:
+            await write(response)
+    await engine.aclose()
+
+
+def _main(argv: Sequence[str]) -> None:  # pragma: no cover - process entry point
+    speed = 1.0
+    gate_open = False
+    contract = mock_data.CONTRACT_VERSION
+    for index, arg in enumerate(argv):
+        if arg == "--speed" and index + 1 < len(argv):
+            speed = float(argv[index + 1])
+        elif arg == "--gate" and index + 1 < len(argv):
+            gate_open = argv[index + 1] == "open"
+        elif arg == "--contract" and index + 1 < len(argv):
+            contract = argv[index + 1]
+    asyncio.run(serve_stdio(MockEngine(speed=speed, gate_open=gate_open, contract_version=contract)))
+
+
+if __name__ == "__main__":  # pragma: no cover - process entry point
+    try:
+        _main(sys.argv[1:])
+    except KeyboardInterrupt:
+        pass

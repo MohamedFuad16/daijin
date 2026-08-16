@@ -1,0 +1,17 @@
+# Captured 2026-08-15T23:45:28Z (UTC) by gym-porter
+# Command: node docs/verification/p4-mutations/gate-scanner-plants.mjs
+# Instrument: the verifier's own, unmodified.
+
+CONTROL  clean    innocent writer, must never be flagged
+CAUGHT   direct gate-file write from a non-owner
+         -> only spend-gate.js may write the gate file; this module writes files and names the gate, and holds no allowlist entry
+CAUGHT   aliased gate path built by concatenation, not gymSpendGatePath()
+         -> only spend-gate.js may write the gate file; this module writes files and names the gate, and holds no allowlist entry
+CAUGHT   owner writing an open-status literal to a VARIABLE target
+         -> a write in the gate module carries an open-status payload
+CAUGHT   convenience demo helper with a template-literal path
+         -> only spend-gate.js may write the gate file; this module writes files and names the gate, and holds no allowlist entry
+
+caught 4/4 plants, control clean
+ACCEPTANCE MET
+# exit=0

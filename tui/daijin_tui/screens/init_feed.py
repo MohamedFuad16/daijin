@@ -1,0 +1,183 @@
+"""Init activity feed. Claude Code style, never a frozen wait."""
+
+from __future__ import annotations
+
+from typing import Any, Iterable
+
+from textual import work
+from textual.containers import Horizontal
+from textual.widgets import Button, Input, Select, Static
+
+from .. import mock_data
+from ..rpc import RpcError
+from ..widgets import Banner, EventLog, PhaseChecklist, SectionTitle
+from .base import DaijinScreen
+from .dialogs import budget_estimate_lines
+
+MODE_OPTIONS = [
+    ("Ingest the existing agent folder as is", "ingest"),
+    ("Layer 1 only, deterministic, no key, no spend", "layer1"),
+    ("Layer 1 then Layer 2 narration, SPENDS on the engineer key", "layer1+layer2"),
+]
+
+
+class InitFeedScreen(DaijinScreen):
+    mode_name = "init"
+    heading = "Initialize brain"
+    subheading = "phase checklist and the raw step-event stream"
+
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self.job_id: str | None = None
+        self._subscribed = False
+
+    def content(self) -> Iterable[Any]:
+        yield Banner("Pick a repo on the repo home, then start.", tone="info", id="init-notice")
+        with Horizontal(id="init-controls"):
+            yield Select(MODE_OPTIONS, value="layer1", id="init-mode", allow_blank=False)
+            yield Button("Start init", id="init-start", variant="primary")
+            yield Button("Cancel job", id="init-cancel")
+            yield Button("Clear", id="init-clear")
+        with Horizontal(id="init-scope-row"):
+            yield Static("Layer 2 scope", classes="kv-label")
+            yield Input(
+                placeholder="optional, comma separated areas, used by the sub-75 path",
+                id="init-scope",
+            )
+        yield SectionTitle("Phases")
+        yield PhaseChecklist(mock_data.INIT_PHASES, id="init-checklist")
+        yield SectionTitle("Step events", "the same jsonl stream the gym and gates views read")
+        yield EventLog(id="init-events")
+
+    async def load(self) -> None:
+        self._subscribe()
+        self.refresh_heading()
+        notice = self.query_one("#init-notice", Banner)
+        if not getattr(self.app, "selected_repo", None):
+            notice.set_notice("No repo selected. Press 1 for the repo home and pick one.", "warn")
+        else:
+            notice.set_notice(f"Ready to initialize {self.app.selected_repo}.", "info")
+
+    def _subscribe(self) -> None:
+        if not self._subscribed:
+            self.client.on_event(self._on_step_event)
+            self._subscribed = True
+
+    def on_unmount(self) -> None:
+        if self._subscribed:
+            self.client.off_event(self._on_step_event)
+            self._subscribed = False
+
+    def _on_step_event(self, event: dict[str, Any]) -> None:
+        if not self.is_mounted:
+            return
+        if not self.accepts_step_event(event):
+            return
+        checklist = self.query_one("#init-checklist", PhaseChecklist)
+        checklist.apply_event(event)
+        self.query_one("#init-events", EventLog).append_event(event)
+        if event.get("phase") == "done":
+            cancelled = event.get("step") == "cancelled"
+            self.query_one("#init-notice", Banner).set_notice(
+                (
+                    f"Init cancelled after {checklist.elapsed:.1f}s, job {self.job_id}."
+                    if cancelled
+                    else f"Init complete for {getattr(self.app, 'selected_repo', '')} in "
+                    f"{checklist.elapsed:.1f}s, job {self.job_id}."
+                ),
+                "warn" if cancelled else "info",
+            )
+
+    async def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "init-start":
+            event.stop()
+            self.start_init()
+        elif event.button.id == "init-cancel":
+            event.stop()
+            await self.cancel_init()
+        elif event.button.id == "init-clear":
+            event.stop()
+            self.job_id = None
+            self.query_one("#init-checklist", PhaseChecklist).reset()
+            self.query_one("#init-events", EventLog).clear()
+
+    def _scope(self) -> dict[str, Any] | None:
+        raw = self.query_one("#init-scope", Input).value.strip()
+        if not raw:
+            return None
+        areas = [part.strip() for part in raw.split(",") if part.strip()]
+        return {"areas": areas} if areas else None
+
+    async def _budget_estimate(
+        self, repo: str, mode: str, scope: dict[str, Any] | None
+    ) -> dict[str, Any] | None:
+        """Zero-spend estimate for the confirmation dialog."""
+        params: dict[str, Any] = {"repoPath": repo, "mode": mode}
+        if scope:
+            params["scope"] = scope
+        try:
+            return await self.client.call("budgetEstimate", params)
+        except RpcError as error:
+            self.report_rpc_error(error)
+            return None
+
+    @work
+    async def start_init(self) -> None:
+        repo = getattr(self.app, "selected_repo", None)
+        notice = self.query_one("#init-notice", Banner)
+        if not repo:
+            notice.set_notice("No repo selected. Press 1 for the repo home and pick one.", "warn")
+            return
+        mode = self.query_one("#init-mode", Select).value
+        params: dict[str, Any] = {"repoPath": repo, "mode": mode}
+        scope = self._scope()
+        if scope:
+            params["scope"] = scope
+
+        if mode == "layer1+layer2":
+            # Spend-touching. The estimate is displayed and confirmed on this
+            # call, or the call is not made at all.
+            estimate = await self._budget_estimate(repo, "layer1+layer2", scope)
+            scope_note = (
+                f"Scoped to {', '.join(scope['areas'])}." if scope else "No scope set, the whole repo is narrated."
+            )
+            confirmed = await self.confirm_spend(
+                method="initBrain, mode layer1+layer2",
+                summary=(
+                    f"Layer 2 narrates prose over the evidence tables for {repo} using your "
+                    f"engineer key. Layer 1 has already run without spending. {scope_note}"
+                ),
+                estimate_lines=list(budget_estimate_lines(estimate)),
+                confirm_label="Run Layer 2 and spend",
+            )
+            if not confirmed:
+                notice.set_notice("Layer 2 not started. Nothing was sent to a provider.", "info")
+                return
+            params["confirm"] = True
+            params["budget"] = estimate
+
+        try:
+            result = await self.client.call("initBrain", params)
+        except RpcError as error:
+            self.report_rpc_error(error)
+            notice.set_notice(error.hint, "error")
+            return
+        self.job_id = result.get("jobId")
+        self.query_one("#init-checklist", PhaseChecklist).reset(self.job_id)
+        self.query_one("#init-events", EventLog).clear()
+        notice.set_notice(f"Init running for {repo}, job {self.job_id}, mode {mode}.", "info")
+
+    async def cancel_init(self) -> None:
+        notice = self.query_one("#init-notice", Banner)
+        if not self.job_id:
+            notice.set_notice("No init job is running.", "warn")
+            return
+        try:
+            result = await self.client.call("jobCancel", {"jobId": self.job_id})
+        except RpcError as error:
+            self.report_rpc_error(error)
+            return
+        if result.get("cancelled"):
+            notice.set_notice(f"Cancel requested for job {self.job_id}.", "warn")
+        else:
+            notice.set_notice(f"Job {self.job_id} had already finished.", "info")

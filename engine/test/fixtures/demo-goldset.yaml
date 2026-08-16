@@ -1,0 +1,15 @@
+# Fixture gold set for the score harness tests. Not a measurement.
+- id: t001
+  query: storage locking
+  must_return: [web.decision.adr-0001]
+  why: The ranked case; the answer must be earned by ranking.
+
+- id: t002
+  query: house rule about helpers
+  must_return: [global.lesson.house-rule]
+  why: The standing-assisted case; the answer arrives by pinning, not by ranking.
+
+- id: t003
+  query: nothing at all resembles this query text
+  must_return: [web.decision.adr-0002]
+  why: The miss; a case the corpus cannot answer keeps the harness honest.

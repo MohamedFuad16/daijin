@@ -1,0 +1,385 @@
+/* Daijin TUI styles. Layout only; every value on screen comes from RPC. */
+
+#screen-heading {
+    padding: 0 1;
+    height: auto;
+}
+
+#screen-body {
+    padding: 0 1;
+}
+
+.nav-bar {
+    height: 3;
+    padding: 0 1;
+}
+
+.nav-button {
+    min-width: 10;
+    margin: 0 1 0 0;
+    border: none;
+    height: 3;
+}
+
+.nav-active {
+    text-style: bold reverse;
+}
+
+.section-title {
+    padding: 1 0 0 0;
+    height: auto;
+    color: $accent;
+}
+
+.banner {
+    height: auto;
+    padding: 0 1;
+    margin: 1 0;
+}
+
+.banner-info {
+    background: $panel;
+}
+
+.banner-warn {
+    background: $warning 30%;
+}
+
+.banner-error {
+    background: $error 30%;
+}
+
+.stub-panel {
+    height: auto;
+    padding: 0 1;
+    margin: 1 0;
+    border: round $warning;
+    color: $text-muted;
+}
+
+.key-value {
+    height: 1;
+}
+
+.kv-label {
+    width: 26;
+    color: $text-muted;
+}
+
+.kv-value {
+    width: 1fr;
+}
+
+/* Repo home */
+
+#repo-cards {
+    height: auto;
+    padding: 1 0;
+}
+
+.repo-card {
+    width: 42;
+    height: auto;
+    padding: 1;
+    margin: 0 2 0 0;
+    border: round $primary;
+}
+
+.repo-card:focus {
+    border: round $accent;
+}
+
+.card-title {
+    height: 1;
+}
+
+.card-path {
+    height: 1;
+    color: $text-muted;
+}
+
+.card-floor {
+    height: 1;
+}
+
+.card-spark {
+    height: 1;
+}
+
+.card-mcp {
+    height: 1;
+}
+
+.card-actions {
+    height: 3;
+    margin: 1 0 0 0;
+}
+
+.card-action {
+    width: 1fr;
+}
+
+.card-detach {
+    min-width: 10;
+    margin: 0 0 0 1;
+}
+
+.health-ok {
+    color: $success;
+}
+
+.health-warn {
+    color: $warning;
+}
+
+.health-critical {
+    color: $error;
+}
+
+.health-none {
+    color: $text-muted;
+}
+
+/* Init and gym activity */
+
+.phase-checklist {
+    height: auto;
+    padding: 1 0;
+}
+
+.event-log {
+    height: 16;
+    border: round $panel;
+}
+
+#init-controls {
+    height: 3;
+}
+
+#init-mode {
+    width: 60;
+}
+
+#gym-controls {
+    height: 3;
+}
+
+#gym-gate {
+    padding: 1 2;
+    width: 1fr;
+}
+
+/* Brain browser */
+
+#search-row {
+    height: 3;
+}
+
+#search-input {
+    width: 1fr;
+}
+
+#chunk-table {
+    height: 12;
+}
+
+#chunk-detail {
+    height: auto;
+    padding: 1;
+    border: round $panel;
+}
+
+/* Charts */
+
+.plot {
+    height: auto;
+    padding: 0;
+}
+
+.radar-chart {
+    height: auto;
+    padding: 1 0;
+}
+
+.sparkline {
+    height: 1;
+}
+
+/* Board and settings tables */
+
+#board-filters {
+    height: 3;
+}
+
+#board-table {
+    height: 14;
+}
+
+#board-detail {
+    height: auto;
+    padding: 1;
+    border: round $panel;
+}
+
+#exam-table {
+    height: 10;
+}
+
+#role-table {
+    height: 9;
+}
+
+#role-detail {
+    height: auto;
+    padding: 1;
+    border: round $panel;
+}
+
+#file-table {
+    height: 8;
+}
+
+#edit-table, #check-table, #extension-table, #boundary-table, #criteria-table, #rollback-table {
+    height: 8;
+}
+
+#cycle-table {
+    height: 9;
+}
+
+/* Gates */
+
+#gates-controls {
+    height: 3;
+}
+
+#gates-table {
+    height: 12;
+}
+
+#gate-evidence {
+    height: auto;
+    padding: 1;
+    border: round $panel;
+}
+
+/* Attach row, exam filters, role and file actions */
+
+#attach-row {
+    height: 3;
+    margin: 1 0 0 0;
+}
+
+#attach-input {
+    width: 1fr;
+}
+
+#init-scope-row {
+    height: 3;
+}
+
+#init-scope {
+    width: 1fr;
+}
+
+#exam-filters {
+    height: 3;
+}
+
+#role-actions, #file-actions {
+    height: 3;
+}
+
+#file-detail {
+    height: auto;
+    padding: 1;
+    border: round $panel;
+}
+
+#percase-table, #cluster-table, #missed-table {
+    height: 10;
+}
+
+#mcp-summary, #diagnosis-headline, #narration {
+    height: auto;
+    padding: 1;
+    border: round $panel;
+}
+
+/* Modal dialogs */
+
+.dialog {
+    width: 84;
+    height: auto;
+    max-height: 80%;
+    padding: 1 2;
+    border: thick $warning;
+    background: $surface;
+}
+
+#prompt-dialog, #agent-file-dialog {
+    border: thick $primary;
+}
+
+#agent-file-dialog {
+    width: 100;
+}
+
+#agent-file-text {
+    height: 20;
+}
+
+.dialog-actions {
+    height: 3;
+    margin: 1 0 0 0;
+}
+
+.dialog-actions Button {
+    margin: 0 1 0 0;
+}
+
+#spend-estimate {
+    padding: 1 0;
+    color: $warning;
+}
+
+SpendConfirmScreen, TextPromptScreen, AgentFileEditScreen {
+    align: center middle;
+}
+
+/* Upgrade screen */
+
+#upgrade-body {
+    padding: 2 4;
+    height: auto;
+}
+
+#upgrade-title {
+    color: $error;
+    padding: 0 0 1 0;
+}
+
+#upgrade-detail, #upgrade-advice {
+    padding: 0 0 1 0;
+    height: auto;
+}
+
+/* Brain inventory */
+
+#inventory-filters {
+    height: 3;
+}
+
+#inventory-query {
+    width: 1fr;
+}
+
+#inventory-table {
+    height: 12;
+}
+
+#inventory-detail {
+    height: auto;
+    padding: 1;
+    border: round $panel;
+}

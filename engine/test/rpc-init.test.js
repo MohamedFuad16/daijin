@@ -1,0 +1,278 @@
+// initBrain, wired to init-miner's pipeline.
+//
+// Driven IN PROCESS with injected dependencies rather than over the pipe, because a real
+// run needs a live Ollama and engine/test is network-free (D-0015). What is asserted here
+// is the WIRING: that the daemon builds the right call, forwards the pipeline's steps onto
+// the notification channel unaltered in shape, and crosses the spend boundary before any
+// work rather than inside the job. The refusals are also exercised over the real pipe in
+// rpc-spend.test.js, because those are what a user meets.
+import assert from 'node:assert/strict';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import test from 'node:test';
+
+import { createRpcServer } from '../src/rpc/server.js';
+
+const ERR_SPEND_REFUSED = -32050;
+const ERR_NOT_IMPLEMENTED = -32001;
+
+/// A server with every outside dependency injected. `calls` records what the daemon asked
+/// the pipeline for, which is the thing under test.
+async function harness({ pipeline, repoPath } = {}) {
+  const stateRoot = await mkdtemp(path.join(tmpdir(), 'daijin-init-state-'));
+  const messages = [];
+  const calls = [];
+  const served = { provider: 'ollama', model: 'test-embed', digest: 'sha256:test', dimension: 8 };
+
+  const server = createRpcServer({
+    stateRoot,
+    write: (message) => messages.push(message),
+    deps: {
+      createEmbedderClient: (options) => ({
+        options,
+        async servedIdentity() { return served; },
+        async embed(texts) { return texts.map(() => new Array(8).fill(0.1)); },
+      }),
+      embedderFromClient: (client) => ({ client, async embed(texts) { return client.embed(texts); } }),
+      openStore: async (root, options) => ({ root, options, project: 'default', async close() {} }),
+      initBrain: async (options) => {
+        calls.push(options);
+        return pipeline ? pipeline(options) : { floor: null };
+      },
+      readSpendGate: async () => ({ open: false, file: '/nowhere/GATE', hint: 'blocked' }),
+      checkOllama: async () => { throw new Error('probe skipped'); },
+    },
+  });
+  if (repoPath) await server.methods.repoAttach({ repoPath });
+  return {
+    server, messages, calls, stateRoot, served,
+    steps: () => messages.filter((row) => row.method === 'step').map((row) => row.params),
+    async cleanup() {
+      await server.close();
+      await rm(stateRoot, { recursive: true, force: true });
+    },
+  };
+}
+
+test('initBrain layer1 returns a jobId and streams the pipeline steps onto the channel', async () => {
+  const repoPath = await mkdtemp(path.join(tmpdir(), 'daijin-init-repo-'));
+  const context = await harness({
+    repoPath,
+    pipeline: async ({ onStep }) => {
+      // The shape init-miner's stepper emits, forwarded rather than rewrapped.
+      await onStep({ ts: 1, jobId: 'x', phase: 'identify', step: 'analyze', detail: '12 files', counts: { files: 12 }, level: 'info' });
+      await onStep({ ts: 2, jobId: 'x', phase: 'evidence', step: 'imports', detail: 'graph built', counts: null, level: 'info' });
+      await onStep({ ts: 3, jobId: 'x', phase: 'floor', step: 'measured', detail: '2 of 3', counts: null, level: 'info' });
+      return { floor: { caseRate: { exact: 2 / 3, cases: '2 of 3' }, chosenBudget: 4000 } };
+    },
+  });
+  try {
+    const { jobId } = await context.server.methods.initBrain({ repoPath, mode: 'layer1' });
+    assert.match(jobId, /^job-init-/, 'the jobId comes back immediately, before the work finishes');
+    await context.server.jobs.drain();
+
+    const steps = context.steps().filter((row) => row.jobId === jobId);
+    assert.deepEqual(steps.map((row) => row.phase), ['identify', 'evidence', 'floor']);
+    assert.deepEqual(steps.map((row) => row.step), ['analyze', 'imports', 'measured']);
+    assert.deepEqual(steps[0].counts, { files: 12 });
+    // counts is OMITTED, not sent empty, so a client can tell "no counts" from "zero".
+    assert.equal(Object.hasOwn(steps[1], 'counts'), false);
+    for (const row of steps) {
+      assert.equal(typeof row.ts, 'number');
+      assert.ok(row.ts > 1_600_000_000_000, 'ts is restamped by the runner, so one clock owns the stream');
+    }
+  } finally {
+    await context.cleanup();
+    await rm(repoPath, { recursive: true, force: true });
+  }
+});
+
+test('the daemon hands the pipeline the SERVED embedder identity, not the configured claim', async () => {
+  const repoPath = await mkdtemp(path.join(tmpdir(), 'daijin-init-repo-'));
+  const context = await harness({ repoPath });
+  try {
+    await context.server.methods.initBrain({ repoPath, mode: 'layer1' });
+    await context.server.jobs.drain();
+
+    assert.equal(context.calls.length, 1);
+    const call = context.calls[0];
+    assert.equal(call.mode, 'layer1');
+    assert.equal(call.repoPath, repoPath);
+    // The environment is built from what ANSWERED, which is what the index records and what
+    // retrieval's identity assert later compares against.
+    assert.equal(call.environment.EMBEDDING_MODEL, context.served.model);
+    assert.equal(call.environment.EMBEDDING_MODEL_DIGEST, context.served.digest);
+    assert.equal(call.environment.EMBEDDING_DIM, String(context.served.dimension));
+    assert.ok(call.embedder?.embed, 'the pipeline needs an embedder with embed()');
+    assert.equal(call.narrator, null, 'no narrator: Layer 2 is not reachable in this build');
+    assert.equal(call.jobId, (await Promise.resolve(call.jobId)));
+  } finally {
+    await context.cleanup();
+    await rm(repoPath, { recursive: true, force: true });
+  }
+});
+
+test('a measured floor lands in the SAME history retrievalScore writes', async () => {
+  // Two sources writing two histories would give a repo card that shows half the
+  // measurements that were actually taken.
+  const repoPath = await mkdtemp(path.join(tmpdir(), 'daijin-init-repo-'));
+  const context = await harness({
+    repoPath,
+    pipeline: async () => ({ floor: { caseRate: { exact: 0.8, cases: '4 of 5' }, chosenBudget: 6000 } }),
+  });
+  try {
+    await context.server.methods.initBrain({ repoPath, mode: 'layer1' });
+    await context.server.jobs.drain();
+
+    const history = JSON.parse(await readFile(path.join(repoPath, '.daijin', 'score-history.json'), 'utf8'));
+    assert.equal(history.length, 1);
+    assert.deepEqual(history[0].caseRate, { exact: 0.8, cases: '4 of 5' });
+    assert.equal(history[0].chosenBudget, 6000);
+
+    // And scoreHistory serves it, which is what the repo card renders.
+    assert.deepEqual(await context.server.methods.scoreHistory({ repoPath }), history);
+  } finally {
+    await context.cleanup();
+    await rm(repoPath, { recursive: true, force: true });
+  }
+});
+
+test('a pipeline failure reaches the user on the step stream', async () => {
+  // The request returned its jobId long ago, so this channel is the only place a user can
+  // learn the job died.
+  const repoPath = await mkdtemp(path.join(tmpdir(), 'daijin-init-repo-'));
+  const context = await harness({
+    repoPath,
+    pipeline: async () => { throw new Error('the evidence pass exploded'); },
+  });
+  try {
+    await context.server.methods.initBrain({ repoPath, mode: 'layer1' });
+    await context.server.jobs.drain();
+    const failure = context.steps().find((row) => row.step === 'failed');
+    assert.ok(failure, 'a pipeline failure must reach the stream');
+    assert.equal(failure.level, 'error');
+    assert.match(failure.detail, /exploded/);
+  } finally {
+    await context.cleanup();
+    await rm(repoPath, { recursive: true, force: true });
+  }
+});
+
+test('mode ingest is refused BEFORE a job starts, naming why', async () => {
+  // The pipeline throws for ingest too, but only after its analyze pass, so a user would
+  // watch a job start and then fail. This refusal is the one they meet.
+  const repoPath = await mkdtemp(path.join(tmpdir(), 'daijin-init-repo-'));
+  const context = await harness({ repoPath });
+  try {
+    await assert.rejects(
+      context.server.methods.initBrain({ repoPath, mode: 'ingest' }),
+      (error) => {
+        assert.equal(error.code, ERR_NOT_IMPLEMENTED);
+        assert.match(error.data.phase, /^P3/);
+        assert.match(error.data.hint, /overwrite your work with machine output/);
+        return true;
+      },
+    );
+    assert.equal(context.calls.length, 0, 'no job ran');
+    assert.deepEqual(context.steps(), [], 'and nothing was streamed');
+  } finally {
+    await context.cleanup();
+    await rm(repoPath, { recursive: true, force: true });
+  }
+});
+
+test('layer1+layer2 crosses the spend boundary before any work', async () => {
+  const repoPath = await mkdtemp(path.join(tmpdir(), 'daijin-init-repo-'));
+  const context = await harness({ repoPath });
+  try {
+    await assert.rejects(
+      context.server.methods.initBrain({ repoPath, mode: 'layer1+layer2' }),
+      (error) => { assert.equal(error.code, ERR_SPEND_REFUSED); return true; },
+    );
+    assert.equal(context.calls.length, 0, 'the refusal happened before the pipeline was called');
+    assert.deepEqual(context.steps(), [], 'a refusal must not look like a job that started');
+
+    // Confirmed, it reaches the pipeline, which refuses Layer 2 itself for want of a
+    // narrator. Two boundaries: the user-facing one here, the structural one there.
+    await context.server.methods.initBrain({ repoPath, mode: 'layer1+layer2', confirm: true, budget: { estimatedTokens: 90_000 } });
+    await context.server.jobs.drain();
+    assert.equal(context.calls.length, 1);
+    assert.equal(context.calls[0].narrator, null);
+    assert.equal(context.calls[0].confirmedBudget, 90_000, 'the budget the user saw travels to the pipeline');
+  } finally {
+    await context.cleanup();
+    await rm(repoPath, { recursive: true, force: true });
+  }
+});
+
+test('initBrain on an unattached repo does not start a job', async () => {
+  const context = await harness({});
+  try {
+    await assert.rejects(
+      context.server.methods.initBrain({ repoPath: '/definitely/not/attached', mode: 'layer1' }),
+      (error) => { assert.equal(error.code, -32602); return true; },
+    );
+    assert.equal(context.calls.length, 0);
+  } finally {
+    await context.cleanup();
+  }
+});
+
+// ---- the mechanical clusterer ------------------------------------------------------------
+
+test('clusterCases attributes a miss to the MISSED DOCUMENT, not to the query', async () => {
+  // The distinction is the whole value. "architecture units are being missed" is
+  // actionable; "queries about storage missed" is not, and an earlier version of this
+  // reported the query's inferred area under the name `area`, which reads as the first
+  // while being the second.
+  const { clusterCases } = await import('../src/rpc/methods.js');
+  const inventory = new Map([
+    ['arch.overview', { type: 'architecture', area: 'rag' }],
+    ['adr.0040', { type: 'decision', area: 'store' }],
+  ]);
+  const results = [
+    { id: 'g001', complete: false, reciprocalRank: 0, misses: ['arch.overview'], identifier: false },
+    { id: 'g002', complete: false, reciprocalRank: 0, misses: ['adr.0040'], identifier: true },
+    { id: 'g003', complete: true, reciprocalRank: 0.5, misses: [], identifier: false },
+  ];
+  const arms = new Map([['g001', 'semantic'], ['g002', 'lexical']]);
+  const report = clusterCases(results, inventory, arms);
+
+  assert.deepEqual(report.misses, ['g001', 'g002']);
+  assert.equal(report.perCase.find((row) => row.caseId === 'g001').type, 'architecture');
+  assert.equal(report.perCase.find((row) => row.caseId === 'g001').area, 'rag');
+  assert.equal(report.perCase.find((row) => row.caseId === 'g003').rank, 2, 'a hit reports the rank it came back at');
+  assert.deepEqual(report.clusters.byType, [{ value: 'architecture', count: 1 }, { value: 'decision', count: 1 }]);
+  assert.deepEqual(report.clusters.byArm, [{ value: 'lexical', count: 1 }, { value: 'semantic', count: 1 }]);
+  assert.equal(report.identifierMisses, 1, 'identifier misses are counted separately; they are the lexical arm failing');
+});
+
+test('an unattributable miss is named, not hidden', async () => {
+  // "unknown" folded into a real bucket hides how much of a diagnosis could not be
+  // attributed, which is the number a reader needs most before acting on it.
+  const { clusterCases } = await import('../src/rpc/methods.js');
+  const report = clusterCases(
+    [{ id: 'g001', complete: false, reciprocalRank: 0, misses: ['gone.missing'], identifier: false }],
+    new Map(),
+    new Map(),
+  );
+  assert.deepEqual(report.clusters.byType, [{ value: 'unattributed', count: 1 }]);
+  assert.deepEqual(report.clusters.byArm, [{ value: 'unattributed', count: 1 }]);
+  assert.equal(report.perCase[0].missed, 'gone.missing', 'and the id it failed on is still named');
+});
+
+test('clusters are ordered by count, so the biggest problem reads first', async () => {
+  const { clusterCases } = await import('../src/rpc/methods.js');
+  const inventory = new Map([
+    ['a', { type: 'architecture', area: 'x' }],
+    ['b', { type: 'architecture', area: 'y' }],
+    ['c', { type: 'decision', area: 'x' }],
+  ]);
+  const report = clusterCases(
+    ['a', 'b', 'c'].map((id, index) => ({ id: `g00${index}`, complete: false, reciprocalRank: 0, misses: [id], identifier: false })),
+    inventory,
+    new Map(),
+  );
+  assert.deepEqual(report.clusters.byType, [{ value: 'architecture', count: 2 }, { value: 'decision', count: 1 }]);
+});

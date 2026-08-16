@@ -1,0 +1,13 @@
+{
+  "id": "demo",
+  "project": "demo",
+  "rootEnv": "DAIJIN_DEMO_ROOT",
+  "root": ".",
+  "goldset": "{{root}}/demo-goldset.yaml",
+  "baseline": "{{root}}/demo-baseline.json",
+  "envFiles": [],
+  "databaseUrlEnv": "DAIJIN_DEMO_DATABASE_URL",
+  "pathGrammar": "generic",
+  "standingPrefix": "global.",
+  "note": "Fixture corpus for the harness tests. The store is injected, so no database is opened."
+}

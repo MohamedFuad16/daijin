@@ -49,6 +49,16 @@ else
   trap 'rm -rf "$WORKROOT"' EXIT
   echo "Mutating a private copy at $ENGINE (the shared tree is never touched)."
 fi
+# THE CONTAINMENT CLAIM, TAKEN BY THE SCRIPT (was previously a command the operator typed
+# around the invocation, which meant a run whose operator forgot it claimed nothing about
+# containment while looking identical to one that proved it). An evidence check that lives in
+# someone's shell history is not evidence; it is a habit.
+tree_digest() {
+  find "$1/src" "$1/test" -type f -name '*.js' -print0 2>/dev/null | sort -z |
+    xargs -0 shasum -a 256 2>/dev/null | shasum -a 256 | cut -d" " -f1
+}
+SHARED_BEFORE=$(tree_digest "$ENGINE_SOURCE")
+
 cd "$ENGINE" || exit 1
 
 # Anything that is not a KILL: a survivor (the code is not pinned) or a skip (the expression
@@ -518,6 +528,19 @@ run_mutation "F81: the wire safety net stops rendering an empty rubric as ungrad
 # incrementing EXECUTED, so the comparison would read as balanced while the count was wrong.
 # Zero instances today; the point is that the next person's ordinary edit must not silently
 # disarm the counter that exists to catch silent disarming.
+SHARED_AFTER=$(tree_digest "$ENGINE_SOURCE")
+echo
+if [ "$SHARED_BEFORE" = "$SHARED_AFTER" ]; then
+  echo "shared tree unchanged: $SHARED_BEFORE"
+else
+  echo "SHARED TREE CHANGED (!!): $SHARED_BEFORE -> $SHARED_AFTER"
+  echo "  A mutation did not restore, or something else wrote to the tree during the run."
+  PROBLEMS=$((PROBLEMS + 1))
+fi
+# BOUND, stated because this check would otherwise be over-read: comparing the ends cannot
+# see a window fully contained inside the run. The private copy is the containment; this
+# catches the case where that structure is broken.
+
 DECLARED=$(grep -cE '^[[:space:]]*run_mutation ' "$SCRIPT_PATH")
 echo
 echo "declared: $DECLARED   executed: $EXECUTED"

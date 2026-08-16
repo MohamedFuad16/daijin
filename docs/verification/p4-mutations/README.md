@@ -14,7 +14,7 @@ instrument, and the captured output of both. Session scratch dies; the evidence 
 | `gate-plants.mjs` | gym-porter's extended plant set (12 plants, 4 controls), per the verifier's standing note that four plants is ten minutes of thought and not a bound. |
 | `gate-plants-output.txt` | its captured output. |
 
-## Measured 2026-08-16 19:05 JST (2026-08-16 10:05Z)
+## Measured 2026-08-16 22:45 JST (2026-08-16 13:45Z)
 
 - `node docs/verification/p4-mutations/gate-scanner-plants.mjs`: caught 4/4 plants, control
   clean, ACCEPTANCE MET, exit 0. The verifier's four plants are also pinned inside
@@ -95,6 +95,13 @@ The battery now copies `src`, `test` and `package.json` to a temp directory, lin
 is the explicit override for someone debugging a test that depends on the tree's real
 location, and it announces itself loudly. Proven per run rather than asserted: hashing the
 shared tree before and after a full battery gives an identical digest.
+
+The comparison is taken BY THE SCRIPT and printed in its output. It used to be a command the
+operator typed around the invocation, which meant a run whose operator forgot it claimed
+nothing about containment while looking identical to one that proved it. An evidence check
+living in someone's shell history is a habit, not evidence. Its failure direction has been
+exercised: a sabotaged restore on a throwaway copy reports both NOT RESTORED and SHARED TREE
+CHANGED with both digests.
 
 THE BOUND ON THAT DIGEST CHECK, stated because it would otherwise be over-trusted. A
 before-and-after comparison CANNOT see a window fully contained inside the run: a file
@@ -183,8 +190,8 @@ f2ff54b05ae07116ac5f763fa7cc4f15457d826e7d6936dd780807feaab4ec34  docs/verificat
 e66ab1295c82a9c0a3ec6aa5fd9eb6dc87baf83dd6fbc0b4259b4578def35b8c  docs/verification/p4-mutations/gate-plants.mjs
 5f9c2255ce54fb3ba743458a198098eb98ddf4eca8b50d73706509ad075f6b55  docs/verification/p4-mutations/gate-scanner-plants-output.txt
 327a2cb8b3399975a5501ac48398ae1b4acbc3a5c8b57aa2c7ac4df630b78e43  docs/verification/p4-mutations/gate-scanner-plants.mjs
-02e71639a5725be5e37b531c0e26e0c2aab796bf2466b741ab140c873ec75d7e  docs/verification/p4-mutations/mutate-output.txt
-fafdefa06e9f305b18dbfe3ddc29300ef287235ba7733aa85bc09b8d4b435416  docs/verification/p4-mutations/mutate.sh
+523ba3ced13556e699938de06802251328d53ad295ff256a6861996a98068eb2  docs/verification/p4-mutations/mutate-output.txt
+d4a709bf5909677fd2d1ac85cdc1aab3277424c1f50249d19eddd3d7e224d16c  docs/verification/p4-mutations/mutate.sh
 ```
 
 `gates.js` and `sandbox.js` are the extractor's ports, consumed unchanged and hashed here

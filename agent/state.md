@@ -1,6 +1,70 @@
 # Daijin build state (authoritative)
 
-## 2026-08-16 18:05 - Conversions land; three rulings; P8 path is short now
+## 2026-08-16 18:15 - CI evidence resolves one defect and exposes a third cause
+
+TWO LEADER CORRECTIONS FROM RAW CI LOGS, both dated here.
+
+CORRECTION 1: the "Event loop is closed" defect was MISCHARACTERIZED by
+the leader as a surviving test failure. The raw log of the one run that
+showed it (81ee2b8) says otherwise: it is a PytestUnraisableExceptionWarning
+at garbage-collection time (proto.pipe.close() in unix_events.py after
+the loop closed - Linux pipe-transport finalization, consistent with
+tui-builder's macOS-vs-Linux lead), and the test that actually FAILED
+in that run was the wall-clock concurrency assertion (184ms against a
+~180ms threshold), the exact flake ad161b0 fixed structurally.
+ad161b0 is NOT an ancestor of 81ee2b8: the "it survived my fix"
+observation was from a PRE-fix run. Since ad161b0 landed, the tui job
+is green in all seven runs. tui-builder's finally-gap fix (5dcf760, two
+socket tests closing outside finally) targets exactly the warning's
+class and is kept. The 3.12-not-the-variable reproduction (290 pass on
+the exact CI pairing, forced-failure probe clean) was correct work
+handed over honestly.
+
+FINDING: A THIRD CAUSE EXISTS. The d86a2c4 run's ENGINE job failed on
+rpc-surface.test.js:182 "gates are data: set writes the file, get reads
+it back" - the exact test the verifier flagged as predicted-under-the-
+battery-mechanism - and it failed IN CI, a fresh single-checkout
+container where no battery can possibly run. The failure content:
+gatesSet wrote the user's literal content, gatesGet read back the
+GENERATED discovered-gates header, meaning something rewrote gates.yaml
+between a set and a get milliseconds apart. The battery mechanism
+cannot produce this in CI; the verifier's prediction becomes the
+discriminating instance it hoped for. 574/575 in that run. Assigned to
+the extractor's nondeterminism hunt as a second data point beside the
+chunk drift (both smell of async ordering against shared paths inside
+one suite process); the CI log is preserved evidence.
+
+INIT-MINER'S D-0031 INVARIANTS LANDED (9056789, d46f53e): the brain is
+durable markdown that the pipeline READS BACK (the index is a function
+of the files, proven by reindexFromBrain and a sourceArtifact field only
+the file reader writes); the contract-never-enters-the-store invariant
+is asserted at the ingest boundary with four plants and a passing
+control. Four silent-loss defects found by building: sub-heading
+truncation invisible to id-based checks (round-trip now compares
+CONTENT), producer shape divergence (both now emit h1+body, which makes
+generated brains hand-editable without migration), heading-only records
+failing their own round trip, and meta fields silently not crossing
+(every marker attribute now consumed by something named). Two surviving
+mutations were fixed by adding the coverage they exposed, not by
+adjusting the count. errors.md is written EMPTY deliberately: absent
+reads "not implemented", empty reads "nothing learned yet", and the
+second is true. Its commit technique (add -N + commit -F -- paths) is
+adopted into D-0026 as the standing form.
+
+GYM-PORTER'S THIRD ITEM LANDED (3bbd571): every mutation hashes its
+file three times; mutated-must-differ catches dead anchors, restored-
+must-equal catches corrupted restores, and BOTH assertions were
+demonstrated firing against a probe copy before being trusted - "a
+check that has never been seen to fail is not yet a check" applied to
+the fix itself.
+
+OPEN RULINGS ISSUED THIS ROUND: init-miner re-measures P3.5 numbers
+after the shape normalization (zero-spend, minutes; re-derive beats
+infer) and restates the hook gap for ruling; its battery must carry the
+D-0032 refusal structurally, demonstrated once. The p4 battery stays
+OUT of per-push CI (evidence instrument for freeze points; CI never
+invokes it, so the in-place override cannot be an accidental default
+there); revisit if it ever joins CI.
 
 GYM-PORTER'S D-0032 CONVERSION LANDED (391d806): the battery copies
 src/test/package.json to a temp dir, links node_modules, mutates THERE;

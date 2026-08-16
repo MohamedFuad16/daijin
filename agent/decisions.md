@@ -724,3 +724,15 @@ the real wiring. A green suite composed entirely of injected seams is a
 statement about the tests' own stubs. Clause (d) of P8 would have
 caught this instance; the rule exists so it does not take an
 integration phase to discover a method has no data source.
+
+## D-0026 addendum (2026-08-16) The commit form that survives concurrent lanes
+
+init-miner's technique is adopted as the standing D-0026 practice: for
+new files `git add -N <files>` (intent-to-add, so the pathspec matches),
+then `git commit -F <msgfile> -- <explicit paths>`. The pathspec form
+commits the WORKING TREE state of exactly those paths and ignores the
+shared index entirely, so another lane staging or resetting mid-command
+can neither pull foreign files in nor drop yours out. Empirical basis:
+three sweeps in a row under the add-then-commit form, zero under this
+one. The pre-commit lane hook remains the backstop for lanes that have
+not adopted the technique.

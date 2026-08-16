@@ -759,9 +759,24 @@ async def test_no_gate_carries_a_status_or_classification_outside_the_contract()
         for gate in ((record["discovered"] or {}).get("gates") or []):
             seen_class.add(gate["classification"])
             seen_status.add(gate["baseline"]["status"])
-    assert seen_status <= set(mock_data.BASELINE_STATUS), f"invented statuses: {seen_status - set(mock_data.BASELINE_STATUS)}"
-    assert seen_class <= set(mock_data.GATE_CLASSIFICATION), f"invented classifications: {seen_class - set(mock_data.GATE_CLASSIFICATION)}"
-    assert len(seen_status) > 1 and len(seen_class) > 1, "the check saw too little to mean anything"
+    # SUBSET catches an invented value. It does NOT catch a documented value
+    # that no path produces, and a check that only ever asserted the subset
+    # reads like coverage of the vocabulary while covering half of it. That is
+    # how `timeout` stayed documented, named in BASELINE_STATUS, printed in
+    # this test's own coverage every run, and reachable from nothing.
+    documented_status = set(mock_data.BASELINE_STATUS)
+    documented_class = set(mock_data.GATE_CLASSIFICATION)
+    assert seen_status <= documented_status, f"invented statuses: {seen_status - documented_status}"
+    assert seen_class <= documented_class, f"invented classifications: {seen_class - documented_class}"
+    # REACHABILITY, the other half. Documented and reachable are different
+    # claims and this test now makes both.
+    assert seen_status == documented_status, (
+        f"documented but produced by nothing, so their rendering is untested: "
+        f"{sorted(documented_status - seen_status)}"
+    )
+    assert seen_class == documented_class, (
+        f"documented but produced by nothing: {sorted(documented_class - seen_class)}"
+    )
     await client.aclose()
 
 

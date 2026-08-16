@@ -618,7 +618,7 @@ async def test_gates_table_classifies_every_candidate_with_evidence():
     async with running_app() as (app, pilot):
         await goto(pilot, "4")
         table = app.screen.query_one("#gates-table", DataTable)
-        assert table.row_count == 5
+        assert table.row_count == len(app.screen.gates)
         column = GATE_COLUMNS.index("classification")
         classifications = {str(table.get_row_at(i)[column]) for i in range(table.row_count)}
         assert classifications == {"live", "measured", "pre-broken", "unavailable"}
@@ -723,7 +723,7 @@ async def test_a_missing_summary_is_a_real_state_not_a_defensive_branch():
         await screen.wait_for_load()
         await settle(pilot)
         notice = text_of(screen.query_one("#gates-notice", Banner))
-        assert screen.query_one("#gates-table", DataTable).row_count == 5, (
+        assert screen.query_one("#gates-table", DataTable).row_count == len(screen.gates), (
             "the rows are known even when the tally is not"
         )
         assert "not yet measured" in notice, f"a count was invented: {notice!r}"
@@ -741,9 +741,9 @@ async def test_the_gate_count_comes_from_the_engines_own_summary():
         await goto(pilot, "4")
         screen = app.screen
         summary = screen.summary
-        assert summary["carryingSignal"] == 3 and summary["total"] == 5
+        assert summary["carryingSignal"] == 3 and summary["total"] == 6
         notice = text_of(screen.query_one("#gates-notice", Banner))
-        assert "3 of 5 carrying signal" in notice, f"the engine's count is not what is shown: {notice!r}"
+        assert "3 of 6 carrying signal" in notice, f"the engine's count is not what is shown: {notice!r}"
 
         # Mutate the engine's own copy: the mock deep copies at construction,
         # so editing the module table would change nothing this app can see.

@@ -461,12 +461,36 @@ GATES: dict[str, dict[str, Any]] = {
                         "unavailableReason": "availability command exited 127",
                     },
                 },
+                {
+                    # A baseline that never finished. `timeout` was documented,
+                    # named in BASELINE_STATUS, printed by the vocabulary gate
+                    # every run, and produced by no path any test reached:
+                    # documented and reachable are different claims.
+                    "id": "e2e-smoke",
+                    "command": "npm run test:e2e",
+                    "role": "e2e",
+                    "cwd": None,
+                    "availabilityCommand": "npm --version && test -d node_modules",
+                    "source": "package.json",
+                    "classification": "pre-broken",
+                    "enabled": False,
+                    "unavailableHint": None,
+                    "baseline": {
+                        "status": "timeout",
+                        "exitCode": None,
+                        "durationMs": 300000,
+                        "timeoutMs": 300000,
+                        "stdoutTail": "starting browser session\n",
+                        "stderrTail": "",
+                        "unavailableReason": None,
+                    },
+                },
             ],
             "summary": {
-                "total": 5,
+                "total": 6,
                 "live": 2,
                 "measured": 1,
-                "preBroken": 1,
+                "preBroken": 2,
                 "unavailable": 1,
                 "carryingSignal": 3,
             },

@@ -512,3 +512,69 @@ test('a full-content write is accepted over a BROKEN file, because that is the r
     await rm(own, { recursive: true, force: true });
   }
 });
+
+test('a brain that cannot be opened reports critical, and keeps its measured floor', async () => {
+  // Found by applying tui-builder's fourth-double lead to my own lane. I verified this
+  // branch BY HAND today, answering their question about whether a stale floor survives,
+  // and never wrote the test: every double in this suite opens a store successfully, so the
+  // one health value that requires a failure was unreachable from the tests.
+  //
+  // My own enum gate made that harder to notice rather than easier, which is the part worth
+  // recording: it asserts `critical` is DOCUMENTED, and a value can be documented, named in
+  // the contract, printed in a coverage list, and still be produced by no code path any
+  // test reaches. Documented and reachable are different claims.
+  const { createRpcServer } = await import('../src/rpc/server.js');
+  const { repoLayout } = await import('../src/state/layout.js');
+  const { createSqliteStore } = await import('../src/store/sqlite.js');
+
+  const stateRoot = await mkdtemp(path.join(tmpdir(), 'daijin-critical-state-'));
+  const own = await mkdtemp(path.join(tmpdir(), 'daijin-critical-repo-'));
+  await mkdir(path.join(own, '.daijin'), { recursive: true });
+
+  const server = createRpcServer({ stateRoot, write: () => {} });
+  try {
+    await server.methods.repoAttach({ repoPath: own });
+    assert.equal((await server.methods.serveStatus({})).repos[0].health, 'no-brain',
+      'never indexed reads as no-brain, not as broken');
+
+    // A real indexed brain and a real measured floor.
+    const layout = await repoLayout(own, { stateRoot, ensure: true });
+    await mkdir(layout.indexRoot, { recursive: true });
+    await mkdir(layout.recordsRoot, { recursive: true });
+    const store = await createSqliteStore({
+      path: layout.databasePath, repoPath: own, project: 'default',
+      embedder: { provider: 'ollama', model: 'bge-m3', digest: 'sha256:test', dimension: 4 },
+    });
+    await store.transaction(async () => {
+      await store.upsertDocument({
+        id: 'web.decision.adr-0001', project: 'default', type: 'decision', path: 'brain/a.md',
+        title: 'A', tags: [], meta: {}, content: 'x', contentHash: 'h',
+      });
+      await store.replaceChunks('web.decision.adr-0001', [{ ordinal: 0, content: 'x', vector: [1, 0, 0, 0] }]);
+    });
+    await store.close();
+    await writeFile(layout.scoreHistoryPath, JSON.stringify([
+      { at: new Date().toISOString(), caseRate: { exact: 0.92, cases: '23 of 25' }, chosenBudget: 4000 },
+    ]), 'utf8');
+
+    const healthy = (await server.methods.serveStatus({})).repos[0];
+    assert.equal(healthy.health, 'ok');
+    assert.equal(healthy.floorScore, 0.92);
+
+    // Break it the way deleting or truncating state does.
+    await writeFile(layout.databasePath, 'this is not a database', 'utf8');
+    const broken = (await server.methods.serveStatus({})).repos[0];
+    assert.equal(broken.health, 'critical', 'an unopenable brain is a state to show, not a crash');
+
+    // THE FLOOR SURVIVES. It lives in records/, measured on a date by a particular embedder,
+    // and nothing recomputes the past; breaking the index cannot unmake the measurement.
+    // A client rendering "no floor can be measured" here would be describing the brain and
+    // hiding a number it has.
+    assert.equal(broken.floorScore, 0.92,
+      'a measured floor is a record, not a property of the index that can be broken');
+  } finally {
+    await server.close();
+    await rm(stateRoot, { recursive: true, force: true });
+    await rm(own, { recursive: true, force: true });
+  }
+});

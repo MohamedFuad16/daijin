@@ -136,9 +136,30 @@ Three states, and the distinction is the whole point of the field:
 | the attempt produced a diff but has no rubric yet | `null` | awaiting grading, which is a real state a TUI should show as such |
 | the attempt produced NO diff (`unsubmitted`) | `null`, with the attempt's status saying why | P7 clause 5: no rubric may be written for a run that never answered, so an empty axes object here would imply a grade of zero where there is no grade at all |
 
-Render `null` as "not graded" and never as zeroed axes. The shapes come from
-`engine/src/gym/grading.js`: `AXES` is the fixed five, and a stored rubric carries
+Render `null` as "not graded" and never as zeroed axes. An EMPTY OBJECT is a forbidden value
+here, per methods.md: zeroed axes on a radar read exactly like measured ones.
+
+[ALIGNED 2026-08-16 to methods.md at 61faf40, finding 79. The three states above were carried
+into the contract; the SHAPE is the contract's ruling and differs from what this document
+implied.]
+
+WIRE SHAPE: a LIST of `{ name, score, max }` in the canonical five-axis order, not a by-name
+object. The wire serves rendering and order matters on a radar, so the order is part of the
+payload rather than a convention the client has to know.
+
+The engine's internal keying stays BY NAME, because a validator wants to look an axis up
+rather than search for it: `engine/src/gym/grading.js` exports `AXES` as the canonical
+ordered five, and a stored rubric carries
 `{ runId, axes: { <axis>: { score, citations } }, verdict, gaps, author, reportedAuthor? }`.
+Mapping by-name to the ordered list happens at the DAEMON BOUNDARY, which is the extractor's
+side:
+
+```js
+axes: rubric ? AXES.map((name) => ({ name, score: rubric.axes[name].score, max: 5 })) : null
+```
+
+`AXES` is exported in canonical order for exactly this, so the daemon never hand-writes the
+order and a sixth axis could not silently arrive out of place.
 
 The rubric and batch TABLES are not in the ledger yet, by ruling: they land with this wiring,
 and their shape is specified jointly by the daemon and the gym rather than invented ahead of

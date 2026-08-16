@@ -86,9 +86,13 @@ test('initBrain layer1 returns a jobId and streams the pipeline steps onto the c
     // IDENTITY LEADS THE STREAM. D-0031 invariant 4 makes init a lifecycle contract that
     // guarantees identity first, and the stream shows the order it actually happened in
     // rather than starting at the first interesting-looking step.
-    assert.deepEqual(steps.map((row) => row.phase), ['identity', 'identify', 'evidence', 'floor']);
-    assert.deepEqual(steps.map((row) => row.step), ['manifest', 'analyze', 'imports', 'measured']);
-    const pipelineSteps = steps.slice(1);
+    // Identity leads and the ENDING closes it. Before the terminal event existed, a
+    // successful init's last event was a phase name (floor/measured), so a client could
+    // observe a job ending only when it went wrong and had to infer success from an idle
+    // stream.
+    assert.deepEqual(steps.map((row) => row.phase), ['identity', 'identify', 'evidence', 'floor', 'done']);
+    assert.deepEqual(steps.map((row) => row.step), ['manifest', 'analyze', 'imports', 'measured', 'finished']);
+    const pipelineSteps = steps.slice(1, -1);
     assert.deepEqual(pipelineSteps[0].counts, { files: 12 });
     // counts is OMITTED, not sent empty, so a client can tell "no counts" from "zero".
     assert.equal(Object.hasOwn(pipelineSteps[1], 'counts'), false);

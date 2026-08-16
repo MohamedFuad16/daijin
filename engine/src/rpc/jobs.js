@@ -50,13 +50,20 @@ export class JobRunner {
    */
   start(prefix, work) {
     const jobId = this.#nextId(prefix);
-    const record = { jobId, cancelled: false, done: false };
+    const record = { jobId, cancelled: false, done: false, announced: false };
     this.#jobs.set(jobId, record);
 
     const emit = (phase, step, detail, extra = {}) => {
       // A cancelled job stops emitting: a feed that keeps scrolling after the user
       // cancelled reads as an engine that ignored them.
       if (record.cancelled) return;
+      // AND A FINISHED JOB STOPS EMITTING. A job that keeps talking after it said it was
+      // finished is the shape a client cannot recover from: it has already rendered the
+      // ending, and the events arriving after it have no place to go. The rule is enforced
+      // here rather than trusted of every job author, which is what turns the invariant
+      // below from a convention into a property.
+      if (record.announced) return;
+      if (phase === 'done') record.announced = true;
       this.#notify(STEP_NOTIFICATION, stepEvent({ jobId, phase, step, detail, now: this.#now, ...extra }));
     };
     const cancelled = () => record.cancelled;
@@ -68,11 +75,33 @@ export class JobRunner {
           this.#notify(STEP_NOTIFICATION, stepEvent({
             jobId, phase: 'done', step: 'cancelled', detail: 'job cancelled by the user', level: 'warn', now: this.#now,
           }));
+        } else if (!record.announced) {
+          // THE INVARIANT: every job emits exactly one done-phase event. Filled in only
+          // when the work did not announce its own, because a runner that always emitted
+          // one would give gatesDiscover two and leave a client asking which is terminal,
+          // which is a worse contract than none.
+          //
+          // Measured before it was designed: gatesDiscover ends with done/written, and a
+          // successful initBrain ended with floor/floor-measured, a phase name rather than
+          // an ending. So a client could observe a job ending exactly when it went wrong,
+          // by failure or cancellation, and had to GUESS when it went right. Every client
+          // then invents its own idle threshold; the two measured independently here were
+          // 9.6s and 9.7s of real inter-event gap inside the floor phase, so an eight
+          // second guess declares a live run finished mid-phase.
+          this.#notify(STEP_NOTIFICATION, stepEvent({
+            jobId, phase: 'done', step: 'finished', detail: 'job finished', now: this.#now,
+          }));
         }
       } catch (error) {
         // A job failure is a step event, not a dropped connection. The request that
         // started it has long since returned its jobId, so this is the only channel the
         // user can learn about it on.
+        //
+        // EMITTED EVEN IF THE JOB ALREADY ANNOUNCED DONE, which is the one case where the
+        // exactly-one invariant yields. A job that announced completion and then threw is
+        // a defect in that job, and a stream that hid the failure to keep a count tidy
+        // would be choosing its own invariant over the user's ability to learn what
+        // happened. Two done events is the honest report of a job that did two things.
         this.#notify(STEP_NOTIFICATION, stepEvent({
           jobId, phase: 'done', step: 'failed', detail: error?.message || 'job failed', level: 'error', now: this.#now,
         }));

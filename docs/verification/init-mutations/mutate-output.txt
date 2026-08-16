@@ -1,4 +1,4 @@
-battery tree: /var/folders/nq/jvmxfqtn475bqlkn9vvnz4y80000gn/T/daijin-init-mutate-JolcT6/engine (private copy)
+battery tree: /var/folders/nq/jvmxfqtn475bqlkn9vvnz4y80000gn/T/daijin-init-mutate-idUOAz/engine (private copy)
 baseline: green across 8 file(s)
 
 killed       M1 existence gate always passes
@@ -18,8 +18,9 @@ killed       M5 diversity floor lowered to zero
 killed       M6 pipeline scores even when the gauge fails its gates
                fails: a gold set that fails its own gates BLOCKS the measurement instead of scoring anyway
 killed       M7 content survival never fails
-               fails: MUTATION: a core cut by the per-candidate cap FAILS the gate and names the raise signal
+               fails: MUTATION: a core cut short FAILS the gate, and the gate names WHICH constraint bit
                fails: MUTATION: a 45-file module loses its cited core to the real budget trim at 3000 tokens
+               fails: when survival fails, the raise signal names the smallest budget that works
 killed       M8 budget choice takes the best instead of the smallest within one case
                fails: the smallest budget within ONE CASE of the best wins
                fails: sweepBudgets measures every point and reports the curve with counts
@@ -92,7 +93,7 @@ killed       M34 adopted units are not marked as human-written
                fails: mode "ingest" adopts a curated folder as-is and measures it on the same gauge
 killed       M35 the contract guard is removed from the ingest boundary (D-0031 invariant 1)
                fails: THE CONTRACT CANNOT ENTER THE STORE, whichever producer made the unit
-killed       M36 unit bodies are written without demotion, colliding with the record splitter
+killed       M36 the heading shift is disabled, so a body heading collides with the record splitter
                fails: a full init runs headlessly and reports the floor it measured, whatever it is
                fails: the run is zero-spend: the only host contacted is the local embedder
                fails: a gold set that fails its own gates BLOCKS the measurement instead of scoring anyway
@@ -103,6 +104,7 @@ killed       M36 unit bodies are written without demotion, colliding with the re
                fails: the index is DERIVED: delete it, regenerate, and the gauge is unchanged
                fails: a unit with sub-headings survives the brain round trip byte for byte
                fails: the brain files are CANONICAL: edit one and the rebuilt index says what the file says
+               fails: when survival fails, the raise signal names the smallest budget that works
 killed       M37 the round trip is checked by id instead of by content
                fails: a unit that quotes a daijin marker is REFUSED rather than silently mangled
 killed       M38 the index is ingested from memory rather than from the written files

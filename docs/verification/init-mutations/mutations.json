@@ -323,10 +323,10 @@
     ]
   },
   {
-    "id": "M36 unit bodies are written without demotion, colliding with the record splitter",
+    "id": "M36 the heading shift is disabled, so a body heading collides with the record splitter",
     "file": "src/init/brain-artifacts.js",
-    "from": "  const body = demoteHeadings(String(unit.content).replace(/^#\\s+.*\\n?/, '').trim());",
-    "to": "  const body = String(unit.content).replace(/^#\\s+.*\\n?/, '').trim();",
+    "from": "  const shift = headingShiftFor(raw);",
+    "to": "  const shift = 0;",
     "tests": [
       "test/init-pipeline.test.js"
     ]

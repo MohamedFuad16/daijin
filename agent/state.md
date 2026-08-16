@@ -1,5 +1,33 @@
 # Daijin build state (authoritative)
 
+## 2026-08-17 15:30 - Deferred by decision: hello carrying the vocabularies
+
+An option raised by tui-builder, relayed by the extractor with a cost
+(forty minutes) so the decision would be made rather than defaulted:
+hello could carry the engine's enum exports, letting client gates
+compare against the engine instead of hand-copied tuples - closing
+the phantom direction for every client, forever. RULED: DEFERRED, to
+the first post-release contract iteration (a v6 item), not built now.
+Grounds: the hold directive admits work only on a checkable lead or a
+shipped defect and this is neither; what HAS fired (clients guessing
+unnamed values) is closed; the printed unconfirmed-majority list is a
+cheap standing counter; and a contract change on the eve of the
+ultrareview reopens the surface the review is about to read. The
+counter-argument is recorded WITH the deferral so the v6 decision
+inherits it: a vocabulary on the wire makes the class impossible
+rather than visible, and clients - who found two of the four named
+defect classes - are the population that keeps meeting it.
+
+PROMOTED, tui-builder's severity ranking of the three instrument
+defects, which corrects the flat treatment: subset-misses and
+mirror-misses FAILED TO CATCH; the harvest under-read ACTIVELY
+POINTED AT A DEFECT THAT WAS NOT THERE - and in a build that has
+spent a week teaching people to chase findings, an instrument that
+manufactures findings is the more expensive failure. False findings
+outrank missed ones.
+
+Board remains quiet at a6081d6 plus this entry. Ultrareview next;
+D-0034 after; hello-vocabularies first on the post-release list.
 ## 2026-08-17 15:10 - Quiet mark moves to a6081d6; the convergence bound stated
 
 Bookkeeping: the tip is a6081d6 (CI 31971991954 green), one past the

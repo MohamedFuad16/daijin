@@ -1,5 +1,34 @@
 # Daijin build state (authoritative)
 
+## 2026-08-17 05:05 - vetoReason lands through the retired lane's own bar
+
+The fix is in (1c436d2, cross-lane named, delegation cited):
+vetoReason joins examListRow as optional beside quarantineReason on
+identical terms, riding every bank row, so a vetoed exam explains
+itself where it is looked at and the client reads row.vetoReason with
+no special case. The write-only toll is closed.
+
+THE RETIRED LANE'S BAR WAS MET BY RUNNING IT: gym 131/131 before and
+after, battery 77/77 with baseline green both runs, both plant scripts
+clean, full suite 613/613, acceptance 18/18 at the new commit. The two
+shared-tree digests DIFFER between runs and the reading is recorded so
+nobody calls it a discrepancy: the source changed because the change
+was the point; each digest asserts nothing moved DURING its own run,
+and "the before-run is what makes the after-run mean something" is the
+handover's rule stated concretely - neither number was available by
+reading.
+
+The extractor's SECOND snapshot anti-pattern in the same file is
+self-reported: a test froze examList's optional set and broke when the
+field joined, exactly as an earlier one froze search's keys. "Twice in
+one file is a habit rather than a slip, and the habit is that when I
+need a value to assert I reach for the one in front of me; the
+correction is to ask what the test is FOR before choosing the
+assertion." Both are properties now.
+
+Remaining anywhere in the project: tui-builder's two mock items (real
+vetoReason location + the twenty-character veto floor), then the
+owner's sequence.
 ## 2026-08-17 04:40 - The engine queue is empty; the instrument's final state recorded
 
 The final delegated commit landed (140391f): search gains context (the

@@ -573,11 +573,24 @@ test('an attempt on the wire carries the contract\'s names, not the ledger\'s co
       assert.equal(Object.hasOwn(attempt, internal), false, `${internal} is a storage detail, not a wire field`);
     }
 
-    // And the whole key set is CLOSED, so a field cannot be added by accident the way
-    // these were: adding one now means changing this list and saying why.
-    assert.deepEqual(Object.keys(attempt).sort(), [
-      'at', 'axes', 'grades', 'id', 'status', 'tokenCap', 'tokens', 'ungradedCode', 'ungradedReason', 'verdict',
-    ]);
+    // FINDING 85: the raw rubric hydration must not ship. The spread that used to build
+    // this row also carried `rubric`, whose `axes` is the BY-NAME object hydrateRubric
+    // parses, so finding 79's forbidden shape rode onto the wire two lines from the
+    // mapping that ruling governs, sitting beside the canonical list it forbids.
+    assert.equal(Object.hasOwn(attempt, 'rubric'), false, 'the hydrated rubric is storage, not wire');
+    assert.ok(Array.isArray(attempt.axes), 'axes is the canonical LIST');
+    assert.ok(attempt.axes.every((row) => typeof row.name === 'string' && Number.isFinite(row.score)),
+      'and its members are { name, score, max }, never a by-name object');
+
+    // THE KEY SET EQUALS THE CONTRACT'S, read from methods.md rather than copied here. A
+    // duplicated list would assert that the engine matches this test, which is true by
+    // construction the moment someone edits both; the contract is what a client author
+    // reads, so the contract is the authority.
+    const { documentedKeys } = await import('./helpers/contract-shape.js');
+    const documented = await documentedKeys('examDetail', { field: 'attempts' });
+    assert.ok(documented, 'the contract must document this shape; an unparseable row is a failure, not a skip');
+    assert.deepEqual(Object.keys(attempt).sort(), documented,
+      'the wire row and the documented row must be the same key set, in both directions');
   } finally {
     await kit.cleanup();
   }

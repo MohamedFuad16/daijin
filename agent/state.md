@@ -1,5 +1,23 @@
 # Daijin build state (authoritative)
 
+## 2026-08-16 23:25 - The audit denominator is now a table, not a memory
+
+gym-porter's follow-through (809779f, README only, verified inert):
+the thirteen-passed-one-failed audit was not copyable because the
+guard list was recited FROM MEMORY - the denominator was whatever the
+auditor recalled, so the next run would silently audit a different
+set. Now sixteen rows in the evidence README, each naming where that
+guard's failure has been WATCHED, not merely where it is defined, plus
+the instruction: a guard absent from the table is one nobody can tell
+has been exercised. Writing it down surfaced TWO guards memory had
+missed (the hook wiring, the scanned-set coverage) - both exercised,
+neither recitable - which is the argument for the table in one
+observation. The generalization, plainly stated and kept: the
+containment check was a habit until it was in the script; the audit
+was a habit until it was in the file; each fix is the same move -
+write the implicit thing down where someone who is not you can check
+it. Manifest unchanged at 5dff20b3, stated per the standing form.
+
 ## 2026-08-16 23:15 - The precedent audits its own author: the containment evidence was a habit
 
 gym-porter turned the new install-time precedent into a checkable

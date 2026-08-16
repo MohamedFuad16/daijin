@@ -1133,12 +1133,12 @@ class MockEngine:
                 },
             )
         exam["status"] = "vetoed"
-        exam.setdefault("provenance", {})["vetoReason"] = reason
-        # examDetail carries its own provenance copy, so the veto has to land in
-        # both or the detail pane keeps showing a record that no longer exists.
-        detail = self.exam_details.get(exam["examId"])
-        if detail is not None:
-            detail.setdefault("provenance", {})["vetoReason"] = reason
+        # TOP LEVEL, not inside provenance. The engine stores it here, and the
+        # approved change carries it on the bank row beside quarantineReason.
+        # My earlier mock invented the provenance location, so the screen's
+        # display branch could never have fired against real data: coverage of
+        # a world that did not exist.
+        exam["vetoReason"] = reason
         return copy.deepcopy(exam)
 
     async def _rpc_examUpdate(self, params: dict[str, Any]) -> dict[str, Any]:

@@ -437,3 +437,9 @@ App.-motion-off DataTable > .datatable--cursor {
     height: auto;
     padding: 0 1;
 }
+
+#gates-raw {
+    height: auto;
+    padding: 1;
+    border: round $warning;
+}

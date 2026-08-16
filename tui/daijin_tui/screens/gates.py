@@ -38,6 +38,7 @@ class GatesScreen(DaijinScreen):
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self.gates: list[dict[str, Any]] = []
+        self.raw_content = ""
         self.job_id: str | None = None
         self._subscribed = False
         self.coalescer = StreamCoalescer(self._render_events)
@@ -51,6 +52,7 @@ class GatesScreen(DaijinScreen):
             yield Button("Toggle enabled", id="gates-toggle")
         yield SectionTitle("gates.yaml", "the engine treats this as data")
         yield DataTable(id="gates-table", cursor_type="row")
+        yield Static("", id="gates-raw", markup=True)
         yield SectionTitle("Liveness evidence", "why this gate is classified the way it is")
         yield Static("[dim]no gate selected[/dim]", id="gate-evidence", markup=True)
         yield SectionTitle("Discovery stream")
@@ -75,7 +77,32 @@ class GatesScreen(DaijinScreen):
             self.gates = []
             table.clear()
             return
-        self.gates = record.get("gates", [])
+        self.gates = record.get("gates") or []
+        self.raw_content = str(record.get("content") or "")
+        # The engine returns gates.yaml as TEXT plus its path; the structured
+        # per-gate classification the contract describes is not on the wire.
+        # Rendering an empty table against that says "this repo has no gates",
+        # which is a claim, and a false one: the file has three. So when there
+        # is no structured list, the file itself is shown and the gap is named.
+        structured = bool(self.gates)
+        self.query_one("#gates-table", DataTable).display = structured
+        raw = self.query_one("#gates-raw", Static)
+        raw.display = not structured
+        if not structured:
+            raw.update(
+                "[b]No structured gate list on the wire.[/b] gatesGet returns the "
+                "file and its path, so classification and liveness evidence cannot "
+                "be tabled here. The file itself, verbatim:\n\n"
+                + (self.raw_content or "[dim]empty[/dim]")
+            )
+            notice.set_notice(
+                f"{record.get('path', 'gates.yaml')}: showing the file verbatim. "
+                f"The per-gate classification the contract describes is not on the "
+                f"wire yet, so nothing is tabled rather than tabling nothing.",
+                "warn",
+            )
+            self._show_gate({})
+            return
         table.clear()
         for gate in self.gates:
             table.add_row(
@@ -99,6 +126,12 @@ class GatesScreen(DaijinScreen):
             self._show_gate(self.gates[0])
 
     def _show_gate(self, gate: dict[str, Any]) -> None:
+        if not gate:
+            self.query_one("#gate-evidence", Static).update(
+                "[dim]No structured gate to explain: the wire carries the file, "
+                "not its classification.[/dim]"
+            )
+            return
         classification = str(gate.get("classification", ""))
         self.query_one("#gate-evidence", Static).update(
             f"[b]{gate.get('name')}[/b]  {gate.get('command')}  [dim]from {gate.get('source')}[/dim]\n"

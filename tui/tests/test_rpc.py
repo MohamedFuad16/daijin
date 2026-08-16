@@ -581,7 +581,7 @@ async def test_veto_requires_a_written_reason():
     assert "at least 20 characters" in caught.value.hint
     vetoed = await client.call("examVeto", {"examId": "exam-0074", "reason": "the statement cannot be written without leaking the fix"})
     assert vetoed["status"] == "vetoed"
-    assert vetoed["provenance"]["vetoReason"].startswith("the statement cannot")
+    assert vetoed["vetoReason"].startswith("the statement cannot")
     await client.aclose()
 
 

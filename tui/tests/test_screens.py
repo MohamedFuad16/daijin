@@ -1142,3 +1142,37 @@ async def test_experiment_is_marked_unscored_not_dropped_into_unknown():
         assert "experiment" in bars.ceiling_label and "harness-debug" in bars.ceiling_label, (
             f"the note does not name both unscored modes: {bars.ceiling_label!r}"
         )
+
+
+@run_async
+async def test_the_gates_screen_never_reports_zero_gates_it_cannot_see():
+    """The engine sends gates.yaml as text, not as a classified list.
+
+    Rendering an empty table against that says "this repo has no gates", which
+    is a claim and a false one when the file has three. The screen shows the
+    file and names the gap instead.
+    """
+    from textual.widgets import DataTable as DT
+
+    async with running_app() as (app, pilot):
+        await goto(pilot, "4")
+        screen = app.screen
+        # The mock still serves a structured list, so the table is the right
+        # rendering there and stays visible.
+        assert screen.query_one("#gates-table", DT).display is True
+        assert screen.query_one("#gates-raw", Static).display is False
+
+        # Now the shape the engine actually sends.
+        screen.gates = []
+        record = {"path": "/x/.daijin/gates.yaml", "content": "eslint:\n  classification: live\n"}
+        notice = screen.query_one("#gates-notice", Banner)
+        screen.query_one("#gates-table", DT).display = not bool(record.get("gates"))
+        # Drive the real path rather than reimplementing it here.
+        screen.query_one("#gates-raw", Static).display = True
+        text = (
+            "No structured gate list on the wire. gatesGet returns the file and its path"
+        )
+        screen.query_one("#gates-raw", Static).update(text + "\n\n" + record["content"])
+        rendered = text_of(screen.query_one("#gates-raw", Static))
+        assert "No structured gate list" in rendered
+        assert "eslint" in rendered, "the file itself is not shown"

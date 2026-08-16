@@ -371,8 +371,11 @@ class ExamsScreen(DaijinScreen):
             f"supersedes {provenance.get('supersedes') or 'nothing'}",
             str(provenance.get("note", "")),
         ]
-        if provenance.get("vetoReason"):
-            lines.append(f"[yellow]veto reason: {provenance['vetoReason']}[/yellow]")
+        # Read off the BANK ROW, which is where the approved change puts it,
+        # beside quarantineReason and with the same shape: present exactly when
+        # its precondition is true.
+        if row.get("vetoReason"):
+            lines.append(f"[yellow]veto reason: {row['vetoReason']}[/yellow]")
         if quarantine:
             lines.append(f"[yellow]quarantined out of measurement: {quarantine}[/yellow]")
         self.query_one("#exam-provenance", Static).update("\n".join(lines))

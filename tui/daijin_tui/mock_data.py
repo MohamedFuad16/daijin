@@ -323,6 +323,12 @@ MCP_SNIPPET: dict[str, dict[str, Any]] = {
 #   orchard-web  discovered.gates non-empty   the table
 #   kiln-api     discovered, gates: []        genuinely zero, and zero is true
 #   lantern-ios  discovered null, parseError  unreadable, which is not zero
+# The engine reports two distinct reasons through this one field, and only one
+# of them is a parse failure. Both are kept so the copy cannot drift back into
+# explaining the second as the first.
+UNSHAPED_GATES_YAML = "version: 1\nlint: npm run lint\n"
+UNSHAPED_GATES_ERROR = "gates.yaml has no `gates:` list, so there is nothing to classify"
+
 BROKEN_GATES_YAML = """version: 1
 gates:
   - id: swiftlint
@@ -482,7 +488,10 @@ GATES: dict[str, dict[str, Any]] = {
     "/Users/owner/code/lantern-ios": {
         "path": "/Users/owner/code/lantern-ios/.daijin/gates.yaml",
         "content": BROKEN_GATES_YAML,
-        "parseError": "line 8, column 6: mapping values are not allowed in this context",
+        "parseError": (
+            "gates.yaml is not valid YAML (Nested mappings are not allowed in "
+            "compact mappings at line 8, column 6:)"
+        ),
         "discovered": None,
     },
 }

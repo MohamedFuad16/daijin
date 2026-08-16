@@ -100,16 +100,20 @@ class GatesScreen(DaijinScreen):
             # so they need the text and the error, not a zero.
             table.display = False
             text_panel.display = True
+            # Not "could not be parsed": one of the reasons the engine gives is
+            # a file that parses perfectly and simply has no gates: key. Naming
+            # a cause the response does not claim is a false explanation, so the
+            # headline stays neutral and the engine's own sentence carries it.
             text_panel.update(
-                f"[b]This gates.yaml could not be read.[/b]\n"
-                f"[red]{self.parse_error or 'no reason given'}[/red]\n\n"
+                f"[b]No gate list could be taken from this file.[/b]\n"
+                f"[red]{self.parse_error or 'the engine gave no reason'}[/red]\n\n"
                 f"The file as it stands:\n\n"
                 + (self.raw_content or "[dim]the file is empty[/dim]")
             )
             notice.set_notice(
-                f"{record.get('path', 'gates.yaml')} could not be parsed, so no "
-                f"gate can be classified from it. This is not zero gates: it is "
-                f"a file that needs fixing, and the reason is above.",
+                f"{record.get('path', 'gates.yaml')}: no gate list could be taken "
+                f"from it, so nothing in it is classified. This is not zero gates, "
+                f"and the reason is above.",
                 "error",
             )
             self._show_gate({})
@@ -168,7 +172,7 @@ class GatesScreen(DaijinScreen):
             # Which empty this is matters. One says the file has nothing in it,
             # the other says we could not find out what is in it.
             reason = (
-                "the file could not be parsed, so nothing in it has been classified"
+                "no gate list could be taken from the file, so nothing in it is classified"
                 if self.discovered is None
                 else "the file describes no gates, so there is nothing to explain"
             )

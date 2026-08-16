@@ -11,6 +11,7 @@ from conftest import DEFAULT_REPO, SUB_75_REPO, goto, run_async, running_app, sc
 
 from textual.widgets import Button, DataTable, Input, Select, Static, TabbedContent
 
+from daijin_tui import mock_data
 from daijin_tui.rpc import SUPPORTED_CONTRACT_VERSION
 from daijin_tui.screens.gates import GATE_COLUMNS
 from daijin_tui.screens.dialogs import AgentFileEditScreen, SpendConfirmScreen, TextPromptScreen
@@ -463,16 +464,67 @@ async def test_a_gates_file_that_describes_nothing_is_not_a_gates_file_that_brok
         raw = screen.query_one("#gates-raw", Static)
         assert raw.display is True
         rendered = text_of(raw)
-        assert "could not be read" in rendered
-        assert "mapping values are not allowed" in rendered, "the parser's reason is not shown"
+        assert "No gate list could be taken" in rendered
+        assert "Nested mappings are not allowed" in rendered, "the engine's reason is not shown"
         assert "swiftlint" in rendered, "the file the user has to fix is not shown"
         assert broken_notice != empty_notice, "the two empty states read identically"
         assert "not zero gates" in broken_notice
         broken_evidence = text_of(screen.query_one("#gate-evidence", Static))
         assert broken_evidence != empty_evidence, "the evidence pane explains both empties the same way"
-        assert "could not be parsed" in broken_evidence
+        assert "no gate list could be taken" in broken_evidence
         assert "describes no gates" in empty_evidence
 
+
+
+@run_async
+async def test_the_unreadable_state_does_not_name_a_cause_the_engine_never_gave():
+    """The engine gives two reasons through parseError and only one is a parse failure.
+
+    A file that is valid YAML with no `gates:` key reaches the same branch. Copy
+    that says "could not be parsed" there is a false explanation rather than a
+    false number, which is the harder one to notice.
+    """
+    async with running_app() as (app, pilot):
+        await goto(pilot, "4")
+        screen = app.screen
+        served = app.client.engine.gates["/Users/owner/code/lantern-ios"]
+        served["content"] = mock_data.UNSHAPED_GATES_YAML
+        served["parseError"] = mock_data.UNSHAPED_GATES_ERROR
+
+        app.selected_repo = "/Users/owner/code/lantern-ios"
+        screen.start_load()
+        await screen.wait_for_load()
+        await settle(pilot)
+
+        rendered = text_of(screen.query_one("#gates-raw", Static))
+        notice = text_of(screen.query_one("#gates-notice", Banner))
+        assert mock_data.UNSHAPED_GATES_ERROR in rendered, "the engine's own reason is not shown"
+        for wrong in ("could not be parsed", "not valid YAML", "could not be read"):
+            assert wrong not in rendered, f"the screen invented a cause: {wrong!r}"
+            assert wrong not in notice, f"the notice invented a cause: {wrong!r}"
+
+
+@run_async
+async def test_a_missing_summary_is_a_real_state_not_a_defensive_branch():
+    """The live engine returns summary null whenever no baseline has been run.
+
+    Verified against the daemon on 2026-08-17: a gates.yaml read without a
+    baseline pass carries discovered with summary null, so this path is ordinary
+    rather than hypothetical and must not print a count nobody measured.
+    """
+    async with running_app() as (app, pilot):
+        await goto(pilot, "4")
+        screen = app.screen
+        app.client.engine.gates[DEFAULT_REPO]["discovered"]["summary"] = None
+        screen.start_load()
+        await screen.wait_for_load()
+        await settle(pilot)
+        notice = text_of(screen.query_one("#gates-notice", Banner))
+        assert screen.query_one("#gates-table", DataTable).row_count == 5, (
+            "the rows are known even when the tally is not"
+        )
+        assert "no summary reported" in notice, f"a count was invented: {notice!r}"
+        assert "carrying signal" not in notice
 
 @run_async
 async def test_the_gate_count_comes_from_the_engines_own_summary():

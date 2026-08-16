@@ -286,11 +286,31 @@ class GymScreen(DaijinScreen):
 
         done = next((e for e in batch if e.get("phase") == "done"), None)
         if done is not None:
-            event = done
+            # This announced "Cycle complete" for every ending, failures
+            # included. A gym cycle is spend touching, so a run that broke
+            # after calling a paid provider was being reported as a success.
+            # The phase says it ended; level says how.
+            level = str(done.get("level") or "info")
+            if level == "error":
+                detail = str(done.get("detail") or done.get("message") or "").strip()
+                message = (
+                    f"Cycle FAILED after {checklist.elapsed:.1f}s, job {self.job_id}. "
+                    f"Spend may already have happened, so check the ledger before "
+                    f"starting another. {detail}".strip()
+                )
+            elif level == "warn":
+                message = (
+                    f"Cycle cancelled after {checklist.elapsed:.1f}s, job {self.job_id}. "
+                    f"Press Refresh status to reload the ledger."
+                )
+            else:
+                message = (
+                    f"Cycle complete in {checklist.elapsed:.1f}s, job {self.job_id}. "
+                    f"Press Refresh status to reload the ledger."
+                )
             self.query_one("#gym-notice", Banner).set_notice(
-                f"Cycle complete in {checklist.elapsed:.1f}s, job {self.job_id}. "
-                f"Press Refresh status to reload the ledger.",
-                "info",
+                message,
+                {"error": "error", "warn": "warn"}.get(level, "info"),
             )
 
     async def on_button_pressed(self, event: Button.Pressed) -> None:

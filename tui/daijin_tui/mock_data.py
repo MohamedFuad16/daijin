@@ -1154,6 +1154,28 @@ BUDGET_ESTIMATE: dict[tuple[str, str], dict[str, Any]] = {
 }
 
 
+def init_failure_script(job_id: str, repo_path: str) -> list[dict[str, Any]]:
+    """An init that BREAKS partway, which is the run the engine actually sends.
+
+    Verified against the daemon: a job that throws still reaches a `done`
+    phase, and the only field separating it from a success is `level`. A mock
+    whose init always succeeds leaves every failure branch unexercised, and
+    this one had a real defect behind it: the banner said "Init complete" for a
+    run that had failed.
+    """
+    return [
+        {"ts": 0, "jobId": job_id, "phase": "verify-roles", "step": "check",
+         "detail": "engineer, glm-4.6, last verified 09:04", "counts": {"ready": 1, "of": 4}, "level": "info"},
+        {"ts": 400, "jobId": job_id, "phase": "identify", "step": "git-walk",
+         "detail": f"reading history of {repo_path}", "counts": {"commits": 617}, "level": "info"},
+        {"ts": 900, "jobId": job_id, "phase": "brain", "step": "embed",
+         "detail": "embedding units", "counts": {"units": 4, "of": 37}, "level": "info"},
+        {"ts": 1_400, "jobId": job_id, "phase": "done", "step": "failed",
+         "detail": "the embedder refused the connection, so no brain was written",
+         "level": "error"},
+    ]
+
+
 def init_script(job_id: str, repo_path: str, mode: str) -> list[dict[str, Any]]:
     """Build the init step-event stream.
 
@@ -1241,6 +1263,24 @@ def init_script(job_id: str, repo_path: str, mode: str) -> list[dict[str, Any]]:
         ev(19_400, "done", "complete", "brain ready", {"units": 37, "chunks": 1_482, "cases": 34}, "info"),
     ]
     return events
+
+
+def gym_failure_script(job_id: str, exam_id: str) -> list[dict[str, Any]]:
+    """A gym cycle that breaks AFTER the provider has been called.
+
+    The spend has happened by then, so a banner reading "Cycle complete" over
+    this run is the worst version of the phase-versus-level defect: it reports
+    a paid run that broke as a success.
+    """
+    return [
+        {"ts": 0, "jobId": job_id, "phase": "setup", "step": "checkout",
+         "detail": f"preparing a sandbox for {exam_id}", "level": "info"},
+        {"ts": 700, "jobId": job_id, "phase": "student", "step": "round",
+         "detail": "round 3, engineer working", "counts": {"rounds": 3}, "level": "info"},
+        {"ts": 1_500, "jobId": job_id, "phase": "done", "step": "failed",
+         "detail": "the teacher's provider returned 503 after the student's rounds were billed",
+         "level": "error"},
+    ]
 
 
 def gym_script(job_id: str, exam_id: str) -> list[dict[str, Any]]:

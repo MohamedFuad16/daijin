@@ -92,9 +92,18 @@ class RepoCard(Vertical):
     def _floor_text(self) -> str:
         """Show the count form when it is available, never a rounded percentage."""
         if self.repo.get("health") == "critical":
-            # A floor from a brain that will not open is a number about
-            # nothing, so the state is named instead of scored.
-            return "[red]brain could not be opened[/red]  [dim]no floor can be measured from it[/dim]"
+            # The floor SURVIVES a broken brain: it comes from the score
+            # history, not from the index, and nothing recomputes the past.
+            # So the number is shown and dated to what it is, rather than
+            # hidden behind a claim that there is nothing to show.
+            floor = self.repo.get("floorScore")
+            if floor is None:
+                return "[red]brain could not be opened[/red]  [dim]and it was never scored[/dim]"
+            return (
+                f"[red]brain could not be opened[/red]  "
+                f"[dim]last measured floor {format_ratio(floor)}, from the score "
+                f"history rather than from this brain[/dim]"
+            )
         if self.case_rate is not None:
             value = case_rate_value(self.case_rate)
             tone = "green" if (value or 0) >= MCP_THRESHOLD else "yellow"

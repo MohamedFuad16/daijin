@@ -713,6 +713,8 @@ class MockEngine:
         self.exam_details = copy.deepcopy(mock_data.EXAM_DETAIL)
         self.gates = copy.deepcopy(mock_data.GATES)
         self.unopenable_brains: set[str] = set()
+        self.failing_inits: set[str] = set()
+        self.failing_cycles = False
         self.agent_files = copy.deepcopy(mock_data.AGENT_FILES)
         self.repos = copy.deepcopy(mock_data.REPOS)
         self.board_rows = copy.deepcopy(mock_data.BOARD_ROWS)
@@ -884,6 +886,14 @@ class MockEngine:
 
     # Core -----------------------------------------------------------------
 
+    def fail_next_init(self, path: str) -> None:
+        """Make this repo's init break partway, as a refused embedder does."""
+        self.failing_inits.add(path)
+
+    def fail_next_cycle(self) -> None:
+        """Make the next gym cycle break after the provider has been called."""
+        self.failing_cycles = True
+
     def break_brain(self, path: str) -> None:
         """Make a repo's brain unopenable, as deleting a state directory does."""
         self.unopenable_brains.add(path)
@@ -903,9 +913,12 @@ class MockEngine:
         row = copy.deepcopy(repo)
         if row.get("path") in self.unopenable_brains:
             row["health"] = "critical"
-            # A floor measured before the brain broke describes a brain nobody
-            # can open now, so it stops being reported rather than going stale.
-            row["floorScore"] = None
+            # floorScore SURVIVES, measured against the daemon: it comes from
+            # the score history under the state root, not from the brain, so
+            # breaking the index cannot clear it and should not. Those numbers
+            # were measured on a date by a particular embedder, and nothing
+            # recomputes the past. This mock cleared it, which was a behaviour
+            # the engine does not have.
         return row
 
     async def _rpc_serveStatus(self, params: dict[str, Any]) -> dict[str, Any]:
@@ -948,7 +961,15 @@ class MockEngine:
             # client-side test, not by a stricter-than-real mock.
             self.recorded_budgets.append((str(repo), params.get("budget")))
         job_id = self._new_job_id("init")
-        self._start_stream(job_id, mock_data.init_script(job_id, str(repo), mode))
+        # A mock whose jobs always succeed leaves every failure branch of every
+        # consumer unexercised. Opt in per repo so tests can drive the run that
+        # breaks without every other test having to handle it.
+        script = (
+            mock_data.init_failure_script(job_id, str(repo))
+            if str(repo) in self.failing_inits
+            else mock_data.init_script(job_id, str(repo), mode)
+        )
+        self._start_stream(job_id, script)
         return {"jobId": job_id}
 
     async def _rpc_diagnose(self, params: dict[str, Any]) -> dict[str, Any]:
@@ -1187,7 +1208,12 @@ class MockEngine:
         config = params.get("config") or {}
         exam_id = config.get("examId") or self.exams[0]["examId"]
         job_id = self._new_job_id("gym")
-        self._start_stream(job_id, mock_data.gym_script(job_id, str(exam_id)))
+        self._start_stream(
+            job_id,
+            mock_data.gym_failure_script(job_id, str(exam_id))
+            if self.failing_cycles
+            else mock_data.gym_script(job_id, str(exam_id)),
+        )
         return {"jobId": job_id}
 
     async def _rpc_gymStatus(self, params: dict[str, Any]) -> dict[str, Any]:

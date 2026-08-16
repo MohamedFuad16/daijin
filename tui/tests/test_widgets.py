@@ -285,16 +285,40 @@ def test_an_ordinary_step_keeps_its_level_styling_and_no_marker():
     assert "[" not in line.split("classify", 2)[-1][:3]
 
 
-def test_the_phase_says_it_ended_and_the_step_says_what_happened():
-    """Every job now ends with phase done; the step carries the outcome."""
-    for step, expected in (("finished", "complete"), ("written", "complete"),
-                           ("failed", "ended: failed"), ("cancelled", "ended: cancelled")):
+def test_the_phase_says_it_ended_and_the_level_says_how():
+    """Corrected in engine 9106794. This test used to encode the old reading.
+
+    Keying on the step means enumerating an open set: finished, written,
+    kept-yours, and whatever the next job names its ending. level is a closed
+    set that is the same for every job, so the step is displayed and the level
+    is what the branch reads. The step still appears, because "failed" is worth
+    seeing; it is simply not what decides.
+    """
+    cases = (
+        ("finished", "info", "complete"),
+        ("written", "info", "complete"),
+        ("kept-yours", "info", "complete"),
+        ("cancelled", "warn", "stopped: cancelled"),
+        ("failed", "error", "FAILED: failed"),
+    )
+    for step, level, expected in cases:
         checklist = PhaseChecklist([("alpha", "Alpha")], clock=lambda: 0.0)
         checklist.apply_event({"jobId": "j", "phase": "alpha", "step": "s", "detail": "", "level": "info"})
-        checklist.apply_event({"jobId": "j", "phase": "done", "step": step, "detail": "", "level": "info"})
+        checklist.apply_event({"jobId": "j", "phase": "done", "step": step, "detail": "", "level": level})
         assert checklist.finished_at is not None
         assert checklist.finish_is_inferred is False
-        assert expected in checklist.snapshot_lines()[0], f"{step} rendered as {checklist.snapshot_lines()[0]}"
+        line = checklist.snapshot_lines()[0]
+        assert expected in line, f"{step}/{level} rendered as {line}"
+
+    # The point of reading level rather than the step: an ending this client
+    # has never heard of still reports correctly, because level is closed.
+    unknown = PhaseChecklist([("alpha", "Alpha")], clock=lambda: 0.0)
+    unknown.apply_event({"jobId": "j", "phase": "alpha", "step": "s", "detail": "", "level": "info"})
+    unknown.apply_event({"jobId": "j", "phase": "done", "step": "quiesced", "detail": "", "level": "error"})
+    assert "FAILED" in unknown.snapshot_lines()[0], (
+        "an ending name this client does not know broke the failure reporting, "
+        "which is what enumerating the step would do"
+    )
 
 
 def test_a_failure_after_a_done_is_not_hidden():

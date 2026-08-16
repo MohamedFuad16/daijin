@@ -137,16 +137,28 @@ class InitFeedScreen(DaijinScreen):
         self._update_progress(checklist)
         done = next((e for e in batch if e.get("phase") == "done"), None)
         if done is not None:
-            event = done
-            cancelled = event.get("step") == "cancelled"
+            # A run that BROKE used to reach this banner and say "Init
+            # complete", because the only branch was on step == cancelled. The
+            # phase says it ended; level says how, and a failed init has to say
+            # so where the user is looking rather than only as a red line in a
+            # feed they may have scrolled past.
+            level = str(done.get("level") or "info")
+            repo = getattr(self.app, "selected_repo", "")
+            if level == "error":
+                detail = str(done.get("detail") or done.get("message") or "").strip()
+                message = (
+                    f"Init FAILED for {repo} after {checklist.elapsed:.1f}s, job {self.job_id}. "
+                    f"There is no brain to use. {detail}".strip()
+                )
+            elif level == "warn":
+                message = f"Init cancelled after {checklist.elapsed:.1f}s, job {self.job_id}."
+            else:
+                message = (
+                    f"Init complete for {repo} in {checklist.elapsed:.1f}s, job {self.job_id}."
+                )
             self.query_one("#init-notice", Banner).set_notice(
-                (
-                    f"Init cancelled after {checklist.elapsed:.1f}s, job {self.job_id}."
-                    if cancelled
-                    else f"Init complete for {getattr(self.app, 'selected_repo', '')} in "
-                    f"{checklist.elapsed:.1f}s, job {self.job_id}."
-                ),
-                "warn" if cancelled else "info",
+                message,
+                {"error": "error", "warn": "warn"}.get(level, "info"),
             )
 
     async def on_button_pressed(self, event: Button.Pressed) -> None:

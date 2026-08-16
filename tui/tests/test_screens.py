@@ -209,8 +209,20 @@ async def test_a_brain_deleted_on_disk_changes_the_badge_without_a_reattach():
             if r["path"].endswith("orchard-web")
         )
         assert row["health"] == "critical"
-        assert row["floorScore"] is None, (
-            "a floor measured before the brain broke describes a brain nobody can open now"
+        # Measured against the daemon on 2026-08-17: the floor SURVIVES, because
+        # it comes from the score history rather than from the brain. The mock
+        # cleared it, which was a behaviour the engine does not have. My earlier
+        # assertion here encoded my invention as a fact.
+        assert row["floorScore"] is not None, (
+            "the score history does not live in the brain, so breaking the brain "
+            "cannot erase what was already measured"
+        )
+        rendered_after = " ".join(text_of(s) for s in card.query(Static))
+        assert "last measured floor" in rendered_after, (
+            "a real historical measurement is being hidden behind the broken state"
+        )
+        assert "from the score history" in rendered_after, (
+            "the surviving floor is shown without saying it is not from this brain"
         )
 
 
@@ -299,6 +311,45 @@ async def test_clicking_initialize_brain_opens_the_init_screen():
 
 # 2. Init activity feed ---------------------------------------------------
 
+
+
+@run_async
+async def test_an_init_that_broke_is_not_announced_as_complete():
+    """The phase says THAT it ended; level says HOW.
+
+    This banner branched only on step == cancelled, so a run that BROKE
+    reported "Init complete" in the one place the user is looking, while the
+    only evidence of the failure was a red line in a feed they may have
+    scrolled past and a repo card still saying no-brain with no stated
+    connection between them.
+
+    Keying on the step was my reading of guidance that has since been
+    corrected (engine 9106794): the step is an open set, level is a closed one.
+    """
+    async with running_app() as (app, pilot):
+        app.client.engine.fail_next_init(DEFAULT_REPO)
+        await goto(pilot, "2")
+        await pilot.click("#init-start")
+        await settle(pilot, 20)
+
+        notice = text_of(app.screen.query_one("#init-notice", Banner))
+        assert "FAILED" in notice, f"a broken init was announced as: {notice!r}"
+        assert "complete" not in notice.lower(), "the failure still reads as a success"
+        assert "no brain to use" in notice, "the consequence is not stated"
+        assert "embedder refused" in notice, "the engine's own reason is not carried"
+
+        checklist = app.screen.query_one("#init-checklist", PhaseChecklist)
+        assert checklist.terminal_level == "error"
+        header = checklist.render().plain
+        assert "FAILED" in header, f"the checklist header hides the failure: {header!r}"
+        # A phase that was running when the job broke did not finish.
+        assert "failed" in {entry["status"] for entry in checklist.state.values()}, (
+            "a run that broke left a checklist of ticks"
+        )
+        assert not any(
+            entry["status"] == "done" and key == "brain"
+            for key, entry in checklist.state.items()
+        ), "the phase that was mid flight when it broke is marked done"
 
 @run_async
 async def test_init_feed_runs_every_phase_from_the_step_event_stream():
@@ -826,6 +877,32 @@ async def test_gym_reads_the_gate_from_serve_status_before_any_attempt():
         assert app.client.engine.spend_calls == [], "reading the gate must not attempt a cycle"
         assert "gate reads blocked" in str(app.screen.query_one("#gym-start", Button).label)
 
+
+
+@run_async
+async def test_a_gym_cycle_that_broke_after_spending_is_not_called_complete():
+    """This banner had no branch at all: every ending read "Cycle complete".
+
+    A gym cycle is spend touching, so a run that broke AFTER the provider was
+    called was being reported as a success, and the user's next move would be
+    to start another one.
+    """
+    async with running_app(gate_open=True) as (app, pilot):
+        app.client.engine.fail_next_cycle()
+        await goto(pilot, "5")
+        await pilot.click("#gym-start")
+        await settle(pilot)
+        if isinstance(app.screen, SpendConfirmScreen):
+            await pilot.click("#spend-confirm")
+        await settle(pilot, 20)
+
+        notice = text_of(app.screen.query_one("#gym-notice", Banner))
+        assert "FAILED" in notice, f"a broken paid cycle was announced as: {notice!r}"
+        assert "complete" not in notice.lower()
+        assert "Spend may already have happened" in notice, (
+            "the user is not told that a failed cycle can still have cost money"
+        )
+        assert "503" in notice, "the engine's own reason is not carried"
 
 @run_async
 async def test_gym_shows_the_spend_gate_refusal_hint_verbatim():

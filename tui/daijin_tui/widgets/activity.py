@@ -114,6 +114,7 @@ class PhaseChecklist(Static):
         self.last_event_at: float | None = None
         self.finish_is_inferred = False
         self.terminal_step: str | None = None
+        self.terminal_level: str = "info"
         self.order: list[str] = []
         self.state: dict[str, dict[str, Any]] = {}
         for key, label in phases:
@@ -144,6 +145,7 @@ class PhaseChecklist(Static):
         self.last_event_at = None
         self.finish_is_inferred = False
         self.terminal_step = None
+        self.terminal_level = "info"
         for entry in self.state.values():
             entry.update(
                 {"status": "pending", "detail": "", "counts": {}, "steps": 0, "warns": 0, "started": None, "ended": None}
@@ -169,17 +171,31 @@ class PhaseChecklist(Static):
             self.started_at = now
 
         if phase in TERMINAL_PHASES:
-            # Key on the PHASE, never the step: the step says what happened
-            # (finished, written, kept-yours, failed, cancelled), the phase
-            # says that it ended. A job that announces done and then throws
-            # sends a second done whose step is failed, and hiding that to
-            # protect a one-event invariant would hide the thing most worth
-            # seeing, so the later step wins.
+            # The phase says THAT it ended; `level` says HOW. Corrected in
+            # engine 9106794: keying on the step to tell success from failure
+            # means enumerating an open set (finished, written, kept-yours, and
+            # whatever the next job names its ending), while level is a small
+            # closed set that is the same for every job.
+            #
+            #   info   it stopped well
+            #   warn   it was stopped (cancelled)
+            #   error  it broke (failed)
+            #
+            # The step is kept for display, because "failed" is worth showing;
+            # it is simply not what the branch reads.
             self.terminal_step = str(event.get("step") or "")
+            self.terminal_level = str(event.get("level") or "info")
+            broke = self.terminal_level == "error"
             for key in self.order:
                 entry = self.state[key]
                 if entry["status"] == "active":
-                    entry["status"] = "warn" if entry["warns"] else "done"
+                    # A phase that was running when the job broke did NOT
+                    # finish. Marking it done is the phantom-done family: a
+                    # checklist of ticks over a run that failed.
+                    if broke:
+                        entry["status"] = "failed"
+                    else:
+                        entry["status"] = "warn" if entry["warns"] else "done"
                     entry["ended"] = now
             self.finished_at = now
             self.finish_is_inferred = False
@@ -315,8 +331,10 @@ class PhaseChecklist(Static):
         elif self.finish_is_inferred:
             # The engine never said it finished; the stream simply stopped.
             state = "complete (inferred from an idle stream)"
-        elif self.terminal_step in ("failed", "cancelled"):
-            state = f"ended: {self.terminal_step}"
+        elif self.terminal_level == "error":
+            state = f"FAILED: {self.terminal_step or 'the job broke'}"
+        elif self.terminal_level == "warn":
+            state = f"stopped: {self.terminal_step or 'cancelled'}"
         else:
             state = "complete"
         return f"{job}  {state}  phase {done}/{len(self.order)}  elapsed {self.elapsed:.1f}s"

@@ -43,6 +43,22 @@ Consequence written into the test file: the isolation rests on the OWN
 REPO, not the cancel; the cancel only stops work sooner. Verified
 empirically the real way: zero temp dirs before and after, meaningful
 because an outliving job would RECREATE its directory on write.
+## 2026-08-16 23:02 - store-adapter's closing note, kept for whoever reads next
+
+It verified before approving rather than after (git status empty
+across all nineteen owned paths; 70e80f7 carries the history stamping)
+and left two things in the record. The checksum is DELIBERATELY
+UNBUILT, not forgotten: a checksum against nothing verifies nothing,
+so it waits to be written against the real release artifact, never
+designed in advance of it. And the habit to inherit, with its four
+instances from one lane: A PASSING CHECK IS NOT EVIDENCE UNTIL IT HAS
+BEEN WATCHED FAILING - it caught a dash sweep that passed with a
+planted em dash, a hash comparison of two empty strings, a shim whose
+exit killed only its subshell, and a mutation that proved nothing
+because its path expression was wrong. Every one failed in the
+direction that looks like nothing happening, which is why reading them
+was never going to be enough. Terminated cleanly, pane released.
+
 ## 2026-08-16 22:50 - Roster: store-adapter retired at owner direction
 
 store-adapter shut down, its lane complete: P2 conformance, the A/B,

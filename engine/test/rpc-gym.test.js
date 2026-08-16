@@ -112,8 +112,8 @@ test('examDetail returns the record and EMPTY axes until grading lands', async (
     const detail = await context.server.methods.examDetail({ repoPath: context.repoPath, examId: 'exam-0001' });
     assert.equal(detail.exam.examId, 'exam-0001');
     assert.deepEqual(detail.attempts, [], 'no runs yet');
-    assert.deepEqual(detail.axes, {},
-      'inventing axes would put five fabricated numbers on a radar chart that reads exactly like measured ones');
+    assert.equal(detail.axes, null,
+      'null, never {}: an empty object renders on a radar exactly like a set of measured zeros');
     assert.equal(detail.provenance.source, 'commit-mining');
 
     const missing = await raised(context.server.methods.examDetail({ repoPath: context.repoPath, examId: 'exam-9999' }));
@@ -328,4 +328,49 @@ test('a quarantined exam is not drawable', async () => {
   } finally {
     await context.cleanup();
   }
+});
+
+// ---- finding 79: the axes shape ----------------------------------------------------------
+
+test('axesFor returns a canonically ORDERED list, never a name-keyed object', async () => {
+  // grading.js keys by name because a rubric is authored and validated by name. A chart
+  // needs a fixed order, and that order must not come from object key order, which is an
+  // accident of how the rubric happened to be written.
+  const { axesFor } = await import('../src/rpc/methods.js');
+  const { AXES } = await import('../src/gym/grading.js');
+
+  // Deliberately scrambled input order.
+  const rubric = { axes: {
+    reasoning_quality: { score: 3, citations: ['a'] },
+    correctness_vs_gold: { score: 5, citations: ['b'] },
+    blast_radius_awareness: { score: 2, citations: ['c'] },
+    convention_adherence: { score: 4, citations: ['d'] },
+    decision_awareness: { score: 1, citations: ['e'] },
+  } };
+  const axes = axesFor(rubric);
+  assert.deepEqual(axes.map((row) => row.name), [...AXES], 'canonical order regardless of input order');
+  assert.deepEqual(axes.map((row) => row.score), [5, 4, 1, 3, 2]);
+  // max travels with every score: a 4 means nothing without the 5 beside it, and a client
+  // that hardcodes the denominator misreads silently the day the scale changes.
+  assert.ok(axes.every((row) => row.max === 5));
+});
+
+test('an ungraded attempt is null, never an empty object or zeroes', async () => {
+  const { axesFor } = await import('../src/rpc/methods.js');
+  assert.equal(axesFor(undefined), null);
+  assert.equal(axesFor({}), null);
+  assert.equal(axesFor({ axes: {} }), null);
+  // Partial is null too: validateRubric refuses a rubric missing an axis, so a partial here
+  // means something upstream is wrong rather than that the grader was brief, and a partial
+  // radar reads as a low score on the missing axes.
+  assert.equal(axesFor({ axes: { correctness_vs_gold: { score: 5 } } }), null);
+});
+
+test('an ungraded attempt says WHY, distinguishing no-diff from diff-but-ungraded', async () => {
+  // unsubmitted is not a bad grade: it records that the student never answered and so
+  // cannot have answered badly.
+  const { ungradedReason } = await import('../src/rpc/methods.js');
+  assert.match(ungradedReason({ status: 'unsubmitted' }), /never submitted/);
+  assert.match(ungradedReason({ status: 'apply-error' }), /did not apply/);
+  assert.match(ungradedReason({ status: 'completed' }), /produced a diff and has not been graded/);
 });

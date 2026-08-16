@@ -26,6 +26,7 @@ import { formatContext } from '../rag/context.js';
 import { retrieve as retrieveImpl } from '../rag/retrieve.js';
 import { getAgentFile as readAgentFile, setAgentFile as writeAgentFile, studentRules } from '../gym/agent-files.js';
 import { runGymCycle } from '../gym/cycle.js';
+import { AXES } from '../gym/grading.js';
 import { parseExamRecord, quarantineExam, vetoExam } from '../gym/exams.js';
 import { GymLedger, gymDatabasePath } from '../gym/ledger.js';
 import { loadResultFiles } from '../gym/result-files.js';
@@ -155,6 +156,43 @@ export function clusterCases(results, documentsById = new Map(), armsByCase = ne
     cases: perCase.length,
     hits: perCase.length - misses.length,
   };
+}
+
+/**
+ * The five axes of one attempt, in canonical order, or NULL when it was never graded.
+ *
+ * THE SHAPE IS A LIST AND THE UNGRADED VALUE IS NULL, both deliberately (D-0025 era finding
+ * 79). An empty object was the previous answer and is now forbidden: zeroed or absent axes
+ * on a radar chart render exactly like measured ones, so a viewer cannot tell "not graded"
+ * from "graded badly". Null cannot be plotted by accident.
+ *
+ * grading.js keys axes BY NAME because a rubric is authored by name and validated by name.
+ * A chart needs a fixed order, and the order must not come from object key order, which is
+ * an accident of how the rubric was written. Mapping name-keyed to canonically-ordered
+ * happens HERE, at the daemon boundary, because that is where the wire shape is owed.
+ *
+ * `max` travels with every score. A 4 means nothing without the 5 beside it, and a client
+ * that hardcodes the denominator silently misreads the day the scale changes.
+ */
+export function axesFor(rubric) {
+  if (!rubric?.axes) return null;
+  const entries = AXES.map((name) => {
+    const entry = rubric.axes[name];
+    return Number.isFinite(entry?.score) ? { name, score: entry.score, max: 5 } : null;
+  });
+  // All five or none. A partial radar is a shape that reads as a low score on the missing
+  // axes, and validateRubric already refuses a rubric missing one, so a partial here means
+  // something upstream is wrong rather than that the grader was brief.
+  return entries.every(Boolean) ? entries : null;
+}
+
+/// Why an attempt has no axes, in the words a reader needs. `unsubmitted` is not a bad
+/// grade, it records that the student never answered and so cannot have answered badly,
+/// which is the distinction the contract asks be preserved.
+export function ungradedReason(attempt) {
+  if (attempt?.status === 'unsubmitted') return 'the student never submitted, so there is no diff to grade';
+  if (attempt?.status === 'apply-error') return 'the submitted diff did not apply, so there is nothing to grade';
+  return 'this attempt produced a diff and has not been graded yet';
 }
 
 function requireRepoPath(params) {
@@ -880,13 +918,25 @@ export function createMethods({
         const exam = ledger.getExam(params.examId);
         if (!exam) throw invalidParams('unknown examId', `No exam named ${params.examId} is in the bank.`);
         const attempts = ledger.database.prepare('SELECT * FROM run WHERE exam_id = ? ORDER BY id DESC').all(params.examId);
+        // NOTE, dated 2026-08-16 (finding 79): this used to return `axes: {}` behind a
+        // comment saying "empty until the grading round lands". The grading round HAS
+        // landed, and `{}` is now a forbidden value: an empty object renders on a radar
+        // exactly like a set of measured zeros. The ruled shape is null when ungraded, and
+        // a canonically-ordered list of { name, score, max } when graded.
+        const graded = attempts.map((attempt) => ({
+          ...attempt,
+          axes: axesFor(attempt.rubric),
+          ungradedReason: attempt.rubric ? null : ungradedReason(attempt),
+        }));
+        const latestGraded = graded.find((attempt) => attempt.axes);
         return {
           exam,
-          attempts,
+          attempts: graded,
           provenance: exam.provenance ?? null,
-          // EMPTY until the grading round lands. Inventing axes here would put five
-          // fabricated numbers on a radar chart that reads exactly like measured ones.
-          axes: {},
+          // The most recent GRADED attempt's axes, or null. Null is not "zero on every
+          // axis"; it is "this has never been graded", and every attempt carries its own
+          // ungradedReason so a reader can tell a missing grade from a missing submission.
+          axes: latestGraded?.axes ?? null,
         };
       });
     },

@@ -428,3 +428,7 @@ App.-motion-off .repo-card,
 App.-motion-off DataTable > .datatable--cursor {
     transition: none;
 }
+
+#init-progress {
+    margin: 0 0 1 0;
+}

@@ -12,7 +12,7 @@ from .. import mock_data
 from ..rpc import RpcError
 from ..stream import FLUSH_INTERVAL, StreamCoalescer
 from ..widgets.activity import IDLE_UNTIL_INFERRED
-from ..widgets import Banner, EventLog, PhaseChecklist, SectionTitle
+from ..widgets import Banner, EventLog, Gauge, PhaseChecklist, SectionTitle
 from .base import DaijinScreen
 from .dialogs import budget_estimate_lines
 
@@ -48,6 +48,11 @@ class InitFeedScreen(DaijinScreen):
                 id="init-scope",
             )
         yield SectionTitle("Phases")
+        # Semantic, not decorative: during a long init the thing a watcher is
+        # tracking is how far through the pipeline the run is, so the bar moves
+        # toward it rather than jumping. It is also the only stream-driven
+        # animation reachable at zero spend, the gym gauge being behind the gate.
+        yield Gauge(caption="waiting for the first phase", id="init-progress")
         # Seeded only against the mock. The real engine's pipeline is its own, and
         # a guessed manifest renders phases the engine never ran.
         yield PhaseChecklist(
@@ -87,6 +92,27 @@ class InitFeedScreen(DaijinScreen):
             return
         self.coalescer.push(event)
 
+    def _update_progress(self, checklist: PhaseChecklist) -> None:
+        """Fill toward the share of phases the engine has reported finishing.
+
+        The denominator is what the engine has SHOWN so far, not a guessed
+        pipeline length, so the bar never implies knowledge of how much is left.
+        """
+        done = sum(
+            1 for key in checklist.order if checklist.state[key]["status"] in ("done", "warn")
+        )
+        seen = sum(
+            1 for key in checklist.order if checklist.state[key]["status"] != "pending"
+        )
+        if not seen:
+            return
+        gauge = self.query_one("#init-progress", Gauge)
+        gauge.set_value(
+            done / seen,
+            motion=getattr(self.app, "motion", None),
+            caption=f"{done} of {seen} reported phases complete",
+        )
+
     def _check_idle(self) -> None:
         """The stream has no terminal event, so a quiet run has to be inferred."""
         if not self.is_mounted:
@@ -108,6 +134,7 @@ class InitFeedScreen(DaijinScreen):
         checklist.apply_events(batch)
         for event in batch:
             log.append_event(event)
+        self._update_progress(checklist)
         done = next((e for e in batch if e.get("phase") == "done"), None)
         if done is not None:
             event = done

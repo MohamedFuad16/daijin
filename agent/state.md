@@ -1,5 +1,23 @@
 # Daijin build state (authoritative)
 
+## 2026-08-16 17:37 addendum - The principle sharpened, with its honest bound
+
+The verifier sharpened unrepresentability's mechanism: a refusal HAS TO
+BE REACHED, so "is this guard on every path?" needs re-answering after
+every refactor; a parameter that does not exist is on no path and the
+question stops being askable. The first kind decays under maintenance;
+the second does not. And the bound that keeps the principle honest:
+elimination only works when the dangerous input has NO legitimate use;
+certify's verdict could not be eliminated because a caller genuinely
+needs to assert one, so it became a checked assertion, and the nine
+constructed refusals are the cases where enforcement is the only
+available answer. Also: F81 re-verified with the case that found it
+(counts 2 then 3), the partial-rubric wire case singled out as the
+harder one (an empty object is obviously nothing; one axis with a real
+score LOOKS like a grade), and gym-porter's defect framing adopted over
+the verifier's own: the only way to catch a check that agrees with
+itself is to ask what it would do if the thing it measures went missing.
+
 ## 2026-08-16 17:35 - Certify delta PASS; the first unplanned guard fires
 
 Verifier report 16, no findings: the contradictory verdict refused

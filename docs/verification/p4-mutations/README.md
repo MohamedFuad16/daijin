@@ -44,6 +44,36 @@ instrument, and the captured output of both. Session scratch dies; the evidence 
      branch separately. A positive control that passes for the wrong reason is a gate that
      cannot fail, one level up.
 
+## Mechanism inventory: every guard, and where its failure was seen
+
+The audit that found the containment habit enumerated these from memory, which makes the
+denominator whatever the auditor recalls. Written down, the audit is re-runnable by anyone,
+including someone checking whether I missed one. The bar per the install-time precedent: a
+mechanism in the invisible-failure class is not trusted until its failure direction has been
+watched.
+
+| guard | where its failure is demonstrated |
+| --- | --- |
+| gate-writer scanner | `gate-scanner-plants.mjs` (verifier's four) and `gate-plants.mjs` (twelve) |
+| scanned-set coverage | fired twice for real, on `src/state` and `src/roles` |
+| clause 18 provider scan | per-branch controls; dropping any branch breaks exactly one |
+| clause 19 fixture scan | composed offending shapes; the stale-exemption mutation |
+| battery: survivor | `mutate.sh`, every KILLED line is the inverse |
+| battery: skipped anchor | seen three times for real, and a probe with a dead anchor |
+| battery: unexecuted | six mutations appended past `exit`, caught by declared-vs-executed |
+| battery: restore | probe with a sabotaged restore, reports NOT RESTORED |
+| battery: containment | probe on a throwaway copy, reports SHARED TREE CHANGED |
+| ledger clause 5 (FK) | a rubric for a run with no row is refused, named before the FK fires |
+| ledger clause 9 (txn) | a batch failing partway leaves no rubric and no batch row |
+| certification refusals | mode, verdict, quarantine, harness, exclusion record, each tested |
+| gold-provenance | fails loud on an unreadable commit, refuses past the store cap |
+| drawn denominator | returns null rather than a short count, four ways |
+| commit-msg governance | self-test both directions, plus a881df2 refused from real history |
+| hook wiring | control and refusal both exercised through the installed hook |
+
+If you add a guard to this lane, add its row. A guard absent from this table is one nobody
+can tell has been exercised, which is the state the table exists to make visible.
+
 ## Three ways this battery has lied, and the three checks that stopped it
 
 1. A SURVIVOR means the code is not pinned. Counted.

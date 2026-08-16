@@ -36,17 +36,23 @@ from typing import Any, Awaitable, Callable, Iterable, Sequence
 from . import mock_data
 
 CLIENT_VERSION = "0.1.0"
-# Ceiling on concurrent in-flight requests from ONE client.
+# Two limits, because the two risks are different.
 #
-# Screens fan out independent calls so a view costs max(latency) rather than
-# sum(latency). Under the socket transport several TUIs share one daemon, so
-# an uncapped fan-out multiplies by the number of attached clients. The cap
-# lives here rather than in each screen because a screen cannot then exceed it
-# by accident, and there is one number to tune.
-#
-# PROVISIONAL: 5, chosen with the leader's 4-to-6 prior and not yet measured
-# against a loaded daemon. Recorded in TRANSPORT-PROPOSAL.md with this basis.
-MAX_IN_FLIGHT = 5
+# MAX_IN_FLIGHT is a runaway backstop, NOT a throughput limit. The extractor
+# measured the real socket daemon: three clients issuing nine concurrent calls
+# each, 27 in flight, cost 37ms total, and three concurrent analyze calls cost
+# the same wall clock as one, because they are filesystem bound and overlap.
+# So breadth is not the risk and a tight cap would only slow the client down.
+MAX_IN_FLIGHT = 32
+
+# EMBEDDING_BOUND is the limit that matters. These methods queue behind ONE
+# local Ollama, so firing several at once does not overlap: it contends. The
+# repo home asks for a retrievalScore per repo, and the brain screen wants a
+# retrievalScore and a diagnose together, which is exactly the case the
+# extractor flagged as worth serialising client-side. Serialising here rather
+# than in each screen keeps it true no matter who calls.
+EMBEDDING_BOUND = frozenset({"search", "retrievalScore", "diagnose"})
+MAX_EMBEDDING_IN_FLIGHT = 1
 # How much of a failing engine's stderr to carry into the error we raise.
 STDERR_TAIL_LINES = 20
 # The contract version this client is built against. A mismatch is an upgrade
@@ -137,10 +143,13 @@ class RpcClient:
         self.contract_version: str | None = None
         self.engine_version: str | None = None
         self._inflight = asyncio.Semaphore(MAX_IN_FLIGHT)
+        self._embedding_inflight = asyncio.Semaphore(MAX_EMBEDDING_IN_FLIGHT)
         self._current_in_flight = 0
-        # Observability for the cap: a test asserts this never exceeds the
-        # ceiling, so the limit is a measured property rather than a comment.
+        self._current_embedding_in_flight = 0
+        # Observability for both limits: tests assert these bind, so the limits
+        # are measured properties rather than comments.
         self.peak_in_flight = 0
+        self.peak_embedding_in_flight = 0
 
     # Event fan out ------------------------------------------------------
 
@@ -187,7 +196,25 @@ class RpcClient:
         return None
 
     async def call(self, method: str, params: dict[str, Any] | None = None) -> Any:
-        """Issue one request, never exceeding MAX_IN_FLIGHT concurrently."""
+        """Issue one request under both limits.
+
+        Embedding-bound methods take the narrow permit first, so a burst of
+        them queues instead of contending for the single local embedder, and
+        holds neither permit while waiting for the other.
+        """
+        if method in EMBEDDING_BOUND:
+            async with self._embedding_inflight:
+                self._current_embedding_in_flight += 1
+                self.peak_embedding_in_flight = max(
+                    self.peak_embedding_in_flight, self._current_embedding_in_flight
+                )
+                try:
+                    return await self._guarded_call(method, params)
+                finally:
+                    self._current_embedding_in_flight -= 1
+        return await self._guarded_call(method, params)
+
+    async def _guarded_call(self, method: str, params: dict[str, Any] | None = None) -> Any:
         async with self._inflight:
             self._current_in_flight += 1
             self.peak_in_flight = max(self.peak_in_flight, self._current_in_flight)

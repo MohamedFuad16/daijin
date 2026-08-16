@@ -15,7 +15,14 @@ import pytest
 from conftest import DEFAULT_REPO, run_async, running_app, settle
 
 from daijin_tui.concurrency import gather_all, gather_iter
-from daijin_tui.rpc import MAX_IN_FLIGHT, MockEngine, MockRpcClient, RpcError
+from daijin_tui.rpc import (
+    EMBEDDING_BOUND,
+    MAX_EMBEDDING_IN_FLIGHT,
+    MAX_IN_FLIGHT,
+    MockEngine,
+    MockRpcClient,
+    RpcError,
+)
 
 
 class LaggyClient(MockRpcClient):
@@ -33,38 +40,89 @@ class LaggyClient(MockRpcClient):
 # The cap ------------------------------------------------------------------
 
 
-def test_the_cap_sits_in_the_agreed_band():
-    """Asserted against a literal, not against itself.
-
-    `peak <= MAX_IN_FLIGHT` is trivially true for any large MAX_IN_FLIGHT, so a
-    test written that way passes when the cap is effectively removed. It did:
-    raising the constant to 500 left the earlier version of these tests green.
-    The band is the leader's 4-to-6 prior; changing the number outside it should
-    be a deliberate act that fails a test first.
+def test_the_broad_ceiling_is_a_backstop_not_a_throughput_limit():
+    """Measured by the extractor against the real socket daemon: 27 calls in
+    flight from three clients cost 37ms, and three concurrent analyze calls
+    cost the same wall clock as one, because they are filesystem bound. So
+    breadth is not the risk, and a tight ceiling would only slow the client.
     """
-    assert 4 <= MAX_IN_FLIGHT <= 6, f"MAX_IN_FLIGHT is {MAX_IN_FLIGHT}, outside the agreed 4 to 6"
+    assert MAX_IN_FLIGHT >= 16, (
+        f"MAX_IN_FLIGHT is {MAX_IN_FLIGHT}, tight enough to throttle a fan-out "
+        "the daemon was measured to absorb"
+    )
 
 
 @run_async
-async def test_the_cap_actually_binds():
-    """With far more work than the ceiling, the peak must BE the ceiling."""
+async def test_the_broad_ceiling_still_binds_if_something_runs_away():
     client = LaggyClient(MockEngine(speed=0.0), latency=0.01)
-    issued = MAX_IN_FLIGHT * 4
+    issued = MAX_IN_FLIGHT * 3
     await gather_iter(client.call("analyze", {"repoPath": DEFAULT_REPO}) for _ in range(issued))
     assert client.peak_in_flight == MAX_IN_FLIGHT, (
         f"issued {issued} concurrent calls and peaked at {client.peak_in_flight}; "
-        f"the cap of {MAX_IN_FLIGHT} is not binding"
+        "the backstop is not binding"
+    )
+    await client.aclose()
+
+
+# The limit that actually matters --------------------------------------------
+
+
+def test_the_embedding_methods_are_the_ones_that_contend():
+    """These queue behind one local Ollama, so concurrency does not overlap."""
+    assert EMBEDDING_BOUND == {"search", "retrievalScore", "diagnose"}
+    assert MAX_EMBEDDING_IN_FLIGHT == 1
+
+
+@run_async
+async def test_embedding_bound_calls_are_serialised():
+    client = LaggyClient(MockEngine(speed=0.0), latency=0.01)
+    await gather_iter(
+        client.call("retrievalScore", {"repoPath": DEFAULT_REPO}) for _ in range(6)
+    )
+    assert client.peak_embedding_in_flight == MAX_EMBEDDING_IN_FLIGHT, (
+        f"six retrievalScore calls peaked at {client.peak_embedding_in_flight} in "
+        "flight; they contend for one embedder and must queue"
     )
     await client.aclose()
 
 
 @run_async
-async def test_the_cap_is_enforced_by_the_client_not_by_each_screen():
-    """A screen cannot exceed the ceiling even by fanning out carelessly."""
-    client = LaggyClient(MockEngine(speed=0.0), latency=0.01)
-    await gather_iter(client.call("serveStatus", {}) for _ in range(50))
-    assert client.peak_in_flight == MAX_IN_FLIGHT
+async def test_cheap_calls_are_not_serialised_by_the_embedding_limit():
+    """The narrow limit must not throttle everything else."""
+    client = LaggyClient(MockEngine(speed=0.0), latency=0.02)
+    await gather_iter(client.call("serveStatus", {}) for _ in range(8))
+    assert client.peak_in_flight > 1, "cheap calls were serialised too"
+    assert client.peak_embedding_in_flight == 0
     await client.aclose()
+
+
+@run_async
+async def test_the_boot_screen_does_not_stack_retrieval_scores():
+    """One retrievalScore per repo, and they must not pile onto one embedder."""
+    client = LaggyClient(MockEngine(speed=0.0), latency=0.02)
+    from daijin_tui.app import DaijinApp
+
+    app = DaijinApp(client, is_mock=True, repo=DEFAULT_REPO)
+    async with app.run_test(size=(170, 55)) as pilot:
+        await pilot.pause()
+        await app.screen.wait_for_load()
+    assert client.peak_embedding_in_flight <= MAX_EMBEDDING_IN_FLIGHT
+    assert client.peak_in_flight > 1, "nothing ran concurrently, so this proves nothing"
+
+
+@run_async
+async def test_the_brain_screen_does_not_run_score_and_diagnose_together():
+    client = LaggyClient(MockEngine(speed=0.0), latency=0.02)
+    from daijin_tui.app import DaijinApp
+
+    app = DaijinApp(client, is_mock=True, repo=DEFAULT_REPO)
+    async with app.run_test(size=(170, 55)) as pilot:
+        await pilot.pause()
+        await app.screen.wait_for_load()
+        await pilot.press("3")
+        await settle(pilot)
+        await app.screen.wait_for_load()
+    assert client.peak_embedding_in_flight <= MAX_EMBEDDING_IN_FLIGHT
 
 
 @run_async

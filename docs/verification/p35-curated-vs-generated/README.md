@@ -109,3 +109,13 @@ auditor, behind the spend boundary.
 
 Both scripts leave the target repo untouched: artifacts to a scratch `artifactRoot`, brain
 database in the run directory, gate commands in a `git archive` export at the pin.
+
+## A note for the dash scan
+
+`adopted-report.json` contains em dashes. They are confined to `units[].title`,
+`units[].body`, `units[].content`, `units[].core` and `units[].meta.section`, which are the
+owner's own curated prose captured VERBATIM from `agent/decisions.md`, whose ADR headings
+use them. Nothing authored for this project contains one, and the data is deliberately not
+rewritten: an adopted unit that does not match its source file byte for byte would make the
+citation false and the artifact useless as evidence. The project's no-dash rule governs what
+is written here, not what is quoted from elsewhere.

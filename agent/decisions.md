@@ -512,3 +512,25 @@ portfolio-mine is real and disqualifying; a win there is impossible; THE
 PROMOTION DECISION COMES FROM THE PLATFORM CORPUS ONLY (31 of 34, three
 cases of headroom). Promoting on MRR because it is the only metric with
 range on small corpora remains forbidden per D-0017.]
+
+[Addition to D-0025, 2026-08-16 12:53, the MEASURED VERDICT: case rate
+identical to the last digit across control, K=20 and K=40
+(0.9117647058823529), violations 0 throughout, so per D-0017 there is
+nothing to promote on and the knob ships OFF, documented as
+measured-neutral-on-enforced. MRR rose 0.0196, which is precisely the
+signature D-0017 exists to be unimpressed by: the platform's one measured
+regression moved MRR up while case rate fell, and a change that moves
+only MRR is the shape the gate refuses. Per-case movement is mixed (four
+cases improved rank, one worsened, none crossed hit/miss), so the
+cross-encoder does real work the enforced gauge cannot see, at 42x to 81x
+per-query cost. topK=20 and topK=40 score identically on every case AND
+retrieve differently on seven (eighteen retrieval-level differences,
+token counts moving up to 308): the finding-66 diagnostics block caught
+on its first real experiment what a score-level comparison would have
+called the same run. VERDICT LIMIT, stated in the record: this corpus
+cannot answer the ruling's question. At a 91.2% floor only three cases
+can possibly improve, and portfolio-mine has less range still. The
+measurement worth running is on a corpus with real retrieval failures,
+and none exists yet; that re-measurement is the standing auditor-era
+item. The full write-up is engine/src/rag/RERANK-MEASUREMENT.md at
+1fe20f1.]

@@ -200,7 +200,11 @@ P8 INTEGRATION (registered 2026-08-16 17:52, pre-registered before any part is
    commit with the run count recorded, because one green run of a suite that
    fails one in three is not evidence of green; and the clause-(c) live init
    targets its OWN state root, never the owner's, since a real init writes
-   repos/<repoId>/ into whatever root it is given]. The verifier attacks
+   repos/<repoId>/ into whatever root it is given. Second sharpening, same day,
+   per verifier report 18: each of the five runs asserts the SOURCE HASH is
+   stable across the run, captured before and after, because a green run that
+   overlapped a mutation window and was retried is invisible to the record, and
+   the hash-stability assertion is what caught the mechanism]. The verifier attacks
    the registered text; a clause that cannot be demonstrated is reported as
    such, never softened.
 

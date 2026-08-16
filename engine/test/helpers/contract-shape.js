@@ -96,10 +96,52 @@ function stripNested(text) {
 }
 
 function splitKeys(text) {
+  return splitEntries(text).map((entry) => entry.name).sort();
+}
+
+function splitEntries(text) {
   return text
     .split(',')
     .map((entry) => entry.replace(/`/g, '').split(':')[0].trim())
     .filter((entry) => entry && /^[A-Za-z_][A-Za-z0-9_]*\??$/.test(entry))
-    .map((entry) => entry.replace(/\?$/, ''))
-    .sort();
+    .map((entry) => ({ name: entry.replace(/\?$/, ''), optional: entry.endsWith('?') }));
+}
+
+/**
+ * The documented shape with OPTIONALITY kept, which the names-only reader throws away.
+ *
+ * `quarantineReason?` is a real thing the contract says: the key is documented and may be
+ * absent, because an exam that was never quarantined has no reason. A reader that strips
+ * the marker turns every optional field into a divergence, and an exemption list that
+ * fills with false entries stops meaning anything, which is the failure this gate exists
+ * to prevent one level down.
+ */
+export async function documentedShape(method, { field = null, file = METHODS_MD } = {}) {
+  const cell = await contractRow(method, { file });
+  if (!cell) return null;
+  const shape = shapeTextOf(cell);
+
+  let body = null;
+  if (field) {
+    const match = shape.match(new RegExp(`${field}\\s*:\\s*\\[\\s*\\{([^}]*)\\}`));
+    body = match ? match[1] : null;
+  } else {
+    const opened = shape.indexOf('{');
+    if (opened !== -1) {
+      let depth = 0;
+      for (let index = opened; index < shape.length; index += 1) {
+        if (shape[index] === '{') depth += 1;
+        if (shape[index] === '}') {
+          depth -= 1;
+          if (depth === 0) { body = stripNested(shape.slice(opened + 1, index)); break; }
+        }
+      }
+    }
+  }
+  if (body === null) return null;
+  const entries = splitEntries(body);
+  return {
+    required: entries.filter((entry) => !entry.optional).map((entry) => entry.name).sort(),
+    optional: entries.filter((entry) => entry.optional).map((entry) => entry.name).sort(),
+  };
 }

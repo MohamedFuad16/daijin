@@ -87,3 +87,36 @@ test('the reader works against the REAL contract, not only fixtures', async () =
   const search = await documentedKeys('search');
   assert.deepEqual(search, ['chunks', 'tokensUsed']);
 });
+
+test('optionality survives the read, because the contract really says it', async () => {
+  // `quarantineReason?` is a documented key that may be absent: an exam that was never
+  // quarantined has no reason. The names-only reader strips the marker, and a gate built on
+  // it reported a false divergence the first time it met a real row. An exemption list that
+  // fills with false entries stops meaning anything, which is the failure the gate exists
+  // to prevent one level down.
+  const { documentedShape } = await import('./helpers/contract-shape.js');
+  const { file, cleanup } = await fixtureContract([
+    '| `thing` | `{}` | `{ always, sometimes?, rows: [{ inner, maybe? }] }` |',
+  ]);
+  try {
+    assert.deepEqual(await documentedShape('thing', { file }), {
+      required: ['always', 'rows'], optional: ['sometimes'],
+    });
+    assert.deepEqual(await documentedShape('thing', { field: 'rows', file }), {
+      required: ['inner'], optional: ['maybe'],
+    });
+    // The names-only reader still returns everything, since callers that only want the key
+    // set should not have to know about optionality.
+    assert.deepEqual(await documentedKeys('thing', { file }), ['always', 'rows', 'sometimes']);
+    assert.equal(await documentedShape('missing', { file }), null);
+  } finally {
+    await cleanup();
+  }
+});
+
+test('the real contract has at least one optional key, so this is not a fixture-only feature', async () => {
+  const { documentedShape } = await import('./helpers/contract-shape.js');
+  const examList = await documentedShape('examList');
+  assert.deepEqual(examList.optional, ['quarantineReason'],
+    'an exam that was never quarantined carries no reason, and the contract says so');
+});

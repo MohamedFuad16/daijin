@@ -1,5 +1,26 @@
 # Daijin build state (authoritative)
 
+## 2026-08-16 17:35 - Certify delta PASS; the first unplanned guard fires
+
+Verifier report 16, no findings: the contradictory verdict refused
+naming both sides (the caller's verdict framed as an assertion checked
+against the record), rubric-less certification refused, and the
+rubric_id linkage confirmed as the point: snapshot-agreement becomes a
+query anyone can run later, not an assertion that weakens the moment a
+rubric is replaced. The verifier failed to construct a valid
+certification six times and censused NINE distinct refusals by tripping
+them (with the honest bound that construction finds what you trip), the
+ninth being the one nobody would think to check: an uncontextualized
+pass is not reproducible, so a certification carries the harness
+provenance it was earned under. The absent-is-not-empty flag
+({computed: true, ids: []} accepted, {ids: []} refused) verified from
+the inside. MILESTONE, in the verifier's words: the scanned-set test
+catching src/state and the skip counter catching its own stale anchor
+are the first two cases in this build where a guard caught something
+its author did not plant: the transition from shown-capable-of-failing
+to actually-failed-usefully, the evidence the mutation discipline is
+doing work rather than performing.
+
 ## 2026-08-16 17:33 addendum - The regeneration test, sharper than record-vs-derivation
 
 gym-porter refined the invariant-2 ratification into the test future

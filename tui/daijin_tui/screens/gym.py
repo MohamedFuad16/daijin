@@ -80,8 +80,14 @@ class GymScreen(DaijinScreen):
         self.refresh_heading()
         self._init_columns()
         # The run ledger and the gate state have nothing to do with each other.
+        # gymStatus likewise requires repoPath, which the v5 contract row for it
+        # does not mention. Reported to the leader.
+        gym_params: dict[str, Any] = {}
+        repo = getattr(self.app, "selected_repo", None)
+        if repo:
+            gym_params["repoPath"] = repo
         status_result, gate_result = await gather_all(
-            self.client.call("gymStatus", {}),
+            self.client.call("gymStatus", gym_params),
             self.client.call("serveStatus", {}),
         )
         if isinstance(status_result, RpcError):
@@ -170,15 +176,40 @@ class GymScreen(DaijinScreen):
         for row in rows:
             table.add_row(*mapper(row))
 
+    @staticmethod
+    def _cycle_number(row: dict[str, Any], position: int) -> int:
+        """Cycle index under either name. The engine says id, the mock says n."""
+        for key in ("n", "id", "cycle_id"):
+            value = row.get(key)
+            if isinstance(value, int):
+                return value
+        return position
+
+    @staticmethod
+    def _cycle_tokens(row: dict[str, Any]) -> int:
+        for key in ("tokens", "work_tokens"):
+            value = row.get(key)
+            if isinstance(value, (int, float)):
+                return int(value)
+        return 0
+
     def _render_cycles(self, cycles: list[dict[str, Any]], ledger: dict[str, Any]) -> None:
-        self._fill("#cycle-table", cycles, lambda row: (
-            format_count(row["n"]), row["examId"], row["verdict"],
-            format_count(row["tokens"]), format_count(row["rounds"]), format_duration(row["durationS"])
-        ))
-        if cycles:
+        numbered = [(self._cycle_number(row, i), row) for i, row in enumerate(cycles, start=1)]
+        table = self.query_one("#cycle-table", DataTable)
+        table.clear()
+        for number, row in numbered:
+            table.add_row(
+                format_count(number),
+                row.get("examId") or row.get("exam_id") or "-",
+                row.get("verdict") or "not graded",
+                format_count(self._cycle_tokens(row)),
+                format_count(row.get("rounds")),
+                format_duration(row.get("durationS")),
+            )
+        if numbered:
             self.query_one("#cycle-trend", PlotextLine).set_data(
-                [row["n"] for row in cycles],
-                {"tokens": [row["tokens"] for row in cycles]},
+                [n for n, _ in numbered],
+                {"tokens": [self._cycle_tokens(row) for _, row in numbered]},
             )
         drawn = ledger.get("drawnFromResultFiles")
         rows = ledger.get("rowsWritten")

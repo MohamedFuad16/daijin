@@ -77,11 +77,17 @@ class BoardScreen(DaijinScreen):
         return table
 
     def _filters(self) -> dict[str, str]:
-        return {
+        """Omit "all" rather than sending it.
+
+        It is a UI sentinel meaning "do not filter", not a value the engine
+        defines, and an engine that takes it literally matches nothing.
+        """
+        chosen = {
             "severity": self.query_one("#filter-severity", Select).value,
             "source": self.query_one("#filter-source", Select).value,
             "status": self.query_one("#filter-status", Select).value,
         }
+        return {key: value for key, value in chosen.items() if value and value != "all"}
 
     async def apply_filters(self) -> None:
         try:

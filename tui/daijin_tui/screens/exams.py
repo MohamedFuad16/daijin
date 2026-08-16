@@ -48,6 +48,42 @@ BENCHMARK_OPTIONS = [
 QUARANTINE_REASON_MIN = 20
 
 
+def with_repo(params: dict[str, Any], repo: Any) -> dict[str, Any]:
+    """Add repoPath, which the engine requires on every exam call.
+
+    The v5 contract rows for examList, examDetail, examVeto and examUpdate do
+    not mention it. The engine refuses without it, so the client sends it and
+    the divergence is reported rather than worked around silently.
+    """
+    if repo:
+        return {**params, "repoPath": repo}
+    return params
+
+
+def attempt_number(attempt: dict[str, Any], position: int) -> int:
+    """The attempt's index, whatever the engine calls it.
+
+    The v5 contract says attempts are { tokens, verdict, grades }. The engine
+    sends id, work_tokens, verdict and axes. Rather than pick one and render
+    blanks against the other, read both and fall back to position. The
+    divergence is reported, not silently absorbed.
+    """
+    for key in ("n", "id"):
+        value = attempt.get(key)
+        if isinstance(value, int):
+            return value
+    return position
+
+
+def attempt_tokens(attempt: dict[str, Any]) -> int:
+    """Work tokens, under either name the two sides use."""
+    for key in ("tokens", "work_tokens"):
+        value = attempt.get(key)
+        if isinstance(value, (int, float)):
+            return int(value)
+    return 0
+
+
 class ExamsScreen(DaijinScreen):
     mode_name = "exams"
     heading = "Exams"
@@ -94,12 +130,25 @@ class ExamsScreen(DaijinScreen):
 
     async def reload_bank(self) -> None:
         table = self.query_one("#exam-table", DataTable)
+        # "all" is a UI sentinel meaning "do not filter", not a value any
+        # engine defines. Sending it asks the engine for exams whose status is
+        # literally "all", which matches nothing: the bank rendered empty
+        # against a real ledger that had a row.
         filters = {
-            "status": self.query_one("#filter-exam-status", Select).value,
-            "benchmarkStatus": self.query_one("#filter-exam-benchmark", Select).value,
+            key: value
+            for key, value in (
+                ("status", self.query_one("#filter-exam-status", Select).value),
+                ("benchmarkStatus", self.query_one("#filter-exam-benchmark", Select).value),
+            )
+            if value and value != "all"
         }
+        # repoPath is REQUIRED by the engine and absent from the v5 contract
+        # row for examList. Sent because the engine is the reality; the
+        # divergence is reported rather than silently absorbed.
         try:
-            rows = await self.client.call("examList", {"filters": filters})
+            rows = await self.client.call(
+                "examList", with_repo({"filters": filters}, getattr(self.app, "selected_repo", None))
+            )
         except RpcError as error:
             self.show_rpc_error(error, "#exam-notice")
             table.clear()
@@ -129,6 +178,15 @@ class ExamsScreen(DaijinScreen):
             await self.show_exam(self.exams[0]["examId"])
         else:
             self.exam_id = None
+            # No exam means no axes. Leaving the radar mounted renders a chart
+            # frame around nothing, which reads as a drawn result.
+            radar = self.query_one("#exam-radar", RadarChart)
+            radar.set_axes([])
+            radar.display = False
+            self.query_one("#exam-axes-note", Static).update(
+                "[dim]No exam selected, so there is nothing to plot.[/dim]"
+            )
+            self._render_attempts([])
             self.query_one("#exam-provenance", Static).update("[dim]no exam matches those filters[/dim]")
 
     def _render_attempts(self, attempts: list[dict[str, Any]]) -> None:
@@ -136,7 +194,7 @@ class ExamsScreen(DaijinScreen):
         if not table.columns:
             table.add_columns(*ATTEMPT_COLUMNS)
         table.clear()
-        for attempt in attempts:
+        for position, attempt in enumerate(attempts, start=1):
             code = attempt.get("ungradedCode")
             if code:
                 note = UNGRADED_NOTE.get(code, "")
@@ -146,8 +204,8 @@ class ExamsScreen(DaijinScreen):
             else:
                 why = "-"
             table.add_row(
-                str(attempt.get("n", "")),
-                f"{int(attempt.get('tokens') or 0):,}",
+                str(attempt_number(attempt, position)),
+                f"{attempt_tokens(attempt):,}",
                 attempt.get("verdict") or "not graded",
                 why,
             )
@@ -166,7 +224,9 @@ class ExamsScreen(DaijinScreen):
 
     async def show_exam(self, exam_id: str) -> None:
         try:
-            detail = await self.client.call("examDetail", {"examId": exam_id})
+            detail = await self.client.call(
+                "examDetail", with_repo({"examId": exam_id}, getattr(self.app, "selected_repo", None))
+            )
         except RpcError as error:
             self.report_rpc_error(error)
             return
@@ -195,18 +255,21 @@ class ExamsScreen(DaijinScreen):
         # An ungraded attempt is not a fail, so it is left out of the pass and
         # fail line rather than plotted as a zero. Tokens are real for every
         # attempt, graded or not, so the token bars keep all of them.
-        graded = [a for a in attempts if a.get("verdict") in ("pass", "fail")]
+        numbered = [
+            (attempt_number(a, i), a) for i, a in enumerate(attempts, start=1)
+        ]
+        graded = [(n, a) for n, a in numbered if a.get("verdict") in ("pass", "fail")]
         if graded:
             history.set_data(
-                [a["n"] for a in graded],
-                {"verdict": [1 if a["verdict"] == "pass" else 0 for a in graded]},
+                [n for n, _ in graded],
+                {"verdict": [1 if a["verdict"] == "pass" else 0 for _, a in graded]},
             )
         else:
             history.set_data([], {})
-        if attempts:
+        if numbered:
             tokens.set_data(
-                [str(a["n"]) for a in attempts],
-                [a.get("tokens") or 0 for a in attempts],
+                [str(n) for n, _ in numbered],
+                [attempt_tokens(a) for _, a in numbered],
             )
         else:
             tokens.set_data([], [])
@@ -267,7 +330,10 @@ class ExamsScreen(DaijinScreen):
         if not reason:
             return
         try:
-            await self.client.call("examVeto", {"examId": exam["examId"], "reason": reason})
+            await self.client.call(
+                "examVeto",
+                with_repo({"examId": exam["examId"], "reason": reason}, getattr(self.app, "selected_repo", None)),
+            )
         except RpcError as error:
             self.report_rpc_error(error)
             return
@@ -296,7 +362,10 @@ class ExamsScreen(DaijinScreen):
         try:
             await self.client.call(
                 "examUpdate",
-                {"examId": exam["examId"], "patch": {"benchmarkStatus": "quarantined", "quarantineReason": reason}},
+                with_repo(
+                    {"examId": exam["examId"], "patch": {"benchmarkStatus": "quarantined", "quarantineReason": reason}},
+                    getattr(self.app, "selected_repo", None),
+                ),
             )
         except RpcError as error:
             self.report_rpc_error(error)
@@ -310,7 +379,11 @@ class ExamsScreen(DaijinScreen):
             return
         try:
             await self.client.call(
-                "examUpdate", {"examId": exam["examId"], "patch": {"benchmarkStatus": "active"}}
+                "examUpdate",
+                with_repo(
+                    {"examId": exam["examId"], "patch": {"benchmarkStatus": "active"}},
+                    getattr(self.app, "selected_repo", None),
+                ),
             )
         except RpcError as error:
             self.report_rpc_error(error)

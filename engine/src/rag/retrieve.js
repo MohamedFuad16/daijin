@@ -7,6 +7,7 @@ import { embedTexts, resolveServedIdentity } from './embed.js';
 import { fuseRankings } from './fuse.js';
 import { PLATFORM_PATH_GRAMMAR, reverseImpact } from './paths.js';
 import { rankRetrieval } from './rank.js';
+import { assertRerankAllowed, normalizeRerankOptions, rerankFusedRows } from './rerank.js';
 import { asStandingUnits, STANDING_ID_PREFIX } from './standing.js';
 import { ALLOWED_TYPE_SET, DEFAULT_EXCLUDED_TYPES } from './types.js';
 import { assertRetrievalIdentity, embeddingIdentity } from '../runtime/embedding-identity.js';
@@ -41,6 +42,8 @@ export function validateOptions(options) {
   if (slotAllocation.championMetric !== undefined && !['fused', 'raw'].includes(slotAllocation.championMetric)) {
     throw new Error("slotAllocation.championMetric must be 'fused' or 'raw'.");
   }
+  // OFF unless the caller asks. D-0025: it becomes a default only on a measured win.
+  const rerank = normalizeRerankOptions(options.rerank);
   const excludeDocumentIds = options.excludeDocumentIds || [];
   // Only applied when the caller expressed no opinion about types.
   const excludeTypes = options.types?.length ? [] : DEFAULT_EXCLUDED_TYPES;
@@ -60,7 +63,7 @@ export function validateOptions(options) {
     throw new Error('excludeDocumentIds must contain at most 1000 safe document ids.');
   }
   return {
-    query, project, types, area, k, tokenBudget, perCandidateCapRatio, documentAggregation, slotAllocation, excludeTypes,
+    query, project, types, area, k, tokenBudget, perCandidateCapRatio, documentAggregation, slotAllocation, excludeTypes, rerank,
     excludeDocumentIds: [...new Set(excludeDocumentIds)],
   };
 }
@@ -169,6 +172,30 @@ export async function retrieve(options, dependencies = {}) {
 
     const rankStarted = performance.now();
     const retrievalFixes = dependencies.retrievalFixes ?? [];
+    // OPTIONAL cross-encoder re-scoring of the FUSED list, before the budget (D-0025).
+    //
+    // Between fusion and ranking is the only place it can help: fusion decides the order of
+    // the pool, the budget decides which of that order gets funded. It is off unless asked
+    // for, and a parity-mode store refuses outright, because the byte-for-byte claim is
+    // measured through that path.
+    let rerankMeta = null;
+    if (parsed.rerank.enabled) {
+      assertRerankAllowed(store);
+      if (!dependencies.reranker) {
+        throw new Error('Reranking was requested but no reranker backend was supplied.');
+      }
+      const rerankStarted = performance.now();
+      const result = await rerankFusedRows({
+        query: parsed.query,
+        rows: indexedRows.semanticRows,
+        reranker: dependencies.reranker,
+        topK: parsed.rerank.topK,
+      });
+      indexedRows.semanticRows = result.rows;
+      rerankMeta = { backend: result.backend, scored: result.scored, latencyMs: result.latencyMs, topK: parsed.rerank.topK };
+      await logger.step('rerank', { candidates: result.scored }, { backend: result.backend }, rerankStarted);
+    }
+
     // `arms` is diagnosis metadata, not a ranking input, so it is destructured OUT before
     // the spread rather than passed to the ranker and ignored there by luck.
     const { arms, ...rankerInputs } = indexedRows;
@@ -199,6 +226,9 @@ export async function retrieve(options, dependencies = {}) {
         standingIds,
         rankedIds: [...new Set(ranked.meta.retrievedIds)],
         excludedDocumentCount: parsed.excludeDocumentIds.length,
+        // null when the stage did not run, so a reader can tell "off" from "ran and cost
+        // nothing". The latency is carried because the knob must display its price.
+        rerank: rerankMeta,
         // Which arm reached each retrieved document. Recorded for the sub-75 diagnosis,
         // which clusters missed cases by type, area and arm.
         arms: Object.fromEntries(

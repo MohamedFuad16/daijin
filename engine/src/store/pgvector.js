@@ -220,6 +220,10 @@ export function createPgVectorStore({
   }
 
   const store = {
+    /// Advertised so the rerank stage can REFUSE this store rather than trusting a
+    /// configuration default to keep it away from the parity measurement.
+    parityMode,
+
     // ---- schema ---------------------------------------------------------------
 
     /** Open the store and bring the schema up to date. Idempotent. */

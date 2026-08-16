@@ -773,3 +773,22 @@ INSTANT, not a commit. The five acceptance runs execute in a DETACHED
 WORKTREE at the pinned commit (git worktree add --detach, node_modules
 linked); the hash and no-battery assertions are retained as
 corroboration inside the worktree.
+
+## D-0034 (2026-08-16) Release path: public repo at release, vanity URL by redirect
+
+Owner ruling, recorded verbatim in effect: (a) the daijin repo flips
+PUBLIC at release time, after ultrareview passes; the canonical
+artifact store is GitHub Releases on this repo (versioned tarball,
+install.sh, and the checksum store-adapter deliberately deferred -
+written against the real artifact, never designed in advance of it).
+www.mohamedfuad.com/daijin serves as the vanity URL with ZERO backend:
+portfolio-mine gains a vercel.json redirect (/daijin -> the repo,
+/daijin/install.sh -> the latest release asset), edited AFTER
+ultrareview is done and deployed by the owner's manual Vercel CLI
+flow. Sequencing is therefore: P8 claim -> owner-triggered ultrareview
+-> findings fixed -> repo public + release cut with checksum ->
+portfolio-mine redirect + owner deploy. The site edit and the
+visibility flip are owner-gated actions in the owner's own sequence;
+nothing here happens before ultrareview passes. The release work
+(tarball, install.sh hardening, checksum) is unassigned until post-P8;
+store-adapter's record holds the checksum's design constraint.

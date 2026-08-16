@@ -14,6 +14,25 @@ instrument, and the captured output of both. Session scratch dies; the evidence 
 | `gate-plants.mjs` | gym-porter's extended plant set (12 plants, 4 controls), per the verifier's standing note that four plants is ten minutes of thought and not a bound. |
 | `gate-plants-output.txt` | its captured output. |
 
+## Re-measured 2026-08-17 by the extractor, on the first change into this retired lane
+
+Run BEFORE and AFTER touching `src/gym/exams.js`, per this file's own handover rule that a
+successor runs the battery and both plant scripts rather than trusting inherited numbers.
+The change was one line: `vetoReason` joins `examListRow` as an optional key.
+
+- before: gym suite 131 of 131; `mutate.sh` 77 declared, 77 executed, all KILLED, shared
+  tree `8a651472...` unchanged during the run.
+- after: gym suite 131 of 131; `mutate.sh` 77 declared, 77 executed, all KILLED, shared
+  tree `0dd7c88e...` unchanged during the run. The digest DIFFERS from the before-run
+  because the source changed between them, which is the point of taking both; what each
+  line asserts is that nothing moved DURING its own run.
+- `gate-scanner-plants.mjs`: 4 of 4 plants caught, control clean, ACCEPTANCE MET, exit 0.
+- `gate-plants.mjs`: 12 plants, 4 controls, 0 failures, exit 0.
+
+The battery did not need extending for this change: the new field is covered by an RPC test
+that asserts both directions of its precondition, and two mutations confirm it (removing the
+field, and making it always present so an un-vetoed exam carries a null reason).
+
 ## Measured 2026-08-17 00:10 JST (2026-08-16 15:10Z)
 
 - `node docs/verification/p4-mutations/gate-scanner-plants.mjs`: caught 4/4 plants, control

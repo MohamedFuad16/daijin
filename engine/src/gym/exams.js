@@ -309,6 +309,18 @@ export function examListRow(exam) {
     status: exam.status,
     benchmarkStatus: exam.benchmarkStatus,
     ...(exam.quarantineReason ? { quarantineReason: exam.quarantineReason } : {}),
+    // The veto reason, on the SAME terms as the quarantine reason: present exactly when its
+    // precondition is true, absent otherwise, because a field whose precondition is false is
+    // neither unmeasured nor measured-and-empty.
+    //
+    // It is here because the engine COMPELS it. A veto is refused without twenty characters
+    // of reason, the record stores them faithfully, and until this line there was no wire
+    // shape that carried them: a user was required to write a justification that nothing
+    // could ever display. A write-only field the user is made to fill is not a record, it is
+    // a toll. Introduced by the extractor's D-0035 batch, which moved examVeto's return from
+    // the full record to this row and took the only path to it away; found by tui-builder
+    // asking why its veto screen never showed a reason back.
+    ...(exam.vetoReason ? { vetoReason: exam.vetoReason } : {}),
     heldOut: exam.heldOut,
     tier: exam.scopeTier,
     provenance: exam.provenance,

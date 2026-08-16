@@ -635,3 +635,31 @@ test('an attempt says which MODE it belongs to, so a debug run cannot read as a 
     await kit.cleanup();
   }
 });
+
+test('a vetoed exam carries the reason it was vetoed for, on the bank row', async () => {
+  // The engine COMPELS this text: a veto is refused without twenty characters. It was
+  // stored faithfully and carried by no wire shape, so a user was required to write a
+  // justification that nothing could ever display. A write-only field the user is made to
+  // fill is not a record, it is a toll.
+  //
+  // On the same terms as quarantineReason: present exactly when its precondition is true,
+  // absent otherwise, because a field whose precondition is false is neither unmeasured nor
+  // measured-and-empty.
+  const kit = await harness({ exams: [exam()] });
+  try {
+    await kit.attach();
+    const before = await kit.server.methods.examList({ repoPath: kit.repoPath });
+    assert.equal(Object.hasOwn(before[0], 'vetoReason'), false, 'an un-vetoed exam carries no reason');
+
+    const reason = 'Superseded by a later commit that reverts this one entirely.';
+    const row = await kit.server.methods.examVeto({ repoPath: kit.repoPath, examId: 'exam-0001', reason });
+    assert.equal(row.vetoReason, reason, 'the mutator returns the reason it just stored');
+
+    // And it PERSISTS onto the bank row, which is where a vetoed exam is actually looked at.
+    const [listed] = await kit.server.methods.examList({ repoPath: kit.repoPath });
+    assert.equal(listed.status, 'vetoed');
+    assert.equal(listed.vetoReason, reason);
+  } finally {
+    await kit.cleanup();
+  }
+});

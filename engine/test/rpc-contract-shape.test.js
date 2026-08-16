@@ -121,9 +121,19 @@ test('optionality survives the read, because the contract really says it', async
   }
 });
 
-test('the real contract has at least one optional key, so this is not a fixture-only feature', async () => {
+test('the real contract has optional keys, so this is not a fixture-only feature', async () => {
+  // A PROPERTY, not a snapshot, and this file has now written the snapshot form twice: the
+  // first froze search's key set and broke when the row was legitimately amended, and this
+  // one froze examList's optional set and broke when vetoReason joined it. Both were tests
+  // asserting today's contract rather than the reader's ability to read it, which is the
+  // anti-pattern this whole instrument exists to report in other people's work. The gate is
+  // what compares a row against the engine; this file proves only that the reader reads.
   const { documentedShape } = await import('./helpers/contract-shape.js');
   const examList = await documentedShape('examList');
-  assert.deepEqual(examList.optional, ['quarantineReason'],
+  assert.ok(examList.optional.includes('quarantineReason'),
     'an exam that was never quarantined carries no reason, and the contract says so');
+  assert.ok(examList.optional.every((key) => !examList.required.includes(key)),
+    'a key is optional or required, never both');
+  assert.ok(examList.required.length > examList.optional.length,
+    'and the row is mostly required keys, so optionality is the exception the reader handles');
 });

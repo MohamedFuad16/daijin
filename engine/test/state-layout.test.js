@@ -238,3 +238,75 @@ test('NOTHING derived is left in the repo for the index to be deleted around', a
   assert.ok(!Object.values(layout).some((value) => value.endsWith('brain.sqlite')),
     'no database path resolves inside the repo any more');
 });
+
+// ---- init as a lifecycle contract (D-0031 invariant 4) -----------------------------------
+
+test('init guarantees IDENTITY FIRST, before anything is built', async () => {
+  // A brain built before an identity exists is written under a path-derived key and then
+  // orphaned by the manifest that arrives after it, which is a fresh floor with no trend
+  // behind it and no way for the user to learn why.
+  const { mkdtemp: makeTemp } = await import('node:fs/promises');
+  const { createRpcServer } = await import('../src/rpc/server.js');
+
+  const repoPath = await makeTemp(path.join(tmpdir(), 'dj-lifecycle-repo-'));
+  const stateRoot = await makeTemp(path.join(tmpdir(), 'dj-lifecycle-state-'));
+  const messages = [];
+  const served = { provider: 'ollama', model: 'test-embed', digest: 'sha256:test', dimension: 8 };
+  const server = createRpcServer({
+    stateRoot,
+    write: (message) => messages.push(message),
+    deps: {
+      createEmbedderClient: () => ({ async servedIdentity() { return served; }, async embed(texts) { return texts.map(() => new Array(8).fill(0.1)); } }),
+      embedderFromClient: (client) => ({ client, async embed(texts) { return client.embed(texts); } }),
+      servedIndexIdentity: async () => served,
+      openStore: async () => ({ project: 'default', async close() {}, async allDocuments() { return []; } }),
+      initBrain: async () => ({ floor: null }),
+    },
+  });
+  try {
+    await server.methods.repoAttach({ repoPath });
+    const { jobId } = await server.methods.initBrain({ repoPath, mode: 'layer1' });
+    await server.jobs.drain();
+
+    const steps = messages.filter((row) => row.method === 'step').map((row) => row.params).filter((row) => row.jobId === jobId);
+    assert.equal(steps[0].phase, 'identity', 'identity leads the stream, because it happened first');
+    assert.equal(steps[0].step, 'manifest');
+
+    // And it is on disk, which is what the state root is keyed by from here on.
+    const manifest = await readManifest(repoPath);
+    assert.match(manifest.repoId, /[0-9a-f-]{36}/);
+    const layout = await repoLayout(repoPath, { stateRoot });
+    assert.equal(layout.repoId, manifest.repoId);
+    // The origin record says which working tree this index belongs to, so a later move is
+    // detectable rather than silently reindexed under the wrong tree.
+    const origin = JSON.parse(await readFile(layout.originPath, 'utf8'));
+    assert.equal(origin.repoPath, path.resolve(repoPath));
+
+    // A SECOND working tree carrying the same manifest is a move or a clone, and from in
+    // here those are indistinguishable. Either way the user hears it: two checkouts sharing
+    // one index is something to discover from a message rather than from wrong answers.
+    const moved = await makeTemp(path.join(tmpdir(), 'dj-lifecycle-moved-'));
+    try {
+      await mkdir(path.join(moved, '.daijin'), { recursive: true });
+      await writeFile(path.join(moved, '.daijin', 'manifest.json'), await readFile(layout.manifestPath, 'utf8'), 'utf8');
+      await server.methods.repoAttach({ repoPath: moved });
+      const second = await server.methods.initBrain({ repoPath: moved, mode: 'layer1' });
+      await server.jobs.drain();
+
+      const movedSteps = messages.filter((row) => row.method === 'step').map((row) => row.params)
+        .filter((row) => row.jobId === second.jobId);
+      const disclosure = movedSteps.find((row) => row.step === 'moved');
+      assert.ok(disclosure, 'the move is disclosed on the stream, not handled silently');
+      assert.match(disclosure.detail, new RegExp(path.resolve(repoPath).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
+        'and it names the tree the index was built for');
+      assert.match(disclosure.detail, /history is kept/i,
+        'the trend line survives a move: nothing recomputes measurements taken on a date');
+    } finally {
+      await rm(moved, { recursive: true, force: true });
+    }
+  } finally {
+    await server.close();
+    await rm(repoPath, { recursive: true, force: true });
+    await rm(stateRoot, { recursive: true, force: true });
+  }
+});

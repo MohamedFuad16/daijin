@@ -83,11 +83,15 @@ test('initBrain layer1 returns a jobId and streams the pipeline steps onto the c
     await context.server.jobs.drain();
 
     const steps = context.steps().filter((row) => row.jobId === jobId);
-    assert.deepEqual(steps.map((row) => row.phase), ['identify', 'evidence', 'floor']);
-    assert.deepEqual(steps.map((row) => row.step), ['analyze', 'imports', 'measured']);
-    assert.deepEqual(steps[0].counts, { files: 12 });
+    // IDENTITY LEADS THE STREAM. D-0031 invariant 4 makes init a lifecycle contract that
+    // guarantees identity first, and the stream shows the order it actually happened in
+    // rather than starting at the first interesting-looking step.
+    assert.deepEqual(steps.map((row) => row.phase), ['identity', 'identify', 'evidence', 'floor']);
+    assert.deepEqual(steps.map((row) => row.step), ['manifest', 'analyze', 'imports', 'measured']);
+    const pipelineSteps = steps.slice(1);
+    assert.deepEqual(pipelineSteps[0].counts, { files: 12 });
     // counts is OMITTED, not sent empty, so a client can tell "no counts" from "zero".
-    assert.equal(Object.hasOwn(steps[1], 'counts'), false);
+    assert.equal(Object.hasOwn(pipelineSteps[1], 'counts'), false);
     for (const row of steps) {
       assert.equal(typeof row.ts, 'number');
       assert.ok(row.ts > 1_600_000_000_000, 'ts is restamped by the runner, so one clock owns the stream');

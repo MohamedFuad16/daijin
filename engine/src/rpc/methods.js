@@ -1236,6 +1236,22 @@ export function createMethods({
       const baseUrl = retrieval.ollamaBaseUrl || undefined;
 
       const jobId = jobs.start('init', async ({ emit, cancelled }) => {
+        // IDENTITY FIRST, before anything is built (D-0031 invariant 4: init is a lifecycle
+        // contract, not a folder check). The manifest is what the state root is keyed by, so
+        // a brain built before an identity exists would be written under a path-derived key
+        // and then orphaned by the manifest that arrived after it. Generated once and never
+        // regenerated; an existing manifest is left byte-identical.
+        const layout = await repoLayout(repoPath, { stateRoot: state.stateRoot, ensure: true, now });
+        emit('identity', 'manifest', `repo ${layout.repoId}`, { counts: { schema: layout.manifest.schema } });
+        // A repo that MOVED keeps its identity and its records and rebuilds its index. Said
+        // out loud rather than handled silently: from in here a move and a second clone
+        // sharing one manifest are indistinguishable, and a user who cloned should hear that
+        // the two checkouts share an index rather than discover it.
+        const origin = await noteOrigin(layout, { now });
+        if (origin.moved) {
+          emit('identity', 'moved',
+            `this brain was last indexed for ${origin.from}; rebuilding the index for ${layout.repoPath}. Measurement history is kept.`);
+        }
         const client = makeEmbedderClient({ model, dimension, baseUrl });
 
         // THE DIGEST IS LEARNED ON FIRST INDEX, then pinned by the index itself.
@@ -1265,7 +1281,7 @@ export function createMethods({
         // A CONCRETE project scope: retrieval requires a non-empty project while the store
         // treats null as the whole store, so a null-project store writes documents no query
         // selects and every gold case misses for a reason unrelated to retrieval.
-        const store = await openStore(repoPath, { embedder: served, project: 'default' });
+        const store = await openStore(repoPath, { path: layout.databasePath, embedder: served, project: 'default' });
         try {
           if (cancelled()) return;
           const report = await runInit({

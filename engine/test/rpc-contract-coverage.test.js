@@ -483,7 +483,14 @@ test('every enum a client can receive is named in its contract row', async () =>
   const { fileURLToPath } = await import('node:url');
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'src');
   const discovery = await read(path.join(root, 'init', 'gate-discovery.js'), 'utf8');
-  const classifications = [...discovery.matchAll(/classification:\s*'([a-z-]+)'/g)].map((match) => match[1]);
+  const classifications = [...new Set([...discovery.matchAll(/classification:\s*'([a-z-]+)'/g)].map((match) => match[1]))];
+  // A KNOWN COUNT, not a floor. This is the last harvest in the gate, and the lesson that
+  // retired the others applies to it: a floor against empty is not a floor against
+  // incomplete, and the health harvest failed by finding three of four while its floor of
+  // two passed. Four classifications exist; a fifth, or a regex that stops seeing one, has
+  // to be a deliberate edit here.
+  assert.equal(classifications.length, 4,
+    `the classification harvest found ${classifications.length} values; it under-reads, or gate-discovery grew one`);
   // HEALTH_STATES is imported rather than harvested, because the harvest could not see it.
   // Two of the four live in a ternary and the regex read `return 'x'` forms, so it found
   // three, and the floor requiring at least two values passed because three is not zero. A
@@ -510,7 +517,10 @@ test('every enum a client can receive is named in its contract row', async () =>
     // A harvest that yields nothing would pass this test vacuously, which is the dead-gate
     // shape one level up: the check would report every row as compliant precisely because it
     // had stopped reading the code.
-    assert.ok(values.length >= 2, `${method}.${field}: ${source} yielded ${values.length} values, so the harvest is broken`);
+    // Kept as a backstop for the imported constants, where under-reading is impossible and
+    // an empty import would still be a broken test. The harvest above is pinned by count
+    // instead, because a floor cannot see incompleteness.
+    assert.ok(values.length >= 2, `${method}.${field}: ${source} yielded ${values.length} values, so the source is broken`);
     const row = await contractLine(method);
     assert.ok(row, `${method} has no contract row`);
     for (const value of values) {

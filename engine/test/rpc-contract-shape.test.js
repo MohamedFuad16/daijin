@@ -80,7 +80,12 @@ test('the reader works against the REAL contract, not only fixtures', async () =
   // A parser tested only on fixtures it was written beside proves that it matches its own
   // examples. The document it exists to read is the one that has to parse.
   const attempts = await documentedKeys('examDetail', { field: 'attempts' });
-  assert.ok(attempts?.length >= 8, 'the real examDetail attempts row is readable');
+  // NOT `length >= 8`, which was the shape that just failed twice elsewhere: a floor
+  // against empty is not a floor against incomplete, and a reader silently dropping three
+  // keys would have passed it. The count is asserted exactly, so under-reading fails here
+  // rather than being caught two instruments away.
+  assert.ok(attempts, 'the real examDetail attempts row is readable');
+  assert.equal(attempts.length, 11, 'every key of the real row, not merely enough of them');
   assert.ok(attempts.includes('tokens') && attempts.includes('grades'));
   assert.equal(attempts.some((key) => key.includes('_')), false, 'no ledger column names are documented');
 

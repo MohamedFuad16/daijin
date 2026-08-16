@@ -10,9 +10,11 @@
 // argument gym-porter made and which the control exists to protect.
 //
 // TWO STANDING NOTES from the verifier, binding per D-0023:
-//   1. EXTEND THIS SET. Four plants is ten minutes of thought, not a bound on the shapes the
-//      mistake can take. Whoever widens the rules should add plants, not treat four as
-//      sufficient. A plant set that stops growing becomes a checklist.
+//   1. EXTEND THIS SET, IN A FREEZE WINDOW. Four plants is ten minutes of thought, not a
+//      bound on the shapes the mistake can take, so this set should grow. But it runs in CI
+//      on every lane's push, so a fifth plant is a gate change: propose it to the leader and
+//      land it in a window. A plant set that stops growing becomes a checklist; one that
+//      grows casually turns someone else's push red for a shape nobody agreed to.
 //   2. THE CONTROL MATTERS AS MUCH AS THE PLANTS. Every plant caught with the control also
 //      flagged is a worse scanner than the narrow one it replaced.
 //

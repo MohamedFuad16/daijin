@@ -1,5 +1,40 @@
 # Daijin build state (authoritative)
 
+## 2026-08-17 13:50 - The mirror flaw: subset is half a vocabulary check; floors against empty
+
+The extractor applied tui-builder's subset finding to its own gate and
+found it mirrored (ae2083d, 626/626 + 18/18): its gate asserted
+produced-is-subset-of-documented, catching what a client cannot look
+up and missing A PHANTOM - a value the row names that the engine can
+never produce. Demonstrated in ten seconds: a fifth health value added
+to the contract left the gate green. Named-one-day, shipped-the-next,
+self-reported: "I named documented-and-reachable-are-different-claims
+on one day and shipped an instrument containing exactly that defect
+on the next."
+
+THE PHANTOM DIRECTION IS THE WORSE HALF, distinguished by cost: a
+missing value makes a client guess (eventually visible); a phantom
+reads as a state that exists, so a client writes a branch that is
+dead code which can never be proven wrong by use - nothing surfaces
+it, ever.
+
+THEN THE FIXED GATE CAUGHT ITS OWN HARVESTER on first fire: the
+harvest regex could not see values living in a ternary, found three of
+four, and the yields-at-least-two floor PASSED because three is not
+zero. The instrument lesson, kept: A FLOOR AGAINST EMPTY IS NOT A
+FLOOR AGAINST INCOMPLETE - two guards of the shape "assert the harvest
+found something" have now both failed by finding SOME; the honest
+guard is a known count or not harvesting at all, and the second is
+usually cheaper. Fix: HEALTH_STATES is a named export used by
+serveStatus and imported by the gate - code and check cannot drift, no
+regex can miss it, equality asserted both directions.
+
+Also adopted cross-lane: tui-builder's 2x2 demonstration form (gate
+shape against mock state, showing WHICH CELL YOU WERE IN) - "showing
+the gap being hidden rather than the fix working" is harder and more
+useful, and the mirror flaw was only found because the finding was
+shown that way. Awaiting tui-builder's mock-sync + timeout-reachability
+landing; then quiet.
 ## 2026-08-17 13:20 - The class was five, closed at the seam; both passes were necessary
 
 The extractor probed every method on a bare repo and the driver-string

@@ -63,6 +63,48 @@ export function chunkUnits(units) {
   return plans;
 }
 
+/**
+ * D-0031 invariant 1: THE CONTRACT IS NEVER INGESTED, NEVER CHUNKED, NEVER RETRIEVED.
+ *
+ * Asserted at the INGEST BOUNDARY rather than in any producer's filter, because the
+ * boundary is the one place every unit must pass through. A check on the adopt filter would
+ * hold today and miss the next producer; this holds for scaffold, adopt, narration and
+ * anything added later, without those authors knowing the rule exists.
+ *
+ * The reason it is needed NOW is that the invariant currently survives by accident. The
+ * generate path constructs its units rather than collecting files, and the adopt filter
+ * cannot reach .daijin/agents only because agents/ is a SIBLING of .daijin/brain. Once the
+ * contract and the brain share one .daijin root, three one-line edits break it silently:
+ * adding .daijin to the candidate roots, moving agents/ under brain/ for tidiness, or a
+ * legacy agent/ folder that happens to contain an agents/ subfolder.
+ *
+ * A rule that scores lower than a chunk is still a rule. Retrieval decides nothing about
+ * how agents behave, so the contract must never be a candidate for it.
+ */
+export function assertNoContractUnits(units) {
+  const offending = [];
+  for (const unit of units) {
+    for (const candidate of [unit.path, unit.meta?.sourceFile, unit.meta?.sourceArtifact, ...(unit.citations || [])]) {
+      if (!candidate) continue;
+      const normalized = String(candidate).replace(/\\/g, '/').replace(/^\.\//, '');
+      const isAgentFile = /(^|\/)agents\//.test(normalized);
+      const isManifest = /(^|\/)manifest\.json$/.test(normalized);
+      if (isAgentFile || isManifest) {
+        offending.push({ id: unit.id, path: candidate, kind: isManifest ? 'manifest' : 'agent-instruction' });
+        break;
+      }
+    }
+  }
+  if (offending.length > 0) {
+    throw new Error(
+      `Refusing to ingest ${offending.length} unit(s) sourced from the CONTRACT (D-0031 invariant 1): `
+      + `${offending.map((entry) => `${entry.id} <- ${entry.path}`).join('; ')}. `
+      + 'Agent instruction files and the manifest load whole and first; they are never chunked, '
+      + 'never retrieved, and retrieval can never outrank them.',
+    );
+  }
+}
+
 function assertAlignment(vectors, expected) {
   if (!Array.isArray(vectors) || vectors.length !== expected) {
     const got = Array.isArray(vectors) ? vectors.length : 'no';
@@ -87,6 +129,8 @@ export async function ingestUnits({
   if (!store) throw new Error('ingestUnits requires a store.');
   if (!embedder?.embed) throw new Error('ingestUnits requires an embedder with an embed(texts) method.');
 
+  // Before anything is chunked or embedded: the contract cannot enter the store.
+  assertNoContractUnits(units);
   const plans = chunkUnits(units);
   const texts = plans.flatMap((plan) => plan.chunks.map((chunk) => chunk.content));
   if (onStep) await onStep({ step: 'embed', detail: `${texts.length} chunks`, counts: { chunks: texts.length, documents: units.length } });

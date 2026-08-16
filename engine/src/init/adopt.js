@@ -150,14 +150,25 @@ export function adoptDocument({ file, content, namespace = 'adopted' }) {
   const { rule, records } = splitRecords(content);
 
   const build = ({ id, unitTitle, body, sectionTitle, preamble = false }) => {
-    const unitContent = body;
+    // Canonical unit shape, identical to what the generator produces: a single h1 title
+    // followed by the body with its own leading heading removed. Adopted records arrive
+    // carrying their `##` heading inside the text, and leaving it there made adopted and
+    // generated units two different shapes, which the brain-artifact round trip then could
+    // not normalise. One shape means adopt.js and scaffold.js write interchangeable files
+    // and a generated brain can be hand-edited into a curated one without a migration.
+    const withoutHeading = String(body).replace(/^#{1,6}\s+.*\n?/, '').trim();
+    // A record that is ONLY its heading (a section title with nothing under it, which a
+    // preamble often is) becomes a title and no body. The obvious fallback, reusing the raw
+    // body when the stripped one is empty, puts the heading back INSIDE the content and the
+    // unit then fails its own round trip.
+    const unitContent = withoutHeading ? `# ${unitTitle}\n\n${withoutHeading}` : `# ${unitTitle}`;
     return {
       id,
       type,
       path: file,
       title: unitTitle,
       tags: ['adopted', stem, type],
-      body: unitContent.replace(/^#{1,6}\s+.*\n?/, '').trim() || unitContent,
+      body: withoutHeading,
       content: unitContent,
       contentHash: sha256(unitContent),
       // The whole record is the core: a curated record cut in half has lost the claim it

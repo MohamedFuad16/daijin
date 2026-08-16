@@ -24,8 +24,9 @@ import { tokens } from '../src/rag/tokens.js';
 import { createSqliteStore } from '../src/store/sqlite.js';
 import { checkContentSurvival, collectDeliveries } from '../src/init/floor.js';
 import { chunkUnits, importRelationships, ingestUnits, servedIndexIdentity } from '../src/init/ingest.js';
+import { readBrainArtifacts, writeBrainArtifacts } from '../src/init/brain-artifacts.js';
 import { caseKey } from '../src/init/goldset.js';
-import { initBrain, mergeGoldset, writeGoldset, writeRetiredGoldset } from '../src/init/pipeline.js';
+import { initBrain, mergeGoldset, reindexFromBrain, writeGoldset, writeRetiredGoldset } from '../src/init/pipeline.js';
 
 const DIMENSION = 64;
 const EMBEDDER = { provider: 'ollama', model: 'fixture-embed', digest: 'sha256-fixture', dimension: DIMENSION };
@@ -187,7 +188,7 @@ test('a full init runs headlessly and reports the floor it measured, whatever it
     // Phases, in the plan's order.
     assert.deepEqual(
       [...new Set(steps.map((step) => step.phase))],
-      ['identify', 'evidence', 'scaffold', 'ingest', 'gates', 'goldset', 'floor'],
+      ['identify', 'evidence', 'scaffold', 'brain', 'ingest', 'gates', 'goldset', 'floor'],
     );
     assert.ok(steps.every((step) => typeof step.ts === 'number' && step.jobId === 'init'), 'RPC v4 step shape');
 
@@ -222,6 +223,17 @@ test('a full init runs headlessly and reports the floor it measured, whatever it
       report.floor.caseRate.exact >= 0.75,
       'MCP unlocks strictly on the measured floor, never on anything else',
     );
+
+    // D-0031: the indexed unit came from the FILE, not from the generator's memory.
+    // sourceArtifact is written only by the artifact reader, so its presence in the store is
+    // proof the index was derived from the brain rather than handed the in-memory units.
+    const indexed = await store.allDocuments({ project: 'default' });
+    assert.ok(indexed.length > 0);
+    assert.ok(
+      indexed.every((entry) => typeof entry.meta?.sourceArtifact === 'string' && entry.meta.sourceArtifact.endsWith('.md')),
+      'every indexed unit names the brain file it was read from',
+    );
+    assert.ok(indexed.every((entry) => entry.meta.schema === 1), 'and the schema it was read under');
 
     // D-0030: the floor never ships without the range it was measured inside.
     assert.ok(report.floor.resolution, 'a floor with no resolution reads as certainty it does not have');
@@ -699,4 +711,236 @@ test('a floor whose gauge cannot be permuted says so instead of taking the floor
     /at least two distinct answers/,
   );
   assert.equal(typeof measureResolution, 'function');
+});
+
+// --- D-0031 -----------------------------------------------------------------------
+
+test('THE CONTRACT CANNOT ENTER THE STORE, whichever producer made the unit', async () => {
+  // Asserted at the ingest boundary with a PLANT, not on any producer's filter. The
+  // invariant currently survives by accident: the generate path constructs its units rather
+  // than collecting files, and the adopt filter cannot reach .daijin/agents only because
+  // agents/ is a SIBLING of .daijin/brain. Three one-line edits break that, and none of
+  // them would touch this test.
+  const { directory, file } = makeStore();
+  const store = await createSqliteStore({ path: file, project: 'default', embedder: EMBEDDER });
+  try {
+    const plants = [
+      { id: 'plant.a', type: 'convention', path: '.daijin/agents/student.md', title: 'Student rules', tags: [], meta: { area: 'contract' }, content: 'Rule text.', body: 'Rule text.' },
+      { id: 'plant.b', type: 'convention', path: '.daijin/brain/conventions.md', title: 'Sneaky', tags: [], meta: { area: 'x', sourceFile: 'agent/agents/teacher.md' }, content: 'Rule text.', body: 'Rule text.' },
+      { id: 'plant.c', type: 'convention', path: '.daijin/manifest.json', title: 'Manifest', tags: [], meta: { area: 'x' }, content: 'Schema.', body: 'Schema.' },
+      { id: 'plant.d', type: 'convention', path: '.daijin/brain/conventions.md', title: 'Cited contract', tags: [], meta: { area: 'x' }, citations: ['.daijin/agents/watcher.md'], content: 'Rule text.', body: 'Rule text.' },
+    ];
+    for (const plant of plants) {
+      await assert.rejects(
+        () => ingestUnits({ store, units: [plant], embedder: { embed: async (texts) => texts.map(() => new Array(DIMENSION).fill(0.1)) }, project: 'default' }),
+        /Refusing to ingest .* sourced from the CONTRACT/,
+        `${plant.id} reached the store through ${plant.path}`,
+      );
+      assert.deepEqual(await store.existingDocumentIds([plant.id]), [], 'and nothing was written');
+    }
+
+    // The control: an ordinary brain unit passes, so the refusal is not refusing everything.
+    await ingestUnits({
+      store,
+      units: [{ id: 'ok.unit', type: 'convention', path: '.daijin/brain/conventions.md', title: 'Real', tags: [], meta: { area: 'x' }, citations: ['src/a.js'], content: 'Rule: real.', body: 'Rule: real.' }],
+      embedder: { embed: async (texts) => texts.map(() => new Array(DIMENSION).fill(0.1)) },
+      project: 'default',
+    });
+    assert.deepEqual(await store.existingDocumentIds(['ok.unit']), ['ok.unit']);
+  } finally {
+    await store.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('the index is DERIVED: delete it, regenerate, and the gauge is unchanged', async () => {
+  // Both halves are asserted. Case-rate equality alone would pass a regeneration that
+  // changed retrieval materially, because on a saturated corpus the rate can hold at its
+  // ceiling while what the gauge can discriminate moves underneath it. The permuted control
+  // is the instrument that shows that, which is why it is checked too.
+  const root = makeRepo();
+  const scratch = mkdtempSync(path.join(tmpdir(), 'daijin-regen-'));
+  const first = makeStore();
+  const ollama = fakeOllama();
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = ollama.fetchImpl;
+  const options = (store) => ({
+    repoPath: root,
+    artifactRoot: scratch,
+    store,
+    embedder: { embed: async (texts) => texts.map((text) => hashEmbed(text)) },
+    environment: ENVIRONMENT,
+    fetchImpl: ollama.fetchImpl,
+    discoverRepoGates: false,
+    clock: () => 1_770_000_000_000,
+  });
+  try {
+    const storeA = await createSqliteStore({ path: first.file, project: 'default', embedder: EMBEDDER });
+    const before = await initBrain(options(storeA));
+    await storeA.close();
+    assert.ok(before.floor, 'the first run measured');
+    assert.ok(existsSync(path.join(scratch, '.daijin/brain/architecture.md')), 'the brain is durable markdown');
+
+    // Delete the INDEX entirely. The brain files stay where they are.
+    rmSync(first.directory, { recursive: true, force: true });
+    const second = makeStore();
+    const storeB = await createSqliteStore({ path: second.file, project: 'default', embedder: EMBEDDER });
+    const after = await initBrain(options(storeB));
+    await storeB.close();
+
+    assert.deepEqual(
+      after.floor.caseRate,
+      before.floor.caseRate,
+      'the gold set scores identically after the index was destroyed and rebuilt',
+    );
+    assert.equal(after.floor.mrr, before.floor.mrr);
+    assert.equal(after.floor.violations, before.floor.violations);
+    assert.deepEqual(
+      after.floor.resolution.caseRate.control,
+      before.floor.resolution.caseRate.control,
+      'and so does the permuted control, which is the half that catches a subtle retrieval change',
+    );
+    assert.equal(after.floor.resolution.caseRate.casesOfHeadroom, before.floor.resolution.caseRate.casesOfHeadroom);
+    rmSync(second.directory, { recursive: true, force: true });
+  } finally {
+    globalThis.fetch = originalFetch;
+    rmSync(scratch, { recursive: true, force: true });
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('a unit with sub-headings survives the brain round trip byte for byte', () => {
+  // The failure this catches is invisible to an id check: written without demotion, a unit's
+  // own "## Imports from" reads back as a NEW record, the unit is truncated to its first
+  // section, and the surviving fragment keeps the id.
+  const unit = {
+    id: 'daijin.architecture.src-store',
+    type: 'architecture',
+    title: 'Module: src/store',
+    tags: [],
+    citations: ['src/store/sqlite.js'],
+    meta: { area: 'src/store', layer: 1, generated: true },
+    content: '# Module: src/store\n\nClaim: two files.\n\n## Imports from\n\n- src/util\n\n## Imported by\n\n- src/api',
+  };
+  const root = mkdtempSync(path.join(tmpdir(), 'daijin-brain-rt-'));
+  try {
+    return (async () => {
+      await writeBrainArtifacts(root, [unit]);
+      const back = await readBrainArtifacts(root);
+      assert.equal(back.units.length, 1, 'one unit in, one unit out, not one plus orphan fragments');
+      assert.equal(back.units[0].content.trim(), unit.content.trim(), 'content survives byte for byte');
+      assert.ok(back.units[0].content.includes('## Imports from'), 'and its sub-headings come back at their own level');
+      assert.deepEqual(back.units[0].citations, unit.citations);
+      assert.equal(back.units[0].meta.area, 'src/store');
+    })();
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('the brain files are CANONICAL: edit one and the rebuilt index says what the file says', async () => {
+  // The falsifiable form of "the index is derived from the brain". An init that ingested
+  // from memory would pass every other test in this file and fail this one.
+  const root = makeRepo();
+  const scratch = mkdtempSync(path.join(tmpdir(), 'daijin-canon-'));
+  const { directory, file } = makeStore();
+  const store = await createSqliteStore({ path: file, project: 'default', embedder: EMBEDDER });
+  const ollama = fakeOllama();
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = ollama.fetchImpl;
+  try {
+    await initBrain({
+      repoPath: root,
+      artifactRoot: scratch,
+      store,
+      embedder: { embed: async (texts) => texts.map((text) => hashEmbed(text)) },
+      environment: ENVIRONMENT,
+      fetchImpl: ollama.fetchImpl,
+      discoverRepoGates: false,
+      clock: () => 1_770_000_000_000,
+    });
+
+    // A human edits the brain by hand, which is the whole point of durable markdown.
+    const conventions = path.join(scratch, '.daijin/brain/conventions.md');
+    const edited = readFileSync(conventions, 'utf8').replace(
+      /Rule: source files indent with/,
+      'Rule: HAND EDITED, source files indent with',
+    );
+    assert.notEqual(edited, readFileSync(conventions, 'utf8'), 'the fixture edit applied');
+    writeFileSync(conventions, edited);
+
+    const result = await reindexFromBrain({
+      repoPath: root,
+      artifactRoot: scratch,
+      store,
+      embedder: { embed: async (texts) => texts.map((text) => hashEmbed(text)) },
+    });
+    assert.ok(result.documents > 0);
+
+    const documents = await store.allDocuments({ project: 'default' });
+    const indentation = documents.find((entry) => entry.id === 'daijin.convention.indentation');
+    assert.ok(indentation, 'the edited unit is in the index');
+    assert.match(indentation.content, /HAND EDITED/, 'the index says what the FILE says, not what the generator said');
+  } finally {
+    globalThis.fetch = originalFetch;
+    await store.close();
+    rmSync(directory, { recursive: true, force: true });
+    rmSync(scratch, { recursive: true, force: true });
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('a reindex with no brain refuses rather than quietly producing an empty index', async () => {
+  const empty = mkdtempSync(path.join(tmpdir(), 'daijin-nobrain-'));
+  const { directory, file } = makeStore();
+  const store = await createSqliteStore({ path: file, project: 'default', embedder: EMBEDDER });
+  try {
+    await assert.rejects(
+      () => reindexFromBrain({ repoPath: empty, artifactRoot: empty, store, embedder: { embed: async () => [] } }),
+      /No brain to reindex/,
+    );
+  } finally {
+    await store.close();
+    rmSync(directory, { recursive: true, force: true });
+    rmSync(empty, { recursive: true, force: true });
+  }
+});
+
+test('a unit that quotes a daijin marker is REFUSED rather than silently mangled', async () => {
+  // The reader strips marker lines, so a unit whose body quotes one comes back without it
+  // and the index would hold something the brain does not say. The round-trip check is what
+  // catches it, and this is the case that proves the check is not decoration.
+  const root = makeRepo({
+    'src/util/marker.js': 'export function markerDoc() {\n  return 1;\n}\n',
+  });
+  const scratch = mkdtempSync(path.join(tmpdir(), 'daijin-marker-'));
+  const { directory, file } = makeStore();
+  const store = await createSqliteStore({ path: file, project: 'default', embedder: EMBEDDER });
+  const ollama = fakeOllama();
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = ollama.fetchImpl;
+  try {
+    await assert.rejects(
+      () => initBrain({
+        repoPath: root,
+        artifactRoot: scratch,
+        store,
+        embedder: { embed: async (texts) => texts.map((text) => hashEmbed(text)) },
+        environment: ENVIRONMENT,
+        fetchImpl: ollama.fetchImpl,
+        discoverRepoGates: false,
+        clock: () => 1_770_000_000_000,
+        // A producer that emits a unit quoting the format's own marker.
+        scaffoldOptions: { injectUnit: true },
+      }),
+      /round trip changed/,
+      'a unit the format cannot represent must stop the run, not enter the index half-written',
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+    await store.close();
+    rmSync(directory, { recursive: true, force: true });
+    rmSync(scratch, { recursive: true, force: true });
+    rmSync(root, { recursive: true, force: true });
+  }
 });

@@ -22,6 +22,7 @@ import YAML from 'yaml';
 
 import { retrieve } from '../rag/retrieve.js';
 import { adoptKnowledgeFolder } from './adopt.js';
+import { readBrainArtifacts, writeBrainArtifacts } from './brain-artifacts.js';
 import { analyze, readSources } from './analyze.js';
 import { buildEvidence } from './evidence.js';
 import {
@@ -38,6 +39,7 @@ import { scaffoldLayer1, validateCitations } from './scaffold.js';
 import { listRepoFiles } from './walk.js';
 
 export const DAIJIN_DIRECTORY = '.daijin';
+export const BRAIN_DIRECTORY = `${DAIJIN_DIRECTORY}/brain`;
 export const GOLDSET_FILE = `${DAIJIN_DIRECTORY}/goldset.yaml`;
 export const RETIRED_GOLDSET_FILE = `${DAIJIN_DIRECTORY}/goldset-retired.yaml`;
 export const REPORT_FILE = `${DAIJIN_DIRECTORY}/init-report.json`;
@@ -180,6 +182,51 @@ function boundRetrieve({ store, project, environment, standingPrefix, pathGramma
     { query, project: project || 'default', k, tokenBudget },
     { store, environment, standingPrefix, pathGrammar, fetchImpl },
   );
+}
+
+/**
+ * Rebuild the index from the brain files, without regenerating the brain.
+ *
+ * This is the operation D-0031 invariant 3 actually promises: "the index is regenerable
+ * from them at any time". Without an entry point that reads ONLY the files, the claim is
+ * untestable, and an init that happened to ingest from memory would look identical to one
+ * that ingests from disk. It is also the operation a user needs after deleting the index,
+ * after editing the brain by hand, or after a schema change.
+ *
+ * Deliberately does NOT re-run analyze, scaffold or the gold-set miner: those regenerate
+ * the brain, and a regeneration is a different act from a reindex. Mixing them is how "I
+ * rebuilt the index" quietly becomes "I overwrote what I had edited".
+ */
+export async function reindexFromBrain({
+  repoPath, artifactRoot = null, store, embedder, project = null, relationships = [], onStep = null,
+  clock = () => Date.now(), jobId = 'reindex',
+} = {}) {
+  if (!store) throw new Error('reindexFromBrain requires an initialised Store.');
+  if (!embedder?.embed) throw new Error('reindexFromBrain requires an embedder with an embed(texts) method.');
+  const root = path.resolve(repoPath);
+  const artifacts = artifactRoot ? path.resolve(artifactRoot) : root;
+  const scope = project ?? (store.project === undefined ? 'default' : store.project);
+  const steps = stepper({ jobId, onStep, clock });
+  steps.setPhase('reindex');
+
+  const brainRoot = path.join(artifacts, BRAIN_DIRECTORY);
+  const brain = await readBrainArtifacts(brainRoot);
+  if (!brain.present || brain.units.length === 0) {
+    throw new Error(
+      `No brain to reindex at ${brainRoot}. The index is derived from the brain files, so there is `
+      + 'nothing to derive it from; run init to generate or adopt one first.',
+    );
+  }
+  await steps.emit({
+    step: 'brain-read',
+    detail: `${brain.units.length} units from ${brain.files.length} file(s), schema ${brain.schema}`,
+    counts: { units: brain.units.length, files: brain.files.length },
+  });
+
+  const ingested = await ingestUnits({
+    store, units: brain.units, embedder, project: scope, relationships, onStep: (event) => steps.emit(event),
+  });
+  return { brainRoot, schema: brain.schema, files: brain.files, ...ingested };
 }
 
 /**
@@ -380,6 +427,64 @@ export async function initBrain({
       report.phases.narrate = { refused: true, code: error.code, reason: error.message };
       await steps.emit({ step: 'narration-refused', detail: error.message, level: 'warn' });
     }
+  }
+
+  // --- brain artifacts (D-0031 invariant 3) ---------------------------------------
+  //
+  // The brain is durable markdown and the index is derived from it. Units are WRITTEN to
+  // .daijin/brain/ and then READ BACK, and it is the read-back units that get indexed, so
+  // the index is provably a function of the files rather than of whatever the generator
+  // held in memory. A round trip that lost a field shows up immediately as a gold-set miss
+  // rather than as a divergence nobody notices until a rebuild.
+  let brainWrite = null;
+  if (writeArtifacts) {
+    steps.setPhase('brain');
+    const brainRoot = path.join(artifacts, BRAIN_DIRECTORY);
+    brainWrite = await writeBrainArtifacts(brainRoot, units, {
+      generator: mode === 'ingest' ? 'daijin-adopt' : 'daijin-layer1',
+    });
+    const readBack = await readBrainArtifacts(brainRoot);
+    // Compared by CONTENT, not by id. An id check passes while a unit is silently truncated,
+    // because the surviving fragment keeps the id; that is how the heading-collision bug got
+    // past the first version of this check.
+    const before = new Map(units.map((unit) => [unit.id, unit]));
+    const after = new Map(readBack.units.map((unit) => [unit.id, unit]));
+    const damaged = [...before.entries()]
+      .filter(([id, unit]) => {
+        const round = after.get(id);
+        if (!round) return true;
+        return round.content.trim() !== unit.content.trim();
+      })
+      .map(([id]) => id);
+    if (damaged.length > 0) {
+      throw new Error(
+        `The brain round trip changed ${damaged.length} unit(s) (${damaged.slice(0, 3).join(', ')}). `
+        + 'The index is derived from these files, so a unit that does not survive the round trip '
+        + 'would be indexed as something the brain does not say.',
+      );
+    }
+    // `core` is a MEASUREMENT annotation (the span the content-survival gate demands back
+    // verbatim), not brain content, so it is carried across by id rather than encoded in the
+    // artifact. Asserted rather than assumed: a unit that lost its core would make the
+    // survival gate silently check nothing.
+    units = readBack.units.map((unit) => ({ ...unit, core: before.get(unit.id)?.core ?? null }));
+    const coreless = units.filter((unit) => !unit.core).length;
+    if (coreless > 0 && coreless === units.length) {
+      throw new Error('Every unit lost its measurement core in the round trip; the survival gate would check nothing.');
+    }
+    report.phases.brain = {
+      root: brainRoot,
+      schema: readBack.schema,
+      written: brainWrite.written,
+      unitsWritten: brainWrite.units,
+      unitsReadBack: readBack.units.length,
+      unknownTypes: brainWrite.unknownTypes,
+    };
+    await steps.emit({
+      step: 'brain-written',
+      detail: `${brainWrite.units} units across ${brainWrite.written.length} file(s), read back ${readBack.units.length}`,
+      counts: { written: brainWrite.units, readBack: readBack.units.length },
+    });
   }
 
   // --- ingest --------------------------------------------------------------------

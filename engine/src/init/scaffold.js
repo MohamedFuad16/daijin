@@ -342,12 +342,13 @@ function historyCard(history) {
  *
  * @returns {{ units: object[], errors: object, notes: string[], limits: object }}
  */
-export function scaffoldLayer1(evidence, {
-  areaCardLimit = DEFAULT_AREA_CARD_LIMIT,
-  filesPerCard = 40,
-  symbols = 40,
-  externals = 20,
-} = {}) {
+export function scaffoldLayer1(evidence, options = {}) {
+  const {
+    areaCardLimit = DEFAULT_AREA_CARD_LIMIT,
+    filesPerCard = 40,
+    symbols = 40,
+    externals = 20,
+  } = options;
   const limits = { areaCardLimit, filesPerCard, symbols, externals };
   const notes = [];
   const units = [];
@@ -415,6 +416,27 @@ export function scaffoldLayer1(evidence, {
       contentHash: sha256(content),
     };
   });
+
+  // A deliberately unrepresentable unit, for the round-trip check's own failure test. The
+  // brain format hides its metadata in an HTML comment, so a unit whose BODY quotes that
+  // comment reads back without the quoted line. The check exists for exactly this, and a
+  // check with no way to fire is the dead coverage this project keeps refusing to ship.
+  if (options.injectUnit) {
+    const content = '# Marker quoting unit\n\nThis unit quotes the format:\n\n<!-- daijin id="quoted" type="convention" -->\n\nend.';
+    finished.push({
+      id: `${UNIT_NAMESPACE}.convention.marker-quoting`,
+      type: 'convention',
+      path: `${UNIT_PATH_ROOT}/convention/marker-quoting.md`,
+      title: 'Marker quoting unit',
+      tags: ['convention', 'generated'],
+      body: content.replace(/^#\s+.*\n?/, '').trim(),
+      content,
+      contentHash: sha256(content),
+      core: 'This unit quotes the format:',
+      citations: [],
+      meta: { area: 'conventions', generated: true, generator: GENERATOR, layer: 1, citations: [] },
+    });
+  }
 
   return { units: finished, errors, notes, limits };
 }

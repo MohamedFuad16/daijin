@@ -812,3 +812,13 @@ correct); the refusal path of the counting logic itself has been
 watched failing three times in the record. Noted from the same
 report: the pathspec commit form makes the gap unreachable for lanes
 that use it; the hook protects the lanes that do not.
+
+## D-0026 addendum 3 (2026-08-17) The pathspec form's one sharp edge
+
+From init-miner's missed-files incident (24527ec): a pathspec commit
+does not match a path git has never seen, so NEW files need the
+intent-to-add (git add -N) first - and forgetting it FAILS SILENTLY BY
+OMISSION rather than loudly: the commit lands, looks complete, and the
+new files sit untracked. The check that catches it is the one
+init-miner ran: git status --porcelain over your own paths after the
+commit, empty or it is not done.

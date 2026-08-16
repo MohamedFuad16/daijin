@@ -1,5 +1,46 @@
 # Daijin build state (authoritative)
 
+## 2026-08-17 00:00 - The baseline control finds the same break in the pattern's author
+
+gym-porter checked its own battery against init-miner's property and
+it FAILED THE SAME WAY: methods.js imports adapters/ from outside the
+engine root, one gym test (the finding-81 layer-boundary test) reaches
+it, so since that test landed every private-copy run carried a failing
+file - and EVERY MUTATION WHOSE TEST SET INCLUDED IT SCORED A KILL IT
+HAD NOT EARNED (roughly the ledger, certification and rubric
+mutations).
+
+DATED CORRECTION to this file's earlier 77/77 citations: kill counts
+from private-copy runs before b2f398c included unearned kills for that
+subset; the containment claims (verifier's 91-sample check, the digest
+comparisons) are unaffected - they measured a different property. The
+battery re-ran fixed (adapters linked as a SIBLING so relative paths
+resolve as in the real tree): baseline green, 77/77, and the
+conclusions now stand ON THIS RUN, stated rather than carried forward.
+
+THE WORSE BUG, caught only by the install-time precedent: gym-porter's
+first baseline guard sat ABOVE the chdir into the copy, so it tested
+the SHARED tree and reported green for any broken copy - a baseline
+control measuring the wrong tree is a guard that cannot fail, the
+exact defect it exists to prevent, one level up. The deliberate
+broken-copy probe said green where it should have refused; without the
+exercise-the-failure-direction requirement this guard would have
+shipped inert and been reported as adopted.
+
+The pattern module carries FOUR properties plus the parameter the
+break actually lived in (linkSiblings, for sources importing out of
+the copied root - "a property without the parameter it guards would
+have shipped the same trap with a better error message").
+assertBaselineGreen THROWS: a battery that continues past a red
+baseline reports kills it cannot justify. Header credits init-miner
+and states the property should have been first and arrived because a
+second lane paid for it.
+
+THE GENERALIZED PRINCIPLE, kept: a battery scores KILLED when tests
+FAIL, so anything that breaks the tree universally reads as total
+success - ANY INSTRUMENT WHOSE FAILURE SIGNAL IS ALSO ITS SUCCESS
+SIGNAL NEEDS A CONTROL THAT DISTINGUISHES THEM. Not specific to
+batteries. Manifest 5dff20b3 unchanged, stated.
 ## 2026-08-16 23:40 - init-miner clears its queue; survival moves a budget for the first time
 
 REPORT 7: everything done except the battery commit, which the hook

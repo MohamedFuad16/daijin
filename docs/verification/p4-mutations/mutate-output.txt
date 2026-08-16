@@ -1,8 +1,9 @@
-# Captured 2026-08-16T08:54:19Z (UTC)
+# Captured 2026-08-16T08:57:34Z (UTC)
 # Command: bash docs/verification/p4-mutations/mutate.sh
-# Mutates a PRIVATE COPY (D-0032); the shared tree is never modified.
+# Mutates a PRIVATE COPY (D-0032); every mutation asserts its anchor landed and that
+# the restore returned the file to its exact pre-mutation hash.
 
-Mutating a private copy at /var/folders/nq/jvmxfqtn475bqlkn9vvnz4y80000gn/T//daijin-mutate-KlYUrB/engine (the shared tree is never touched).
+Mutating a private copy at /var/folders/nq/jvmxfqtn475bqlkn9vvnz4y80000gn/T//daijin-mutate-eDL2xZ/engine (the shared tree is never touched).
 KILLED   (4 failing): boundary check never fires (condition inverted)
 KILLED   (1 failing): extension no longer requires edits since the boundary
 KILLED   (4 failing): extension no longer requires a passing check

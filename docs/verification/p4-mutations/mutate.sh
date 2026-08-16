@@ -57,16 +57,28 @@ PROBLEMS=0
 # Mutations that actually EXECUTED, compared against the declared count at the end.
 EXECUTED=0
 
+# Hash of one file, used three times per mutation: before, mutated, restored.
+digest() { shasum -a 256 "$1" | cut -d" " -f1; }
+
 run_mutation() {
   local name="$1" file="$2" expr="$3" tests="$4"
   EXECUTED=$((EXECUTED + 1))
   cp "$file" "$file.bak"
+  # THE ANCHOR ASSERTION (D-0032 item 3). A perl expression that matches nothing is a silent
+  # no-op, and a silent no-op looks EXACTLY like a successful run: the tests pass, the line
+  # prints, and nothing tested anything. The verifier produced a minute of false evidence
+  # this way while holding the F81 lie class in mind, which is the argument for counters
+  # over conventions. Hashes make the claim checkable rather than inferred from a diff.
+  local before mutated restored
+  before=$(digest "$file")
   perl -0pi -e "$expr" "$file"
-  if cmp -s "$file" "$file.bak"; then
+  mutated=$(digest "$file")
+  if [ "$before" = "$mutated" ]; then
     # A SKIPPED mutation is NOT evidence: the expression matched nothing, so nothing was
     # tested, and the line still reads like a result at a glance. Both skips seen on
     # 2026-08-16 were caused by a refactor moving an anchor out from under an expression.
-    echo "SKIPPED (no textual change, RE-ANCHOR THIS): $name"
+    echo "SKIPPED (anchor matched nothing, RE-ANCHOR THIS): $name"
+    echo "         source unchanged at $before"
     PROBLEMS=$((PROBLEMS + 1))
     mv "$file.bak" "$file"
     return
@@ -82,6 +94,15 @@ run_mutation() {
     PROBLEMS=$((PROBLEMS + 1))
   fi
   mv "$file.bak" "$file"
+  # THE RESTORE ASSERTION. A mutation that does not put the file back leaves every later
+  # mutation running against a tree nobody described, and the failure would be attributed to
+  # whichever mutation ran next.
+  restored=$(digest "$file")
+  if [ "$restored" != "$before" ]; then
+    echo "NOT RESTORED (!!): $name"
+    echo "         expected $before, found $restored"
+    PROBLEMS=$((PROBLEMS + 1))
+  fi
 }
 
 run_mutation "boundary check never fires (condition inverted)" \

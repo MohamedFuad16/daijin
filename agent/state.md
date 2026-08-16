@@ -1,5 +1,44 @@
 # Daijin build state (authoritative)
 
+## 2026-08-17 11:15 - CI GREEN, WATCHED. The board is closed.
+
+Two consecutive green runs, all four jobs, watched not assumed
+(31965626051 at b4ddd96 the conformance fix; 31966163061 at 0954f0c
+the three rulings). The tui job prints its own honesty: 340 passed, 1
+skipped, the skip naming Ollama as the precondition AND listing every
+method not checked - with -rs added to the CI invocation because a
+skip whose reason nobody can read is how the skip path becomes the
+only path. Both non-vacuity branches were FORCED and watched to fire
+(all-refusals fails with "nothing was checked, so this run proves
+nothing"; the vacuous conditional fails naming what the fixture
+lacks). All three rulings landed as ruled.
+
+TUI-BUILDER'S UNPROMPTED CONFESSION, kept beside the leader's own
+stale-green correction because they are the same class from opposite
+sides: its "live conformance green" was true ON ITS MACHINE and false
+everywhere else - the instrument was measuring the laptop and got read
+as measuring the wire, while nine red runs accumulated. "I never asked
+what the green was evidence OF" joins the record as the passing-signal
+form: a green true for a reason unrelated to the claim it supports.
+Its tool conclusion is also the record's: two restore incidents across
+two lanes in one session is a TOOL problem, not an attention problem,
+"and I will not out-discipline it by trying harder" - mutate-once
+adopted.
+
+RULING on its question 1: the trade is INTENDED and now recorded as a
+bound - the conformance check is a local-and-acceptance instrument;
+wire drift reaches main and is caught at acceptance, with the CI skip
+line naming the unchecked methods every run as the standing reminder.
+A CI job with Ollama (model cached) is possible later and deliberately
+NOT built now; revisit if wire drift actually bites, per
+build-when-it-fires. Question 2 was already answered in a crossed
+message: the init had FAILED (done/failed under --no-probe); health
+was correct; the guidance was the defect and is corrected (phase for
+ended, level for how).
+
+THE BOARD IS CLOSED. Every lane's queue is empty, CI is green and
+watched, the contract is at zero divergence, and the project waits on
+exactly one thing: THE OWNER'S ULTRAREVIEW, then D-0034.
 ## 2026-08-17 10:55 - A fourth defect class: correct mechanism, wrong reading guidance
 
 The extractor answered tui-builder's two open observations by

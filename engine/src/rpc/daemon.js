@@ -29,6 +29,14 @@ const stateRoot = argument('--state-root') || path.join(os.homedir(), '.daijin')
 // D-0015), and a doctor run on a machine where probing would hang. The status is still
 // ANSWERED, and it says the probe was skipped rather than reporting a healthy service it
 // never contacted.
+//
+// IT IS WRONG FOR ANYTHING THAT EMBEDS, and the failure looks like success. tui-builder
+// measured it during the P8 live half: under --no-probe an init that would embed emits TWO
+// step events and stops, because the embedder client is refused at construction. A
+// truncated run and a fast run are the same shape from the outside, so a demonstration or a
+// doctor run that used this flag would show an activity feed that ended early and read as
+// an init that finished quickly. Use it for RPC-surface work, where nothing embeds; do not
+// use it for an init, a search, a retrievalScore or a diagnose.
 const deps = process.argv.includes('--no-probe')
   ? {
     checkOllama: async () => {

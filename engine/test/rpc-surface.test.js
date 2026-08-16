@@ -478,3 +478,37 @@ test('gatesSet and gatesGet return the SAME shape, so a save renders like a read
     await rm(own, { recursive: true, force: true });
   }
 });
+
+test('a full-content write is accepted over a BROKEN file, because that is the repair path', async () => {
+  // The client's mock refused this, which would have taught the screen a safety the engine
+  // does not provide. It is not a leniency: gatesSet is the only way a user can fix the file
+  // they broke, so refusing to write because the current content does not parse would lock
+  // them out of their own repair.
+  const { createRpcServer } = await import('../src/rpc/server.js');
+  const stateRoot = await mkdtemp(path.join(tmpdir(), 'daijin-gates-repair-state-'));
+  const own = await mkdtemp(path.join(tmpdir(), 'daijin-gates-repair-repo-'));
+  await mkdir(path.join(own, '.daijin'), { recursive: true });
+
+  const server = createRpcServer({ stateRoot, write: () => {} });
+  try {
+    await server.methods.repoAttach({ repoPath: own });
+    const broken = await server.methods.gatesSet({ repoPath: own, patch: { content: 'gates:\n  - id: x\n   bad: indent\n' } });
+    assert.equal(broken.discovered, null, 'the engine wrote it and says it does not parse');
+
+    const repaired = await server.methods.gatesSet({ repoPath: own, patch: { content: 'gates:\n  - id: x\n    command: exit 0\n' } });
+    assert.notEqual(repaired.discovered, null, 'and the repair is accepted over the broken file');
+    assert.equal(repaired.parseError, null);
+
+    // What IS refused, always and regardless of the file's state: a structural patch. The
+    // engine replaces the whole document on the user's instruction and never merges into
+    // one, because it treats gates.yaml as data it does not author.
+    for (const patch of [{ gates: [] }, { gates: [{ id: 'x' }] }, {}]) {
+      const refused = await server.methods.gatesSet({ repoPath: own, patch }).then(() => null).catch((error) => error);
+      assert.equal(refused?.code, -32602, `a structural patch must be refused: ${JSON.stringify(patch)}`);
+    }
+  } finally {
+    await server.close();
+    await rm(stateRoot, { recursive: true, force: true });
+    await rm(own, { recursive: true, force: true });
+  }
+});

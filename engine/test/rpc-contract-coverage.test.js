@@ -388,3 +388,66 @@ test('a file the user broke still comes back, and says WHY it is not interpreted
   assert.equal(none.parseError, null);
   assert.equal(none.discovered.summary, null, 'a file with no summary is not a summary of nothing');
 });
+
+// ---- the gates vocabulary the contract now publishes ---------------------------------------
+//
+// The client asked what values it can receive, having assumed pass/fail/violations from the
+// contract's prose. Two of those three were wrong: `violations` never occurs, and `timeout`
+// and `unavailable` both do. A baseline column built on the assumption would have printed a
+// string the engine never sends and had no branch for two it does.
+//
+// These lock the answer to the SOURCE rather than to a list typed here, so a fifth status
+// appearing anywhere in the runner fails this test rather than silently reaching a client.
+
+test('baseline.status is exactly the four the runner can emit, checked against its source', async () => {
+  const { readFile: read } = await import('node:fs/promises');
+  const { fileURLToPath } = await import('node:url');
+  const runner = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'src', 'gym', 'gates.js');
+  const source = await read(runner, 'utf8');
+
+  // Every status literal the runner assigns, harvested from the code.
+  const emitted = new Set([...source.matchAll(/status:\s*(?:timedOut\s*\?\s*)?'([a-z-]+)'/g)].map((match) => match[1]));
+  for (const branch of source.matchAll(/status:\s*timedOut\s*\?\s*'([a-z-]+)'\s*:\s*code === 0\s*\?\s*'([a-z-]+)'\s*:\s*'([a-z-]+)'/g)) {
+    emitted.add(branch[1]); emitted.add(branch[2]); emitted.add(branch[3]);
+  }
+  assert.deepEqual([...emitted].sort(), ['fail', 'pass', 'timeout', 'unavailable'],
+    'the runner emits a status the contract does not document, or stopped emitting one it does');
+
+  // And the contract says the same four, so the two cannot drift.
+  const { contractRow } = await import('./helpers/contract-shape.js');
+  const row = await contractRow('gatesGet');
+  for (const status of ['pass', 'fail', 'timeout', 'unavailable']) {
+    assert.ok(row.includes(`\`${status}\``), `the contract row must name ${status}`);
+  }
+  // NOT asserted: that the word "violations" is absent from the row. It appears there
+  // because the row EXPLAINS why a tool with pre-existing violations is a measured gate
+  // rather than a status, and asserting on a word's absence from prose tests the prose
+  // rather than the vocabulary. The deepEqual against the runner's source above is what
+  // establishes that `violations` is not a status; this half only checks the four are named.
+});
+
+test('discovered and parseError are mutually exclusive, always', async () => {
+  // The client branches on `discovered` alone, which is only safe if there is no partial
+  // parse. There is not: the parse is all-or-nothing at the document level, and a malformed
+  // row inside a readable document passes through as written rather than being rejected.
+  const { parseGatesFile } = await import('../src/rpc/methods.js');
+  const cases = [
+    'gates:\n  - id: a\n    command: x\n',       // clean
+    'gates: []\n',                                // zero gates
+    'gates:\n  - id: a\n   bad: indent\n',        // unparseable
+    '',                                            // empty
+    'version: 1\n',                                // no gates list
+    'gates:\n  - id: a\n  - nonsense\n  - 42\n',  // readable document, junk rows
+  ];
+  for (const content of cases) {
+    const { discovered, parseError } = parseGatesFile(content);
+    assert.equal(Boolean(discovered) !== Boolean(parseError), true,
+      `exactly one of discovered/parseError must be set for ${JSON.stringify(content)}`);
+  }
+  // The junk-row case specifically: the document is readable, so it is DISCOVERED, and the
+  // rows come through untouched. Rejecting the document because one row is odd would refuse
+  // a file the user is allowed to write.
+  const junk = parseGatesFile('gates:\n  - id: a\n  - nonsense\n  - 42\n');
+  assert.equal(junk.parseError, null);
+  assert.equal(junk.discovered.gates.length, 3);
+});

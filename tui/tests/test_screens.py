@@ -984,7 +984,7 @@ async def test_ungraded_attempts_explain_themselves_by_code():
         unsubmitted = next(r for r in reasons if "unsubmitted" in r)
         assert "never answered" in unsubmitted, "the code was not branched on"
         assert "cannot have answered badly" in unsubmitted
-        verdicts = [str(table.get_row_at(i)[2]) for i in range(table.row_count)]
+        verdicts = [str(table.get_row_at(i)[3]) for i in range(table.row_count)]
         assert all(v == "not graded" for v in verdicts)
 
 
@@ -1018,3 +1018,57 @@ async def test_the_retrieval_tester_says_why_it_has_no_percentage():
         summary = text_of(app.screen.query_one("#search-summary", Static))
         assert "one query is not a measurement" in summary
         assert "%" not in summary, "the tester must not invent a rate it cannot have"
+
+
+# The run mode is a claim about the record --------------------------------
+
+
+@run_async
+async def test_a_harness_debug_attempt_is_marked_in_both_channels():
+    """Only an evaluation attempt touches the scored record.
+
+    Rendering the two identically invites reading a debug run as a scored one,
+    so it is marked by text as well as by dimming: dim is invisible to a reader
+    without colour, and this is exactly the distinction they most need.
+    """
+    from textual.widgets import DataTable as DT
+
+    from daijin_tui.widgets import DitherBars
+
+    async with running_app() as (app, pilot):
+        await goto(pilot, "6")
+        await app.screen.show_exam("exam-0058")
+        await settle(pilot)
+        table = app.screen.query_one("#attempt-table", DT)
+        modes = [str(table.get_row_at(i)[1]) for i in range(table.row_count)]
+        assert "harness-debug" in modes, "the mode column does not say which runs were debug"
+        assert "evaluation" in modes
+        bars = app.screen.query_one("#exam-tokens", DitherBars)
+        assert any(label.endswith("*") for label in bars.labels), (
+            "no textual marker on the debug bars, so a colourless reader sees nothing"
+        )
+        assert "harness-debug" in bars.ceiling_label
+        assert "outside the scored record" in bars.ceiling_label
+
+
+@run_async
+async def test_an_attempt_with_no_mode_is_not_presented_as_scored():
+    """Absence of the field is not evidence of an evaluation run."""
+    from textual.widgets import DataTable as DT
+
+    from daijin_tui.widgets import DitherBars
+
+    async with running_app() as (app, pilot):
+        await goto(pilot, "6")
+        await app.screen.show_exam("exam-0058")
+        await settle(pilot)
+        table = app.screen.query_one("#attempt-table", DT)
+        modes = [str(table.get_row_at(i)[1]) for i in range(table.row_count)]
+        assert "unknown" in modes, "a row without a mode was given one"
+        assert modes.count("evaluation") == 1, (
+            "rows with no mode were defaulted to evaluation, which claims they were scored"
+        )
+        bars = app.screen.query_one("#exam-tokens", DitherBars)
+        # Unknown is neither marked as debug nor silently treated as scored.
+        marked = [label for label in bars.labels if label.endswith("*")]
+        assert len(marked) == 2, f"expected only the two declared debug attempts, saw {marked}"

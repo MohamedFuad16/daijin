@@ -12,6 +12,7 @@ from typing import Any, Iterable
 
 from textual import work
 from textual.containers import Horizontal
+from rich.text import Text
 from textual.widgets import Button, DataTable, Select, Static
 
 from ..concurrency import gather_all
@@ -22,7 +23,14 @@ from .base import DaijinScreen
 from .dialogs import TextPromptScreen
 
 EXAM_COLUMNS = ("exam", "title", "tier", "status", "benchmark", "held out", "quarantine reason")
-ATTEMPT_COLUMNS = ("attempt", "tokens", "verdict", "why not graded")
+ATTEMPT_COLUMNS = ("attempt", "mode", "tokens", "verdict", "why not graded")
+
+# Only an evaluation attempt touches the scored record. A harness-debug attempt
+# is deliberately outside it, so rendering the two identically invites reading
+# a debug run as a scored one. An ABSENT mode is neither: it is not evidence of
+# an evaluation run, so it is left unstyled rather than defaulted to scored.
+SCORED_MODE = "evaluation"
+UNSCORED_MODE = "harness-debug"
 
 # What each ungraded code means for the reader. Branch on the CODE; display the
 # engine's sentence, which is written to be improved.
@@ -77,6 +85,22 @@ def attempt_tokens(attempt: dict[str, Any]) -> int:
     """Work tokens spent on the attempt."""
     value = attempt.get("tokens")
     return int(value) if isinstance(value, (int, float)) else 0
+
+
+def attempt_mode(attempt: dict[str, Any]) -> str | None:
+    """The run mode, or None when the row does not carry one."""
+    value = attempt.get("mode")
+    return str(value) if value else None
+
+
+def is_unscored(attempt: dict[str, Any]) -> bool:
+    """True only when the row SAYS it was harness-debug.
+
+    An unknown mode is not treated as scored and not treated as debug: the
+    absence of the field is not evidence either way, and guessing in the
+    direction of "scored" is the guess that misleads.
+    """
+    return attempt_mode(attempt) == UNSCORED_MODE
 
 
 def attempt_cap(attempt: dict[str, Any]) -> int | None:
@@ -210,12 +234,18 @@ class ExamsScreen(DaijinScreen):
                     why = f"{why} ({note})"
             else:
                 why = "-"
-            table.add_row(
+            mode = attempt_mode(attempt)
+            # Dim carries "not scored" for a sighted reader; the mode column
+            # carries it for everyone, which is the two-channel rule again.
+            style = "dim" if is_unscored(attempt) else None
+            cells = [
                 str(attempt_number(attempt, position)),
+                mode or "unknown",
                 f"{attempt_tokens(attempt):,}",
                 attempt.get("verdict") or "not graded",
                 why,
-            )
+            ]
+            table.add_row(*(Text(cell, style=style) for cell in cells))
 
     async def _settings(self) -> dict[str, Any] | None:
         try:
@@ -283,11 +313,21 @@ class ExamsScreen(DaijinScreen):
             caps = [attempt_cap(a) for _, a in numbered]
             cap = max((c for c in caps if c), default=None)
             tokens.set_data(
-                [str(n) for n, _ in numbered],
+                # A marked label is the channel that survives without colour.
+                [f"{n}*" if is_unscored(a) else str(n) for n, a in numbered],
                 [attempt_tokens(a) for _, a in numbered],
                 [texture_for_verdict(a.get("verdict")) for _, a in numbered],
                 ceiling=cap,
-                ceiling_label=f"cap {cap:,}" if cap else "",
+                ceiling_label=" ".join(
+                    part
+                    for part in (
+                        f"cap {cap:,}" if cap else "",
+                        "* harness-debug, outside the scored record"
+                        if any(is_unscored(a) for _, a in numbered)
+                        else "",
+                    )
+                    if part
+                ),
             )
         else:
             tokens.set_data([], [])

@@ -1,5 +1,41 @@
 # Daijin build state (authoritative)
 
+## 2026-08-16 12:27 - P3 LIVE RUN COMPLETE: 25 of 25, and the control says why that is not the point
+
+init-miner ran the constants-generalization init on portfolio-mine pinned
+at 81d453aaf200ecc1c27dfdca6f8b201bb976736a, Layer 1 only, zero spend,
+repo read-only and verified byte-identical before and after. Floor 25 of
+25 = exact 1, MRR 0.96, 0 violations, chosen budget 3000 from a flat
+3k/4k/6k/8k curve, MCP unlocked at 0.75, all five integrity gates passing
+before measurement, errors.md empty with 9 fix commits kept as evidence,
+one gate candidate classified UNAVAILABLE with its reason named (pnpm not
+installed HERE is never pre-broken; pre-broken blames the repo and is a
+claim a user acts on). Embedder recorded: ollama/bge-m3 dim 1024, digest
+verified equal to the platform's before indexing.
+
+THE NUMBER IS QUALIFIED BY ITS OWN CONTROL and is never quoted alone
+(D-0030): the permuted control scores 0.72 because k=8 delivers 7.6 of 11
+documents per query. Case rate saturates on a small corpus; MRR still
+separates (range 0.8235). The enforced metric loses its discriminating
+power exactly where the unfloored one keeps it.
+
+Four defects only the live run could surface, all fixed and
+mutation-covered: the selection ramp dropping 10 of 29 candidates (nearly
+a FALSE FINDING: two runs blocked at diversity with 19 cases and "the
+repo cannot supply 25" would have been wrong); leakage false-positives on
+scoped package names; built-ins reported as external packages; and the
+existence/staleness deadlock (D-0029). Plus the served-tag versus
+configured-name identity mismatch, both sides now derived from one
+function. Instrument lesson recorded: two stale mutation anchors read as
+SURVIVORS ("18 of 20 killed" was wrong); a mutation that fails to apply
+is not evidence either way, and the harness now shouts ANCHOR!! instead.
+Also: corpus shape explains everything (73 files but only 6 source files;
+11 units, 49 chunks); the architecture-window dilution persists under the
+real embedder (86 of 174) and is chunking, deferred for its own decision
+after P4. The extractor's workarounds are deleted; process.env asserted
+unchanged across a sweep. init-miner's seven files were swept into
+df1f99b (D-0026 addition covers it; correcting commit c3ae35f).
+
 ## 2026-08-16 12:23 - P5 ACCEPTED: PASS on all six clauses, zero findings
 
 Verifier report 10, the first attack run inside a real hold window and the

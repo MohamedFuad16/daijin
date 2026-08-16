@@ -438,3 +438,61 @@ therefore sharpened: the commit itself is PATH-SCOPED, git commit -- <own
 paths>, which cannot take another lane's staged work regardless of index
 state. A bare git commit at the repo root is no longer a legal operation
 for any lane, the leader included.]
+
+## D-0027 (2026-08-16) A retired gold case never enters the file the scorer loads
+
+The harness scores every case in the file it loads. A case retired because
+its target no longer exists would be measured against a known-absent answer
+and score as a permanent miss, quietly lowering every future floor. Ruling:
+.daijin/goldset.yaml holds ACTIVE cases only; the retirement record lives
+in .daijin/goldset-retired.yaml and is APPENDED, never overwritten, so a
+run cannot erase what earlier runs retired. store.d.ts already required a
+retired case keep its date and reason; this is where that lands in the
+file layout. Mutation-covered both ways. (Drafted by init-miner, merged by
+the leader.)
+
+## D-0028 (2026-08-16) The gold set is carried forward; identity is a stable key
+
+Re-mining regenerates every case from the CURRENT tree, so nothing the
+miner produces can ever be stale: the staleness gate was live at the unit
+level and dead in the product. Ruling: the previous gold set is read and
+merged with the freshly mined one. Identity is a STABLE KEY written at
+mining time (provenance plus a hash of the canonical query), not the
+positional id and not the query, so a user rewording a question edits
+their case instead of creating a second one. Mechanics own must_return (a
+fact about the tree as it is now); the user owns the wording; a reworded
+case is marked userEdited so the report can say how much of the gauge is
+user-worded. Keyless legacy files fall back to that format's identity.
+(Drafted by init-miner, merged by the leader.)
+
+## D-0029 (2026-08-16) A vacuous ranking constraint is pruned, not grounds for retirement
+
+The existence gate checks must_return AND must_not_outrank; the staleness
+gate judged only the answer, so a case whose DISTRACTOR was deleted
+satisfied neither and the two gates deadlocked the pipeline permanently.
+Ruling: dead must_not_outrank ids are pruned before the gates run, with
+what was pruned reported, never silent. Grounds: a document that no longer
+exists cannot outrank anything, so the constraint is vacuous while the
+case remains perfectly askable; retiring it would shrink the gauge for a
+dead distractor. General lesson retained: two gates reading different id
+sets over the same object can deadlock each other, and neither looks
+wrong in isolation. (Drafted by init-miner, merged by the leader.)
+
+## D-0030 (2026-08-16) Every floor report carries its permuted-control range
+
+From the P3 live run: on portfolio-mine (11 units, 49 chunks) the floor
+scored 25 of 25 = exact 1 while a PERMUTED control (every answer
+deliberately wrong) scored 18 of 25 = 0.72, because k=8 delivers 7.6 of
+11 documents per query; presence is nearly free and case rate retains
+0.28 of discriminating range, while MRR retains 0.8235. The
+constants-generalization answer: the constants were tuned on 557
+documents and the FLOOR METRIC, not the retrieval configuration, is what
+fails to generalize downward. Ruling: every floor measurement reports its
+permuted-control range alongside the raw number, so a saturated gauge can
+never be read as a perfect one (init-miner builds it into the report).
+Gating the MCP unlock on the control range instead of the raw rate is a
+contract change deferred to the auditor era, recorded here as the open
+design question. init-miner's own verdict-line withdrawal (its script
+printed DISCRIMINATING from an invented 0.8 threshold; it now reports
+both ranges and no pass mark) is the discipline applied to its own
+instrument.

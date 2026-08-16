@@ -4,7 +4,7 @@
   "artifactRoot": "/private/tmp/claude-501/-Users-mfuad16-Documents-Codex-2026-07-21-hand-ai-brain-build-instructions-md-ai-brain-platform/e95b2f5e-687e-47b1-a3be-17bfadbc8b2e/scratchpad/p35-gen/artifacts",
   "mode": "layer1",
   "project": "default",
-  "startedAt": 1786868158209,
+  "startedAt": 1786886658076,
   "phases": {
     "evidence": {
       "sourceFiles": 6,
@@ -34,6 +34,35 @@
         }
       }
     },
+    "brain": {
+      "root": "/private/tmp/claude-501/-Users-mfuad16-Documents-Codex-2026-07-21-hand-ai-brain-build-instructions-md-ai-brain-platform/e95b2f5e-687e-47b1-a3be-17bfadbc8b2e/scratchpad/p35-gen/artifacts/.daijin/brain",
+      "schema": 1,
+      "written": [
+        {
+          "file": "architecture.md",
+          "units": 5,
+          "type": "architecture"
+        },
+        {
+          "file": "conventions.md",
+          "units": 5,
+          "type": "convention"
+        },
+        {
+          "file": "workflow.md",
+          "units": 1,
+          "type": "workflow"
+        },
+        {
+          "file": "errors.md",
+          "units": 0,
+          "type": "lesson"
+        }
+      ],
+      "unitsWritten": 11,
+      "unitsReadBack": 11,
+      "unknownTypes": []
+    },
     "ingest": {
       "documents": 11,
       "chunks": 49,
@@ -46,7 +75,7 @@
         "digest": "7907646426070047a77226ac3e684fbbe8410524f7b4a74d02837e43f2146bab",
         "dimension": 1024,
         "embedderId": "ollama:bge-m3@7907646426070047a77226ac3e684fbbe8410524f7b4a74d02837e43f2146bab",
-        "indexDigest": "e389cafe08e30c94c50e75d0449ebeec32ae40bee66671bdedaa00e7c2f40c7d"
+        "indexDigest": "a0c794422d2c403c2253f9728ef0563028f6e79cebccfde748dbbe4898ddb9c1"
       }
     },
     "gates": {
@@ -356,7 +385,7 @@
       "baseline": {
         "status": "unavailable",
         "exitCode": null,
-        "durationMs": 8,
+        "durationMs": 10,
         "timeoutMs": 120000,
         "stdoutTail": "",
         "stderrTail": "/bin/sh: pnpm: command not found\n",
@@ -437,10 +466,19 @@
       "status": "pass",
       "tokenBudget": 3000,
       "perCandidateCap": 660,
+      "meanTokensConsumed": 866,
       "checked": 174,
-      "survived": 88,
-      "survival": "88 of 174",
+      "survived": 92,
+      "survival": "92 of 174",
       "truncatedAway": [],
+      "truncatedUnits": [],
+      "events": {
+        "total": 0,
+        "units": 0,
+        "oversized": 0,
+        "capBound": 0,
+        "budgetBound": 0
+      },
       "windowMissed": [
         {
           "caseId": "g001",
@@ -449,7 +487,8 @@
           "ordinal": 3,
           "coreTokens": 107,
           "deliveredTokens": 77,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g001",
@@ -458,7 +497,8 @@
           "ordinal": 3,
           "coreTokens": 79,
           "deliveredTokens": 35,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g001",
@@ -467,7 +507,8 @@
           "ordinal": 6,
           "coreTokens": 79,
           "deliveredTokens": 61,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g001",
@@ -476,7 +517,8 @@
           "ordinal": 6,
           "coreTokens": 77,
           "deliveredTokens": 61,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g002",
@@ -485,7 +527,8 @@
           "ordinal": 4,
           "coreTokens": 79,
           "deliveredTokens": 44,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g002",
@@ -494,7 +537,8 @@
           "ordinal": 4,
           "coreTokens": 77,
           "deliveredTokens": 28,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g002",
@@ -503,7 +547,8 @@
           "ordinal": 3,
           "coreTokens": 79,
           "deliveredTokens": 35,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g003",
@@ -512,7 +557,8 @@
           "ordinal": 4,
           "coreTokens": 77,
           "deliveredTokens": 28,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g003",
@@ -521,7 +567,8 @@
           "ordinal": 2,
           "coreTokens": 107,
           "deliveredTokens": 17,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g003",
@@ -530,7 +577,8 @@
           "ordinal": 2,
           "coreTokens": 79,
           "deliveredTokens": 17,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g003",
@@ -539,16 +587,8 @@
           "ordinal": 2,
           "coreTokens": 79,
           "deliveredTokens": 19,
-          "allowance": 660
-        },
-        {
-          "caseId": "g004",
-          "id": "daijin.architecture.root",
-          "type": "architecture",
-          "ordinal": 3,
-          "coreTokens": 79,
-          "deliveredTokens": 35,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g005",
@@ -557,7 +597,8 @@
           "ordinal": 4,
           "coreTokens": 79,
           "deliveredTokens": 44,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g005",
@@ -566,7 +607,8 @@
           "ordinal": 4,
           "coreTokens": 107,
           "deliveredTokens": 22,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g005",
@@ -575,7 +617,8 @@
           "ordinal": 3,
           "coreTokens": 79,
           "deliveredTokens": 35,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g006",
@@ -584,7 +627,8 @@
           "ordinal": 3,
           "coreTokens": 107,
           "deliveredTokens": 77,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g007",
@@ -593,7 +637,8 @@
           "ordinal": 3,
           "coreTokens": 79,
           "deliveredTokens": 35,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g007",
@@ -602,7 +647,8 @@
           "ordinal": 3,
           "coreTokens": 77,
           "deliveredTokens": 18,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g007",
@@ -611,7 +657,8 @@
           "ordinal": 3,
           "coreTokens": 107,
           "deliveredTokens": 77,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g007",
@@ -620,7 +667,8 @@
           "ordinal": 3,
           "coreTokens": 79,
           "deliveredTokens": 18,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g008",
@@ -629,7 +677,8 @@
           "ordinal": 4,
           "coreTokens": 79,
           "deliveredTokens": 44,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g008",
@@ -638,7 +687,8 @@
           "ordinal": 3,
           "coreTokens": 107,
           "deliveredTokens": 77,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g008",
@@ -647,7 +697,8 @@
           "ordinal": 4,
           "coreTokens": 77,
           "deliveredTokens": 28,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g008",
@@ -656,7 +707,8 @@
           "ordinal": 3,
           "coreTokens": 79,
           "deliveredTokens": 35,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g009",
@@ -665,7 +717,8 @@
           "ordinal": 6,
           "coreTokens": 79,
           "deliveredTokens": 61,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g009",
@@ -674,7 +727,8 @@
           "ordinal": 6,
           "coreTokens": 77,
           "deliveredTokens": 61,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g009",
@@ -683,7 +737,8 @@
           "ordinal": 3,
           "coreTokens": 187,
           "deliveredTokens": 59,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g009",
@@ -692,7 +747,8 @@
           "ordinal": 6,
           "coreTokens": 107,
           "deliveredTokens": 61,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g009",
@@ -701,7 +757,8 @@
           "ordinal": 6,
           "coreTokens": 79,
           "deliveredTokens": 63,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g010",
@@ -710,7 +767,8 @@
           "ordinal": 3,
           "coreTokens": 107,
           "deliveredTokens": 77,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g010",
@@ -719,16 +777,8 @@
           "ordinal": 3,
           "coreTokens": 79,
           "deliveredTokens": 35,
-          "allowance": 660
-        },
-        {
-          "caseId": "g010",
-          "id": "daijin.architecture.api",
-          "type": "architecture",
-          "ordinal": 3,
-          "coreTokens": 77,
-          "deliveredTokens": 18,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g011",
@@ -737,7 +787,8 @@
           "ordinal": 3,
           "coreTokens": 79,
           "deliveredTokens": 35,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g011",
@@ -746,16 +797,8 @@
           "ordinal": 3,
           "coreTokens": 107,
           "deliveredTokens": 77,
-          "allowance": 660
-        },
-        {
-          "caseId": "g011",
-          "id": "daijin.architecture.scripts",
-          "type": "architecture",
-          "ordinal": 3,
-          "coreTokens": 79,
-          "deliveredTokens": 18,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g012",
@@ -764,7 +807,8 @@
           "ordinal": 3,
           "coreTokens": 107,
           "deliveredTokens": 77,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g012",
@@ -773,7 +817,8 @@
           "ordinal": 3,
           "coreTokens": 77,
           "deliveredTokens": 18,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g012",
@@ -782,7 +827,8 @@
           "ordinal": 3,
           "coreTokens": 79,
           "deliveredTokens": 18,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g012",
@@ -791,7 +837,8 @@
           "ordinal": 3,
           "coreTokens": 79,
           "deliveredTokens": 35,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g013",
@@ -800,7 +847,8 @@
           "ordinal": 3,
           "coreTokens": 107,
           "deliveredTokens": 77,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g013",
@@ -809,7 +857,8 @@
           "ordinal": 3,
           "coreTokens": 77,
           "deliveredTokens": 18,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g014",
@@ -818,7 +867,8 @@
           "ordinal": 3,
           "coreTokens": 107,
           "deliveredTokens": 77,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g014",
@@ -827,7 +877,8 @@
           "ordinal": 3,
           "coreTokens": 79,
           "deliveredTokens": 35,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g014",
@@ -836,7 +887,8 @@
           "ordinal": 3,
           "coreTokens": 79,
           "deliveredTokens": 18,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g014",
@@ -845,7 +897,8 @@
           "ordinal": 3,
           "coreTokens": 77,
           "deliveredTokens": 18,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g015",
@@ -854,7 +907,8 @@
           "ordinal": 4,
           "coreTokens": 77,
           "deliveredTokens": 28,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g015",
@@ -863,7 +917,8 @@
           "ordinal": 4,
           "coreTokens": 79,
           "deliveredTokens": 24,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g015",
@@ -872,7 +927,8 @@
           "ordinal": 4,
           "coreTokens": 107,
           "deliveredTokens": 22,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g015",
@@ -881,7 +937,8 @@
           "ordinal": 4,
           "coreTokens": 79,
           "deliveredTokens": 44,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g015",
@@ -890,7 +947,8 @@
           "ordinal": 3,
           "coreTokens": 187,
           "deliveredTokens": 59,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g016",
@@ -899,7 +957,8 @@
           "ordinal": 4,
           "coreTokens": 79,
           "deliveredTokens": 44,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g016",
@@ -908,7 +967,8 @@
           "ordinal": 4,
           "coreTokens": 79,
           "deliveredTokens": 24,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g016",
@@ -917,7 +977,8 @@
           "ordinal": 4,
           "coreTokens": 107,
           "deliveredTokens": 22,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g016",
@@ -926,7 +987,8 @@
           "ordinal": 4,
           "coreTokens": 77,
           "deliveredTokens": 28,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g017",
@@ -935,7 +997,8 @@
           "ordinal": 4,
           "coreTokens": 79,
           "deliveredTokens": 44,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g017",
@@ -944,7 +1007,8 @@
           "ordinal": 4,
           "coreTokens": 79,
           "deliveredTokens": 24,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g017",
@@ -953,7 +1017,8 @@
           "ordinal": 4,
           "coreTokens": 107,
           "deliveredTokens": 22,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g017",
@@ -962,7 +1027,8 @@
           "ordinal": 4,
           "coreTokens": 77,
           "deliveredTokens": 28,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g017",
@@ -971,7 +1037,8 @@
           "ordinal": 3,
           "coreTokens": 187,
           "deliveredTokens": 59,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g018",
@@ -980,7 +1047,8 @@
           "ordinal": 4,
           "coreTokens": 79,
           "deliveredTokens": 44,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g018",
@@ -989,7 +1057,8 @@
           "ordinal": 4,
           "coreTokens": 107,
           "deliveredTokens": 22,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g018",
@@ -998,7 +1067,8 @@
           "ordinal": 4,
           "coreTokens": 79,
           "deliveredTokens": 24,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g018",
@@ -1007,7 +1077,8 @@
           "ordinal": 4,
           "coreTokens": 77,
           "deliveredTokens": 28,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g018",
@@ -1016,7 +1087,8 @@
           "ordinal": 3,
           "coreTokens": 187,
           "deliveredTokens": 59,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g019",
@@ -1025,7 +1097,8 @@
           "ordinal": 3,
           "coreTokens": 107,
           "deliveredTokens": 77,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g019",
@@ -1034,16 +1107,8 @@
           "ordinal": 3,
           "coreTokens": 79,
           "deliveredTokens": 35,
-          "allowance": 660
-        },
-        {
-          "caseId": "g019",
-          "id": "daijin.architecture.api",
-          "type": "architecture",
-          "ordinal": 3,
-          "coreTokens": 77,
-          "deliveredTokens": 18,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g020",
@@ -1052,7 +1117,8 @@
           "ordinal": 3,
           "coreTokens": 79,
           "deliveredTokens": 35,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g020",
@@ -1061,7 +1127,8 @@
           "ordinal": 3,
           "coreTokens": 79,
           "deliveredTokens": 18,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g020",
@@ -1070,7 +1137,8 @@
           "ordinal": 3,
           "coreTokens": 77,
           "deliveredTokens": 18,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g020",
@@ -1079,7 +1147,8 @@
           "ordinal": 3,
           "coreTokens": 107,
           "deliveredTokens": 77,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g021",
@@ -1088,7 +1157,8 @@
           "ordinal": 5,
           "coreTokens": 107,
           "deliveredTokens": 65,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g021",
@@ -1097,7 +1167,8 @@
           "ordinal": 3,
           "coreTokens": 187,
           "deliveredTokens": 59,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g021",
@@ -1106,7 +1177,8 @@
           "ordinal": 6,
           "coreTokens": 79,
           "deliveredTokens": 61,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g021",
@@ -1115,7 +1187,8 @@
           "ordinal": 6,
           "coreTokens": 77,
           "deliveredTokens": 61,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g021",
@@ -1124,7 +1197,8 @@
           "ordinal": 6,
           "coreTokens": 79,
           "deliveredTokens": 63,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g022",
@@ -1133,7 +1207,8 @@
           "ordinal": 5,
           "coreTokens": 77,
           "deliveredTokens": 21,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g022",
@@ -1142,7 +1217,8 @@
           "ordinal": 6,
           "coreTokens": 79,
           "deliveredTokens": 61,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g022",
@@ -1151,7 +1227,8 @@
           "ordinal": 3,
           "coreTokens": 187,
           "deliveredTokens": 59,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g022",
@@ -1160,7 +1237,8 @@
           "ordinal": 6,
           "coreTokens": 107,
           "deliveredTokens": 61,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g022",
@@ -1169,7 +1247,8 @@
           "ordinal": 6,
           "coreTokens": 79,
           "deliveredTokens": 63,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g023",
@@ -1178,7 +1257,8 @@
           "ordinal": 5,
           "coreTokens": 107,
           "deliveredTokens": 65,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g023",
@@ -1187,7 +1267,8 @@
           "ordinal": 5,
           "coreTokens": 79,
           "deliveredTokens": 19,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g023",
@@ -1196,7 +1277,8 @@
           "ordinal": 5,
           "coreTokens": 79,
           "deliveredTokens": 21,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g024",
@@ -1205,7 +1287,8 @@
           "ordinal": 5,
           "coreTokens": 107,
           "deliveredTokens": 65,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         },
         {
           "caseId": "g025",
@@ -1214,7 +1297,8 @@
           "ordinal": 5,
           "coreTokens": 107,
           "deliveredTokens": 65,
-          "allowance": 660
+          "nominalCap": 660,
+          "boundBy": "budget-exhausted"
         }
       ],
       "raiseSignal": null
@@ -1534,22 +1618,123 @@
       }
     ]
   },
-  "finishedAt": 1786868184336,
+  "finishedAt": 1786886683658,
   "units": [
+    {
+      "id": "daijin.architecture.api",
+      "type": "architecture",
+      "path": "architecture.md#daijin.architecture.api",
+      "title": "Module: api",
+      "tags": [
+        "architecture",
+        "api"
+      ],
+      "content": "# Module: api\n\nClaim: api holds 1 source file, imports 0 other areas (0 file-level references out), and is imported by 0 (0 references in).\nEvidence: import graph over 3 parsed source files, directory tree, and the tracked file list (git-ls-files).\n\nFiles in this module:\n- api/visits.mjs (imported by 0, imports 0)\n\n## Imports from\n\n- nothing in this repo\n\n## Imported by\n\n- nothing in this repo\n\n## External packages used here\n\n- none\n\n## Node built-ins used here\n\n- node:crypto (1 files)\n\n## Exported symbols\n\n- handler (api/visits.mjs)\n\n## Provenance\n\nGenerated by Daijin Layer 1. Deterministic, no model, no network.\nMethod: import graph and directory tree over the tracked source files\nReproduce: re-run daijin init on this repo at the same commit; identical input produces identical bytes.\nEvidence digest: 56ceefbed9166fb58eb727a030c428f91fa603a619421df10f98da308b2acea7",
+      "body": "Claim: api holds 1 source file, imports 0 other areas (0 file-level references out), and is imported by 0 (0 references in).\nEvidence: import graph over 3 parsed source files, directory tree, and the tracked file list (git-ls-files).\n\nFiles in this module:\n- api/visits.mjs (imported by 0, imports 0)\n\n## Imports from\n\n- nothing in this repo\n\n## Imported by\n\n- nothing in this repo\n\n## External packages used here\n\n- none\n\n## Node built-ins used here\n\n- node:crypto (1 files)\n\n## Exported symbols\n\n- handler (api/visits.mjs)\n\n## Provenance\n\nGenerated by Daijin Layer 1. Deterministic, no model, no network.\nMethod: import graph and directory tree over the tracked source files\nReproduce: re-run daijin init on this repo at the same commit; identical input produces identical bytes.\nEvidence digest: 56ceefbed9166fb58eb727a030c428f91fa603a619421df10f98da308b2acea7",
+      "citations": [
+        "api/visits.mjs"
+      ],
+      "meta": {
+        "area": "api",
+        "generated": true,
+        "layer": 1,
+        "citations": [
+          "api/visits.mjs"
+        ],
+        "sourceArtifact": "architecture.md",
+        "schema": 1
+      },
+      "core": "Claim: api holds 1 source file, imports 0 other areas (0 file-level references out), and is imported by 0 (0 references in).\nEvidence: import graph over 3 parsed source files, directory tree, and the tracked file list (git-ls-files).\n\nFiles in this module:\n- api/visits.mjs (imported by 0, imports 0)"
+    },
+    {
+      "id": "daijin.architecture.dependencies",
+      "type": "architecture",
+      "path": "architecture.md#daijin.architecture.dependencies",
+      "title": "Dependencies",
+      "tags": [
+        "architecture",
+        "dependencies"
+      ],
+      "content": "# Dependencies\n\nClaim: 10 declared dependencies, 10 of 10 imported by at least one source file, 0 declared and never imported, 0 imported and never declared.\nEvidence: package.json crossed with the import graph over 3 parsed source files.\n\nDeclared and used:\n\n- react ^19.2.8 (2 files)\n- @gsap/react ^2.1.2 (1 files)\n- @vitejs/plugin-react ^6.0.4 (1 files)\n- border-beam ^1.3.0 (1 files)\n- gsap ^3.15.0 (1 files)\n- lucide-react ^1.26.0 (1 files)\n- react-dom ^19.2.8 (1 files)\n- react-icons ^5.7.0 (1 files)\n- thinking-orbs ^0.1.1 (1 files)\n- vite ^8.1.5 (1 files)\n\n## Declared and never imported\n\n- none\n\n## Imported but not declared\n\n- none\n\n## Provenance\n\nGenerated by Daijin Layer 1. Deterministic, no model, no network.\nMethod: import graph and directory tree over the tracked source files\nReproduce: re-run daijin init on this repo at the same commit; identical input produces identical bytes.\nEvidence digest: 44d4cc1b43c90349f207f13530550a3541b6764c6ebe0426957344fcfaf8b9c4",
+      "body": "Claim: 10 declared dependencies, 10 of 10 imported by at least one source file, 0 declared and never imported, 0 imported and never declared.\nEvidence: package.json crossed with the import graph over 3 parsed source files.\n\nDeclared and used:\n\n- react ^19.2.8 (2 files)\n- @gsap/react ^2.1.2 (1 files)\n- @vitejs/plugin-react ^6.0.4 (1 files)\n- border-beam ^1.3.0 (1 files)\n- gsap ^3.15.0 (1 files)\n- lucide-react ^1.26.0 (1 files)\n- react-dom ^19.2.8 (1 files)\n- react-icons ^5.7.0 (1 files)\n- thinking-orbs ^0.1.1 (1 files)\n- vite ^8.1.5 (1 files)\n\n## Declared and never imported\n\n- none\n\n## Imported but not declared\n\n- none\n\n## Provenance\n\nGenerated by Daijin Layer 1. Deterministic, no model, no network.\nMethod: import graph and directory tree over the tracked source files\nReproduce: re-run daijin init on this repo at the same commit; identical input produces identical bytes.\nEvidence digest: 44d4cc1b43c90349f207f13530550a3541b6764c6ebe0426957344fcfaf8b9c4",
+      "citations": [
+        "package.json"
+      ],
+      "meta": {
+        "area": "dependencies",
+        "generated": true,
+        "layer": 1,
+        "citations": [
+          "package.json"
+        ],
+        "sourceArtifact": "architecture.md",
+        "schema": 1
+      },
+      "core": "Claim: 10 declared dependencies, 10 of 10 imported by at least one source file, 0 declared and never imported, 0 imported and never declared.\nEvidence: package.json crossed with the import graph over 3 parsed source files.\n\nDeclared and used:\n\n- react ^19.2.8 (2 files)\n- @gsap/react ^2.1.2 (1 files)\n- @vitejs/plugin-react ^6.0.4 (1 files)\n- border-beam ^1.3.0 (1 files)\n- gsap ^3.15.0 (1 files)\n- lucide-react ^1.26.0 (1 files)\n- react-dom ^19.2.8 (1 files)\n- react-icons ^5.7.0 (1 files)\n- thinking-orbs ^0.1.1 (1 files)\n- vite ^8.1.5 (1 files)"
+    },
+    {
+      "id": "daijin.architecture.root",
+      "type": "architecture",
+      "path": "architecture.md#daijin.architecture.root",
+      "title": "Module: (root)",
+      "tags": [
+        "architecture",
+        "(root)"
+      ],
+      "content": "# Module: (root)\n\nClaim: (root) holds 1 source file, imports 0 other areas (0 file-level references out), and is imported by 0 (0 references in).\nEvidence: import graph over 3 parsed source files, directory tree, and the tracked file list (git-ls-files).\n\nFiles in this module:\n- vite.config.js (imported by 0, imports 0)\n\n## Imports from\n\n- nothing in this repo\n\n## Imported by\n\n- nothing in this repo\n\n## External packages used here\n\n- @vitejs/plugin-react (1 files)\n- vite (1 files)\n\n## Node built-ins used here\n\n- none\n\n## Exported symbols\n\n- none found by the deterministic scan\n\n## Provenance\n\nGenerated by Daijin Layer 1. Deterministic, no model, no network.\nMethod: import graph and directory tree over the tracked source files\nReproduce: re-run daijin init on this repo at the same commit; identical input produces identical bytes.\nEvidence digest: 9a33b129e340dc8cb01c6adeefbf7e773efd474fa5952d2d1614d2d0c0b65f75",
+      "body": "Claim: (root) holds 1 source file, imports 0 other areas (0 file-level references out), and is imported by 0 (0 references in).\nEvidence: import graph over 3 parsed source files, directory tree, and the tracked file list (git-ls-files).\n\nFiles in this module:\n- vite.config.js (imported by 0, imports 0)\n\n## Imports from\n\n- nothing in this repo\n\n## Imported by\n\n- nothing in this repo\n\n## External packages used here\n\n- @vitejs/plugin-react (1 files)\n- vite (1 files)\n\n## Node built-ins used here\n\n- none\n\n## Exported symbols\n\n- none found by the deterministic scan\n\n## Provenance\n\nGenerated by Daijin Layer 1. Deterministic, no model, no network.\nMethod: import graph and directory tree over the tracked source files\nReproduce: re-run daijin init on this repo at the same commit; identical input produces identical bytes.\nEvidence digest: 9a33b129e340dc8cb01c6adeefbf7e773efd474fa5952d2d1614d2d0c0b65f75",
+      "citations": [
+        "vite.config.js"
+      ],
+      "meta": {
+        "area": "(root)",
+        "generated": true,
+        "layer": 1,
+        "citations": [
+          "vite.config.js"
+        ],
+        "sourceArtifact": "architecture.md",
+        "schema": 1
+      },
+      "core": "Claim: (root) holds 1 source file, imports 0 other areas (0 file-level references out), and is imported by 0 (0 references in).\nEvidence: import graph over 3 parsed source files, directory tree, and the tracked file list (git-ls-files).\n\nFiles in this module:\n- vite.config.js (imported by 0, imports 0)"
+    },
+    {
+      "id": "daijin.architecture.scripts",
+      "type": "architecture",
+      "path": "architecture.md#daijin.architecture.scripts",
+      "title": "Module: scripts",
+      "tags": [
+        "architecture",
+        "scripts"
+      ],
+      "content": "# Module: scripts\n\nClaim: scripts holds 1 source file, imports 0 other areas (0 file-level references out), and is imported by 0 (0 references in).\nEvidence: import graph over 3 parsed source files, directory tree, and the tracked file list (git-ls-files).\n\nFiles in this module:\n- scripts/fetch-contributions.mjs (imported by 0, imports 0)\n\n## Imports from\n\n- nothing in this repo\n\n## Imported by\n\n- nothing in this repo\n\n## External packages used here\n\n- none\n\n## Node built-ins used here\n\n- node:fs (1 files)\n- node:path (1 files)\n- node:url (1 files)\n\n## Exported symbols\n\n- none found by the deterministic scan\n\n## Provenance\n\nGenerated by Daijin Layer 1. Deterministic, no model, no network.\nMethod: import graph and directory tree over the tracked source files\nReproduce: re-run daijin init on this repo at the same commit; identical input produces identical bytes.\nEvidence digest: 9a9fb5f068c33b7fbe8d30501f1f5b43182b3cabe22699a86f8f75d48f9b7c4f",
+      "body": "Claim: scripts holds 1 source file, imports 0 other areas (0 file-level references out), and is imported by 0 (0 references in).\nEvidence: import graph over 3 parsed source files, directory tree, and the tracked file list (git-ls-files).\n\nFiles in this module:\n- scripts/fetch-contributions.mjs (imported by 0, imports 0)\n\n## Imports from\n\n- nothing in this repo\n\n## Imported by\n\n- nothing in this repo\n\n## External packages used here\n\n- none\n\n## Node built-ins used here\n\n- node:fs (1 files)\n- node:path (1 files)\n- node:url (1 files)\n\n## Exported symbols\n\n- none found by the deterministic scan\n\n## Provenance\n\nGenerated by Daijin Layer 1. Deterministic, no model, no network.\nMethod: import graph and directory tree over the tracked source files\nReproduce: re-run daijin init on this repo at the same commit; identical input produces identical bytes.\nEvidence digest: 9a9fb5f068c33b7fbe8d30501f1f5b43182b3cabe22699a86f8f75d48f9b7c4f",
+      "citations": [
+        "scripts/fetch-contributions.mjs"
+      ],
+      "meta": {
+        "area": "scripts",
+        "generated": true,
+        "layer": 1,
+        "citations": [
+          "scripts/fetch-contributions.mjs"
+        ],
+        "sourceArtifact": "architecture.md",
+        "schema": 1
+      },
+      "core": "Claim: scripts holds 1 source file, imports 0 other areas (0 file-level references out), and is imported by 0 (0 references in).\nEvidence: import graph over 3 parsed source files, directory tree, and the tracked file list (git-ls-files).\n\nFiles in this module:\n- scripts/fetch-contributions.mjs (imported by 0, imports 0)"
+    },
     {
       "id": "daijin.architecture.src",
       "type": "architecture",
-      "path": ".daijin/brain/architecture/src.md",
+      "path": "architecture.md#daijin.architecture.src",
       "title": "Module: src",
       "tags": [
         "architecture",
-        "generated",
         "src"
       ],
-      "body": "Claim: src holds 3 source files, imports 0 other areas (2 file-level references out), and is imported by 0 (2 references in).\nEvidence: import graph over 3 parsed source files, directory tree, and the tracked file list (git-ls-files).\n\nFiles in this module:\n- src/DaijinMascot.jsx (imported by 1, imports 0)\n- src/main.jsx (imported by 0, imports 2)\n- src/signature-path.js (imported by 1, imports 0)\n\n## Imports from\n\n- nothing in this repo\n\n## Imported by\n\n- nothing in this repo\n\n## External packages used here\n\n- react (2 files)\n- @gsap/react (1 files)\n- border-beam (1 files)\n- gsap (1 files)\n- lucide-react (1 files)\n- react-dom (1 files)\n- react-icons (1 files)\n- thinking-orbs (1 files)\n\n## Node built-ins used here\n\n- none\n\n## Exported symbols\n\n- DaijinMascot (src/DaijinMascot.jsx)\n- signatureDot (src/signature-path.js)\n- signaturePath (src/signature-path.js)\n- signatureStrokeWidth (src/signature-path.js)\n- signatureViewBox (src/signature-path.js)\n\n## Provenance\n\nGenerated by Daijin Layer 1. Deterministic, no model, no network.\nMethod: import graph and directory tree over the tracked source files\nReproduce: re-run daijin init on this repo at the same commit; identical input produces identical bytes.\nEvidence digest: d6f7f5b7ffdf582b48bef3f6f2905cab6502a54cdd5e5ba2b6ad5f17cf826cae",
       "content": "# Module: src\n\nClaim: src holds 3 source files, imports 0 other areas (2 file-level references out), and is imported by 0 (2 references in).\nEvidence: import graph over 3 parsed source files, directory tree, and the tracked file list (git-ls-files).\n\nFiles in this module:\n- src/DaijinMascot.jsx (imported by 1, imports 0)\n- src/main.jsx (imported by 0, imports 2)\n- src/signature-path.js (imported by 1, imports 0)\n\n## Imports from\n\n- nothing in this repo\n\n## Imported by\n\n- nothing in this repo\n\n## External packages used here\n\n- react (2 files)\n- @gsap/react (1 files)\n- border-beam (1 files)\n- gsap (1 files)\n- lucide-react (1 files)\n- react-dom (1 files)\n- react-icons (1 files)\n- thinking-orbs (1 files)\n\n## Node built-ins used here\n\n- none\n\n## Exported symbols\n\n- DaijinMascot (src/DaijinMascot.jsx)\n- signatureDot (src/signature-path.js)\n- signaturePath (src/signature-path.js)\n- signatureStrokeWidth (src/signature-path.js)\n- signatureViewBox (src/signature-path.js)\n\n## Provenance\n\nGenerated by Daijin Layer 1. Deterministic, no model, no network.\nMethod: import graph and directory tree over the tracked source files\nReproduce: re-run daijin init on this repo at the same commit; identical input produces identical bytes.\nEvidence digest: d6f7f5b7ffdf582b48bef3f6f2905cab6502a54cdd5e5ba2b6ad5f17cf826cae",
-      "contentHash": "1c99af7acc014d178ff1fbc51e40d627adf457bad042eec749a8074419dc164f",
-      "core": "Claim: src holds 3 source files, imports 0 other areas (2 file-level references out), and is imported by 0 (2 references in).\nEvidence: import graph over 3 parsed source files, directory tree, and the tracked file list (git-ls-files).\n\nFiles in this module:\n- src/DaijinMascot.jsx (imported by 1, imports 0)\n- src/main.jsx (imported by 0, imports 2)\n- src/signature-path.js (imported by 1, imports 0)",
+      "body": "Claim: src holds 3 source files, imports 0 other areas (2 file-level references out), and is imported by 0 (2 references in).\nEvidence: import graph over 3 parsed source files, directory tree, and the tracked file list (git-ls-files).\n\nFiles in this module:\n- src/DaijinMascot.jsx (imported by 1, imports 0)\n- src/main.jsx (imported by 0, imports 2)\n- src/signature-path.js (imported by 1, imports 0)\n\n## Imports from\n\n- nothing in this repo\n\n## Imported by\n\n- nothing in this repo\n\n## External packages used here\n\n- react (2 files)\n- @gsap/react (1 files)\n- border-beam (1 files)\n- gsap (1 files)\n- lucide-react (1 files)\n- react-dom (1 files)\n- react-icons (1 files)\n- thinking-orbs (1 files)\n\n## Node built-ins used here\n\n- none\n\n## Exported symbols\n\n- DaijinMascot (src/DaijinMascot.jsx)\n- signatureDot (src/signature-path.js)\n- signaturePath (src/signature-path.js)\n- signatureStrokeWidth (src/signature-path.js)\n- signatureViewBox (src/signature-path.js)\n\n## Provenance\n\nGenerated by Daijin Layer 1. Deterministic, no model, no network.\nMethod: import graph and directory tree over the tracked source files\nReproduce: re-run daijin init on this repo at the same commit; identical input produces identical bytes.\nEvidence digest: d6f7f5b7ffdf582b48bef3f6f2905cab6502a54cdd5e5ba2b6ad5f17cf826cae",
       "citations": [
         "src/DaijinMascot.jsx",
         "src/main.jsx",
@@ -1558,266 +1743,142 @@
       "meta": {
         "area": "src",
         "generated": true,
-        "generator": "daijin-layer1",
         "layer": 1,
         "citations": [
           "src/DaijinMascot.jsx",
           "src/main.jsx",
           "src/signature-path.js"
         ],
-        "evidenceDigest": "d6f7f5b7ffdf582b48bef3f6f2905cab6502a54cdd5e5ba2b6ad5f17cf826cae"
-      }
+        "sourceArtifact": "architecture.md",
+        "schema": 1
+      },
+      "core": "Claim: src holds 3 source files, imports 0 other areas (2 file-level references out), and is imported by 0 (2 references in).\nEvidence: import graph over 3 parsed source files, directory tree, and the tracked file list (git-ls-files).\n\nFiles in this module:\n- src/DaijinMascot.jsx (imported by 1, imports 0)\n- src/main.jsx (imported by 0, imports 2)\n- src/signature-path.js (imported by 1, imports 0)"
     },
     {
-      "id": "daijin.architecture.root",
-      "type": "architecture",
-      "path": ".daijin/brain/architecture/root.md",
-      "title": "Module: (root)",
-      "tags": [
-        "architecture",
-        "generated",
-        "root"
-      ],
-      "body": "Claim: (root) holds 1 source file, imports 0 other areas (0 file-level references out), and is imported by 0 (0 references in).\nEvidence: import graph over 3 parsed source files, directory tree, and the tracked file list (git-ls-files).\n\nFiles in this module:\n- vite.config.js (imported by 0, imports 0)\n\n## Imports from\n\n- nothing in this repo\n\n## Imported by\n\n- nothing in this repo\n\n## External packages used here\n\n- @vitejs/plugin-react (1 files)\n- vite (1 files)\n\n## Node built-ins used here\n\n- none\n\n## Exported symbols\n\n- none found by the deterministic scan\n\n## Provenance\n\nGenerated by Daijin Layer 1. Deterministic, no model, no network.\nMethod: import graph and directory tree over the tracked source files\nReproduce: re-run daijin init on this repo at the same commit; identical input produces identical bytes.\nEvidence digest: 9a33b129e340dc8cb01c6adeefbf7e773efd474fa5952d2d1614d2d0c0b65f75",
-      "content": "# Module: (root)\n\nClaim: (root) holds 1 source file, imports 0 other areas (0 file-level references out), and is imported by 0 (0 references in).\nEvidence: import graph over 3 parsed source files, directory tree, and the tracked file list (git-ls-files).\n\nFiles in this module:\n- vite.config.js (imported by 0, imports 0)\n\n## Imports from\n\n- nothing in this repo\n\n## Imported by\n\n- nothing in this repo\n\n## External packages used here\n\n- @vitejs/plugin-react (1 files)\n- vite (1 files)\n\n## Node built-ins used here\n\n- none\n\n## Exported symbols\n\n- none found by the deterministic scan\n\n## Provenance\n\nGenerated by Daijin Layer 1. Deterministic, no model, no network.\nMethod: import graph and directory tree over the tracked source files\nReproduce: re-run daijin init on this repo at the same commit; identical input produces identical bytes.\nEvidence digest: 9a33b129e340dc8cb01c6adeefbf7e773efd474fa5952d2d1614d2d0c0b65f75",
-      "contentHash": "fb50caa144867b80e3aefaa63b2e75d389b354b40f38f6a296f175360148ff5d",
-      "core": "Claim: (root) holds 1 source file, imports 0 other areas (0 file-level references out), and is imported by 0 (0 references in).\nEvidence: import graph over 3 parsed source files, directory tree, and the tracked file list (git-ls-files).\n\nFiles in this module:\n- vite.config.js (imported by 0, imports 0)",
-      "citations": [
-        "vite.config.js"
-      ],
-      "meta": {
-        "area": "(root)",
-        "generated": true,
-        "generator": "daijin-layer1",
-        "layer": 1,
-        "citations": [
-          "vite.config.js"
-        ],
-        "evidenceDigest": "9a33b129e340dc8cb01c6adeefbf7e773efd474fa5952d2d1614d2d0c0b65f75"
-      }
-    },
-    {
-      "id": "daijin.architecture.api",
-      "type": "architecture",
-      "path": ".daijin/brain/architecture/api.md",
-      "title": "Module: api",
-      "tags": [
-        "architecture",
-        "generated",
-        "api"
-      ],
-      "body": "Claim: api holds 1 source file, imports 0 other areas (0 file-level references out), and is imported by 0 (0 references in).\nEvidence: import graph over 3 parsed source files, directory tree, and the tracked file list (git-ls-files).\n\nFiles in this module:\n- api/visits.mjs (imported by 0, imports 0)\n\n## Imports from\n\n- nothing in this repo\n\n## Imported by\n\n- nothing in this repo\n\n## External packages used here\n\n- none\n\n## Node built-ins used here\n\n- node:crypto (1 files)\n\n## Exported symbols\n\n- handler (api/visits.mjs)\n\n## Provenance\n\nGenerated by Daijin Layer 1. Deterministic, no model, no network.\nMethod: import graph and directory tree over the tracked source files\nReproduce: re-run daijin init on this repo at the same commit; identical input produces identical bytes.\nEvidence digest: 56ceefbed9166fb58eb727a030c428f91fa603a619421df10f98da308b2acea7",
-      "content": "# Module: api\n\nClaim: api holds 1 source file, imports 0 other areas (0 file-level references out), and is imported by 0 (0 references in).\nEvidence: import graph over 3 parsed source files, directory tree, and the tracked file list (git-ls-files).\n\nFiles in this module:\n- api/visits.mjs (imported by 0, imports 0)\n\n## Imports from\n\n- nothing in this repo\n\n## Imported by\n\n- nothing in this repo\n\n## External packages used here\n\n- none\n\n## Node built-ins used here\n\n- node:crypto (1 files)\n\n## Exported symbols\n\n- handler (api/visits.mjs)\n\n## Provenance\n\nGenerated by Daijin Layer 1. Deterministic, no model, no network.\nMethod: import graph and directory tree over the tracked source files\nReproduce: re-run daijin init on this repo at the same commit; identical input produces identical bytes.\nEvidence digest: 56ceefbed9166fb58eb727a030c428f91fa603a619421df10f98da308b2acea7",
-      "contentHash": "5b6e1bba3c958124580f3db449facce42f17caabc60bfeb657dbff0a7ba234e5",
-      "core": "Claim: api holds 1 source file, imports 0 other areas (0 file-level references out), and is imported by 0 (0 references in).\nEvidence: import graph over 3 parsed source files, directory tree, and the tracked file list (git-ls-files).\n\nFiles in this module:\n- api/visits.mjs (imported by 0, imports 0)",
-      "citations": [
-        "api/visits.mjs"
-      ],
-      "meta": {
-        "area": "api",
-        "generated": true,
-        "generator": "daijin-layer1",
-        "layer": 1,
-        "citations": [
-          "api/visits.mjs"
-        ],
-        "evidenceDigest": "56ceefbed9166fb58eb727a030c428f91fa603a619421df10f98da308b2acea7"
-      }
-    },
-    {
-      "id": "daijin.architecture.scripts",
-      "type": "architecture",
-      "path": ".daijin/brain/architecture/scripts.md",
-      "title": "Module: scripts",
-      "tags": [
-        "architecture",
-        "generated",
-        "scripts"
-      ],
-      "body": "Claim: scripts holds 1 source file, imports 0 other areas (0 file-level references out), and is imported by 0 (0 references in).\nEvidence: import graph over 3 parsed source files, directory tree, and the tracked file list (git-ls-files).\n\nFiles in this module:\n- scripts/fetch-contributions.mjs (imported by 0, imports 0)\n\n## Imports from\n\n- nothing in this repo\n\n## Imported by\n\n- nothing in this repo\n\n## External packages used here\n\n- none\n\n## Node built-ins used here\n\n- node:fs (1 files)\n- node:path (1 files)\n- node:url (1 files)\n\n## Exported symbols\n\n- none found by the deterministic scan\n\n## Provenance\n\nGenerated by Daijin Layer 1. Deterministic, no model, no network.\nMethod: import graph and directory tree over the tracked source files\nReproduce: re-run daijin init on this repo at the same commit; identical input produces identical bytes.\nEvidence digest: 9a9fb5f068c33b7fbe8d30501f1f5b43182b3cabe22699a86f8f75d48f9b7c4f",
-      "content": "# Module: scripts\n\nClaim: scripts holds 1 source file, imports 0 other areas (0 file-level references out), and is imported by 0 (0 references in).\nEvidence: import graph over 3 parsed source files, directory tree, and the tracked file list (git-ls-files).\n\nFiles in this module:\n- scripts/fetch-contributions.mjs (imported by 0, imports 0)\n\n## Imports from\n\n- nothing in this repo\n\n## Imported by\n\n- nothing in this repo\n\n## External packages used here\n\n- none\n\n## Node built-ins used here\n\n- node:fs (1 files)\n- node:path (1 files)\n- node:url (1 files)\n\n## Exported symbols\n\n- none found by the deterministic scan\n\n## Provenance\n\nGenerated by Daijin Layer 1. Deterministic, no model, no network.\nMethod: import graph and directory tree over the tracked source files\nReproduce: re-run daijin init on this repo at the same commit; identical input produces identical bytes.\nEvidence digest: 9a9fb5f068c33b7fbe8d30501f1f5b43182b3cabe22699a86f8f75d48f9b7c4f",
-      "contentHash": "59d65696fd4410bb748fd2a33e0de33bf77458cd5e589764ec7fb25deebb6df0",
-      "core": "Claim: scripts holds 1 source file, imports 0 other areas (0 file-level references out), and is imported by 0 (0 references in).\nEvidence: import graph over 3 parsed source files, directory tree, and the tracked file list (git-ls-files).\n\nFiles in this module:\n- scripts/fetch-contributions.mjs (imported by 0, imports 0)",
-      "citations": [
-        "scripts/fetch-contributions.mjs"
-      ],
-      "meta": {
-        "area": "scripts",
-        "generated": true,
-        "generator": "daijin-layer1",
-        "layer": 1,
-        "citations": [
-          "scripts/fetch-contributions.mjs"
-        ],
-        "evidenceDigest": "9a9fb5f068c33b7fbe8d30501f1f5b43182b3cabe22699a86f8f75d48f9b7c4f"
-      }
-    },
-    {
-      "id": "daijin.architecture.dependencies",
-      "type": "architecture",
-      "path": ".daijin/brain/architecture/dependencies.md",
-      "title": "Dependencies",
-      "tags": [
-        "architecture",
-        "dependencies",
-        "generated"
-      ],
-      "body": "Claim: 10 declared dependencies, 10 of 10 imported by at least one source file, 0 declared and never imported, 0 imported and never declared.\nEvidence: package.json crossed with the import graph over 3 parsed source files.\n\nDeclared and used:\n\n- react ^19.2.8 (2 files)\n- @gsap/react ^2.1.2 (1 files)\n- @vitejs/plugin-react ^6.0.4 (1 files)\n- border-beam ^1.3.0 (1 files)\n- gsap ^3.15.0 (1 files)\n- lucide-react ^1.26.0 (1 files)\n- react-dom ^19.2.8 (1 files)\n- react-icons ^5.7.0 (1 files)\n- thinking-orbs ^0.1.1 (1 files)\n- vite ^8.1.5 (1 files)\n\n## Declared and never imported\n\n- none\n\n## Imported but not declared\n\n- none\n\n## Provenance\n\nGenerated by Daijin Layer 1. Deterministic, no model, no network.\nMethod: import graph and directory tree over the tracked source files\nReproduce: re-run daijin init on this repo at the same commit; identical input produces identical bytes.\nEvidence digest: 44d4cc1b43c90349f207f13530550a3541b6764c6ebe0426957344fcfaf8b9c4",
-      "content": "# Dependencies\n\nClaim: 10 declared dependencies, 10 of 10 imported by at least one source file, 0 declared and never imported, 0 imported and never declared.\nEvidence: package.json crossed with the import graph over 3 parsed source files.\n\nDeclared and used:\n\n- react ^19.2.8 (2 files)\n- @gsap/react ^2.1.2 (1 files)\n- @vitejs/plugin-react ^6.0.4 (1 files)\n- border-beam ^1.3.0 (1 files)\n- gsap ^3.15.0 (1 files)\n- lucide-react ^1.26.0 (1 files)\n- react-dom ^19.2.8 (1 files)\n- react-icons ^5.7.0 (1 files)\n- thinking-orbs ^0.1.1 (1 files)\n- vite ^8.1.5 (1 files)\n\n## Declared and never imported\n\n- none\n\n## Imported but not declared\n\n- none\n\n## Provenance\n\nGenerated by Daijin Layer 1. Deterministic, no model, no network.\nMethod: import graph and directory tree over the tracked source files\nReproduce: re-run daijin init on this repo at the same commit; identical input produces identical bytes.\nEvidence digest: 44d4cc1b43c90349f207f13530550a3541b6764c6ebe0426957344fcfaf8b9c4",
-      "contentHash": "86dad330b69917eb57330d5ee2030da408688804807949dd5c80b008e201b51f",
-      "core": "Claim: 10 declared dependencies, 10 of 10 imported by at least one source file, 0 declared and never imported, 0 imported and never declared.\nEvidence: package.json crossed with the import graph over 3 parsed source files.\n\nDeclared and used:\n\n- react ^19.2.8 (2 files)\n- @gsap/react ^2.1.2 (1 files)\n- @vitejs/plugin-react ^6.0.4 (1 files)\n- border-beam ^1.3.0 (1 files)\n- gsap ^3.15.0 (1 files)\n- lucide-react ^1.26.0 (1 files)\n- react-dom ^19.2.8 (1 files)\n- react-icons ^5.7.0 (1 files)\n- thinking-orbs ^0.1.1 (1 files)\n- vite ^8.1.5 (1 files)",
-      "citations": [
-        "package.json"
-      ],
-      "meta": {
-        "area": "dependencies",
-        "generated": true,
-        "generator": "daijin-layer1",
-        "layer": 1,
-        "citations": [
-          "package.json"
-        ],
-        "evidenceDigest": "44d4cc1b43c90349f207f13530550a3541b6764c6ebe0426957344fcfaf8b9c4"
-      }
-    },
-    {
-      "id": "daijin.convention.indentation",
+      "id": "daijin.convention.filenaming",
       "type": "convention",
-      "path": ".daijin/brain/convention/indentation.md",
-      "title": "Convention: Indentation",
+      "path": "conventions.md#daijin.convention.filenaming",
+      "title": "Convention: File naming",
       "tags": [
         "convention",
-        "generated",
-        "indentation"
+        "conventions"
       ],
-      "body": "Rule: source files indent with spaces, width 1.\nMeasured: 5 of 5 files, mechanically, over the tracked file list.\n\n## Counts\n\n- spaces: 5\n- none: 1\n- tabs: 0\n\n## Exceptions\n\n- none found\n\n## How this was measured\n\ncounted per file over indented lines; a file is classified by whichever of tabs or spaces leads it.\n\n## Provenance\n\nGenerated by Daijin Layer 1. Deterministic, no model, no network.\nMethod: statistical count over the tracked source files\nReproduce: re-run daijin init on this repo at the same commit; identical input produces identical bytes.\nEvidence digest: dda321b7db31c6fc069e206f26ef9075ac5aa67712cdbebbd6037354ee1ed9a2",
-      "content": "# Convention: Indentation\n\nRule: source files indent with spaces, width 1.\nMeasured: 5 of 5 files, mechanically, over the tracked file list.\n\n## Counts\n\n- spaces: 5\n- none: 1\n- tabs: 0\n\n## Exceptions\n\n- none found\n\n## How this was measured\n\ncounted per file over indented lines; a file is classified by whichever of tabs or spaces leads it.\n\n## Provenance\n\nGenerated by Daijin Layer 1. Deterministic, no model, no network.\nMethod: statistical count over the tracked source files\nReproduce: re-run daijin init on this repo at the same commit; identical input produces identical bytes.\nEvidence digest: dda321b7db31c6fc069e206f26ef9075ac5aa67712cdbebbd6037354ee1ed9a2",
-      "contentHash": "eb0e0ee499223f111a31ea56d995126985f424594ca9893da5cce5fdaa8438f6",
-      "core": "Rule: source files indent with spaces, width 1.\nMeasured: 5 of 5 files, mechanically, over the tracked file list.",
+      "content": "# Convention: File naming\n\nRule: source file names are kebab-case.\nMeasured: 2 of 6 files, mechanically, over the tracked file list.\n\n## Counts\n\n- kebab-case: 2\n- lowercase: 2\n- PascalCase: 1\n- other: 1\n\n## Exceptions\n\n- none found\n\n## How this was measured\n\nclassified per file name against kebab-case, snake_case, camelCase, PascalCase and lowercase.\n\n## Provenance\n\nGenerated by Daijin Layer 1. Deterministic, no model, no network.\nMethod: statistical count over the tracked source files\nReproduce: re-run daijin init on this repo at the same commit; identical input produces identical bytes.\nEvidence digest: 0b2f46129590e39fa057b82c41f9c920b30638d8e02d1f07aafe6b678c2b0617",
+      "body": "Rule: source file names are kebab-case.\nMeasured: 2 of 6 files, mechanically, over the tracked file list.\n\n## Counts\n\n- kebab-case: 2\n- lowercase: 2\n- PascalCase: 1\n- other: 1\n\n## Exceptions\n\n- none found\n\n## How this was measured\n\nclassified per file name against kebab-case, snake_case, camelCase, PascalCase and lowercase.\n\n## Provenance\n\nGenerated by Daijin Layer 1. Deterministic, no model, no network.\nMethod: statistical count over the tracked source files\nReproduce: re-run daijin init on this repo at the same commit; identical input produces identical bytes.\nEvidence digest: 0b2f46129590e39fa057b82c41f9c920b30638d8e02d1f07aafe6b678c2b0617",
       "citations": [],
       "meta": {
         "area": "conventions",
         "generated": true,
-        "generator": "daijin-layer1",
         "layer": 1,
         "citations": [],
-        "evidenceDigest": "dda321b7db31c6fc069e206f26ef9075ac5aa67712cdbebbd6037354ee1ed9a2"
-      }
+        "sourceArtifact": "conventions.md",
+        "schema": 1
+      },
+      "core": "Rule: source file names are kebab-case.\nMeasured: 2 of 6 files, mechanically, over the tracked file list."
+    },
+    {
+      "id": "daijin.convention.indentation",
+      "type": "convention",
+      "path": "conventions.md#daijin.convention.indentation",
+      "title": "Convention: Indentation",
+      "tags": [
+        "convention",
+        "conventions"
+      ],
+      "content": "# Convention: Indentation\n\nRule: source files indent with spaces, width 1.\nMeasured: 5 of 5 files, mechanically, over the tracked file list.\n\n## Counts\n\n- spaces: 5\n- none: 1\n- tabs: 0\n\n## Exceptions\n\n- none found\n\n## How this was measured\n\ncounted per file over indented lines; a file is classified by whichever of tabs or spaces leads it.\n\n## Provenance\n\nGenerated by Daijin Layer 1. Deterministic, no model, no network.\nMethod: statistical count over the tracked source files\nReproduce: re-run daijin init on this repo at the same commit; identical input produces identical bytes.\nEvidence digest: dda321b7db31c6fc069e206f26ef9075ac5aa67712cdbebbd6037354ee1ed9a2",
+      "body": "Rule: source files indent with spaces, width 1.\nMeasured: 5 of 5 files, mechanically, over the tracked file list.\n\n## Counts\n\n- spaces: 5\n- none: 1\n- tabs: 0\n\n## Exceptions\n\n- none found\n\n## How this was measured\n\ncounted per file over indented lines; a file is classified by whichever of tabs or spaces leads it.\n\n## Provenance\n\nGenerated by Daijin Layer 1. Deterministic, no model, no network.\nMethod: statistical count over the tracked source files\nReproduce: re-run daijin init on this repo at the same commit; identical input produces identical bytes.\nEvidence digest: dda321b7db31c6fc069e206f26ef9075ac5aa67712cdbebbd6037354ee1ed9a2",
+      "citations": [],
+      "meta": {
+        "area": "conventions",
+        "generated": true,
+        "layer": 1,
+        "citations": [],
+        "sourceArtifact": "conventions.md",
+        "schema": 1
+      },
+      "core": "Rule: source files indent with spaces, width 1.\nMeasured: 5 of 5 files, mechanically, over the tracked file list."
+    },
+    {
+      "id": "daijin.convention.modulesystem",
+      "type": "convention",
+      "path": "conventions.md#daijin.convention.modulesystem",
+      "title": "Convention: Module system",
+      "tags": [
+        "convention",
+        "conventions"
+      ],
+      "content": "# Convention: Module system\n\nRule: modules are ES modules (import and export).\nMeasured: 6 of 6 files, mechanically, over the tracked file list.\n\n## Counts\n\n- esm: 6\n- cjs: 0\n- mixed: 0\n- neither: 0\n\n## Exceptions\n\n- none found\n\n## How this was measured\n\nclassified per file by which module syntax appears; files using both are counted as mixed.\n\n## Provenance\n\nGenerated by Daijin Layer 1. Deterministic, no model, no network.\nMethod: statistical count over the tracked source files\nReproduce: re-run daijin init on this repo at the same commit; identical input produces identical bytes.\nEvidence digest: 0f3a14e62fbad75b672f82be09eee5b8b07a76c83ab292f5626d67a2f60defe4",
+      "body": "Rule: modules are ES modules (import and export).\nMeasured: 6 of 6 files, mechanically, over the tracked file list.\n\n## Counts\n\n- esm: 6\n- cjs: 0\n- mixed: 0\n- neither: 0\n\n## Exceptions\n\n- none found\n\n## How this was measured\n\nclassified per file by which module syntax appears; files using both are counted as mixed.\n\n## Provenance\n\nGenerated by Daijin Layer 1. Deterministic, no model, no network.\nMethod: statistical count over the tracked source files\nReproduce: re-run daijin init on this repo at the same commit; identical input produces identical bytes.\nEvidence digest: 0f3a14e62fbad75b672f82be09eee5b8b07a76c83ab292f5626d67a2f60defe4",
+      "citations": [],
+      "meta": {
+        "area": "conventions",
+        "generated": true,
+        "layer": 1,
+        "citations": [],
+        "sourceArtifact": "conventions.md",
+        "schema": 1
+      },
+      "core": "Rule: modules are ES modules (import and export).\nMeasured: 6 of 6 files, mechanically, over the tracked file list."
     },
     {
       "id": "daijin.convention.quotes",
       "type": "convention",
-      "path": ".daijin/brain/convention/quotes.md",
+      "path": "conventions.md#daijin.convention.quotes",
       "title": "Convention: String quotes",
       "tags": [
         "convention",
-        "generated",
-        "quotes"
+        "conventions"
       ],
-      "body": "Rule: JavaScript and TypeScript files prefer single quotes.\nMeasured: 5 of 6 files, mechanically, over the tracked file list.\n\n## Counts\n\n- single: 5\n- double: 1\n\n## Exceptions\n\n- src/signature-path.js\n\n## How this was measured\n\ncounted per file by comparing single-quoted and double-quoted string literals outside comments.\n\n## Provenance\n\nGenerated by Daijin Layer 1. Deterministic, no model, no network.\nMethod: statistical count over the tracked source files\nReproduce: re-run daijin init on this repo at the same commit; identical input produces identical bytes.\nEvidence digest: 295ac536c5758fa724fe835ddab6c12faaaa94e8831058260cecf1761e33e7a5",
       "content": "# Convention: String quotes\n\nRule: JavaScript and TypeScript files prefer single quotes.\nMeasured: 5 of 6 files, mechanically, over the tracked file list.\n\n## Counts\n\n- single: 5\n- double: 1\n\n## Exceptions\n\n- src/signature-path.js\n\n## How this was measured\n\ncounted per file by comparing single-quoted and double-quoted string literals outside comments.\n\n## Provenance\n\nGenerated by Daijin Layer 1. Deterministic, no model, no network.\nMethod: statistical count over the tracked source files\nReproduce: re-run daijin init on this repo at the same commit; identical input produces identical bytes.\nEvidence digest: 295ac536c5758fa724fe835ddab6c12faaaa94e8831058260cecf1761e33e7a5",
-      "contentHash": "9b77bfad65c05c9f6d71ba3cdb2e4f939e523c62d7e935ecf799bed2dc82c246",
-      "core": "Rule: JavaScript and TypeScript files prefer single quotes.\nMeasured: 5 of 6 files, mechanically, over the tracked file list.",
+      "body": "Rule: JavaScript and TypeScript files prefer single quotes.\nMeasured: 5 of 6 files, mechanically, over the tracked file list.\n\n## Counts\n\n- single: 5\n- double: 1\n\n## Exceptions\n\n- src/signature-path.js\n\n## How this was measured\n\ncounted per file by comparing single-quoted and double-quoted string literals outside comments.\n\n## Provenance\n\nGenerated by Daijin Layer 1. Deterministic, no model, no network.\nMethod: statistical count over the tracked source files\nReproduce: re-run daijin init on this repo at the same commit; identical input produces identical bytes.\nEvidence digest: 295ac536c5758fa724fe835ddab6c12faaaa94e8831058260cecf1761e33e7a5",
       "citations": [
         "src/signature-path.js"
       ],
       "meta": {
         "area": "conventions",
         "generated": true,
-        "generator": "daijin-layer1",
         "layer": 1,
         "citations": [
           "src/signature-path.js"
         ],
-        "evidenceDigest": "295ac536c5758fa724fe835ddab6c12faaaa94e8831058260cecf1761e33e7a5"
-      }
+        "sourceArtifact": "conventions.md",
+        "schema": 1
+      },
+      "core": "Rule: JavaScript and TypeScript files prefer single quotes.\nMeasured: 5 of 6 files, mechanically, over the tracked file list."
     },
     {
       "id": "daijin.convention.semicolons",
       "type": "convention",
-      "path": ".daijin/brain/convention/semicolons.md",
+      "path": "conventions.md#daijin.convention.semicolons",
       "title": "Convention: Statement terminators",
       "tags": [
         "convention",
-        "generated",
-        "semicolons"
+        "conventions"
       ],
-      "body": "Rule: statements are written with terminating semicolons.\nMeasured: 5 of 5 files, mechanically, over the tracked file list.\n\n## Counts\n\n- with: 5\n- without: 0\n\n## Exceptions\n\n- none found\n\n## How this was measured\n\ncounted per file over statement-shaped lines; files with fewer than five such lines are not counted.\n\n## Provenance\n\nGenerated by Daijin Layer 1. Deterministic, no model, no network.\nMethod: statistical count over the tracked source files\nReproduce: re-run daijin init on this repo at the same commit; identical input produces identical bytes.\nEvidence digest: 91bc7f999d3d0fb6a4d7346cd16130f2cf199cd932e19cf005ad37a94b5fa59a",
       "content": "# Convention: Statement terminators\n\nRule: statements are written with terminating semicolons.\nMeasured: 5 of 5 files, mechanically, over the tracked file list.\n\n## Counts\n\n- with: 5\n- without: 0\n\n## Exceptions\n\n- none found\n\n## How this was measured\n\ncounted per file over statement-shaped lines; files with fewer than five such lines are not counted.\n\n## Provenance\n\nGenerated by Daijin Layer 1. Deterministic, no model, no network.\nMethod: statistical count over the tracked source files\nReproduce: re-run daijin init on this repo at the same commit; identical input produces identical bytes.\nEvidence digest: 91bc7f999d3d0fb6a4d7346cd16130f2cf199cd932e19cf005ad37a94b5fa59a",
-      "contentHash": "8d3869aa577f1f1b1fdbced591e377e9a486ec924d8579d8dfaf0a08b11c3f11",
-      "core": "Rule: statements are written with terminating semicolons.\nMeasured: 5 of 5 files, mechanically, over the tracked file list.",
+      "body": "Rule: statements are written with terminating semicolons.\nMeasured: 5 of 5 files, mechanically, over the tracked file list.\n\n## Counts\n\n- with: 5\n- without: 0\n\n## Exceptions\n\n- none found\n\n## How this was measured\n\ncounted per file over statement-shaped lines; files with fewer than five such lines are not counted.\n\n## Provenance\n\nGenerated by Daijin Layer 1. Deterministic, no model, no network.\nMethod: statistical count over the tracked source files\nReproduce: re-run daijin init on this repo at the same commit; identical input produces identical bytes.\nEvidence digest: 91bc7f999d3d0fb6a4d7346cd16130f2cf199cd932e19cf005ad37a94b5fa59a",
       "citations": [],
       "meta": {
         "area": "conventions",
         "generated": true,
-        "generator": "daijin-layer1",
         "layer": 1,
         "citations": [],
-        "evidenceDigest": "91bc7f999d3d0fb6a4d7346cd16130f2cf199cd932e19cf005ad37a94b5fa59a"
-      }
-    },
-    {
-      "id": "daijin.convention.modulesystem",
-      "type": "convention",
-      "path": ".daijin/brain/convention/modulesystem.md",
-      "title": "Convention: Module system",
-      "tags": [
-        "convention",
-        "generated",
-        "modulesystem"
-      ],
-      "body": "Rule: modules are ES modules (import and export).\nMeasured: 6 of 6 files, mechanically, over the tracked file list.\n\n## Counts\n\n- esm: 6\n- cjs: 0\n- mixed: 0\n- neither: 0\n\n## Exceptions\n\n- none found\n\n## How this was measured\n\nclassified per file by which module syntax appears; files using both are counted as mixed.\n\n## Provenance\n\nGenerated by Daijin Layer 1. Deterministic, no model, no network.\nMethod: statistical count over the tracked source files\nReproduce: re-run daijin init on this repo at the same commit; identical input produces identical bytes.\nEvidence digest: 0f3a14e62fbad75b672f82be09eee5b8b07a76c83ab292f5626d67a2f60defe4",
-      "content": "# Convention: Module system\n\nRule: modules are ES modules (import and export).\nMeasured: 6 of 6 files, mechanically, over the tracked file list.\n\n## Counts\n\n- esm: 6\n- cjs: 0\n- mixed: 0\n- neither: 0\n\n## Exceptions\n\n- none found\n\n## How this was measured\n\nclassified per file by which module syntax appears; files using both are counted as mixed.\n\n## Provenance\n\nGenerated by Daijin Layer 1. Deterministic, no model, no network.\nMethod: statistical count over the tracked source files\nReproduce: re-run daijin init on this repo at the same commit; identical input produces identical bytes.\nEvidence digest: 0f3a14e62fbad75b672f82be09eee5b8b07a76c83ab292f5626d67a2f60defe4",
-      "contentHash": "9e1c7f3e41e7109047ec34c0be099244bbc9625b57ce82076f17473ff2aec25f",
-      "core": "Rule: modules are ES modules (import and export).\nMeasured: 6 of 6 files, mechanically, over the tracked file list.",
-      "citations": [],
-      "meta": {
-        "area": "conventions",
-        "generated": true,
-        "generator": "daijin-layer1",
-        "layer": 1,
-        "citations": [],
-        "evidenceDigest": "0f3a14e62fbad75b672f82be09eee5b8b07a76c83ab292f5626d67a2f60defe4"
-      }
-    },
-    {
-      "id": "daijin.convention.filenaming",
-      "type": "convention",
-      "path": ".daijin/brain/convention/filenaming.md",
-      "title": "Convention: File naming",
-      "tags": [
-        "convention",
-        "generated",
-        "filenaming"
-      ],
-      "body": "Rule: source file names are kebab-case.\nMeasured: 2 of 6 files, mechanically, over the tracked file list.\n\n## Counts\n\n- kebab-case: 2\n- lowercase: 2\n- PascalCase: 1\n- other: 1\n\n## Exceptions\n\n- none found\n\n## How this was measured\n\nclassified per file name against kebab-case, snake_case, camelCase, PascalCase and lowercase.\n\n## Provenance\n\nGenerated by Daijin Layer 1. Deterministic, no model, no network.\nMethod: statistical count over the tracked source files\nReproduce: re-run daijin init on this repo at the same commit; identical input produces identical bytes.\nEvidence digest: 0b2f46129590e39fa057b82c41f9c920b30638d8e02d1f07aafe6b678c2b0617",
-      "content": "# Convention: File naming\n\nRule: source file names are kebab-case.\nMeasured: 2 of 6 files, mechanically, over the tracked file list.\n\n## Counts\n\n- kebab-case: 2\n- lowercase: 2\n- PascalCase: 1\n- other: 1\n\n## Exceptions\n\n- none found\n\n## How this was measured\n\nclassified per file name against kebab-case, snake_case, camelCase, PascalCase and lowercase.\n\n## Provenance\n\nGenerated by Daijin Layer 1. Deterministic, no model, no network.\nMethod: statistical count over the tracked source files\nReproduce: re-run daijin init on this repo at the same commit; identical input produces identical bytes.\nEvidence digest: 0b2f46129590e39fa057b82c41f9c920b30638d8e02d1f07aafe6b678c2b0617",
-      "contentHash": "8427a362c0528a077d355286c3c78761b6e1b4c8cf3ce2f3a36f19afbc2bfdde",
-      "core": "Rule: source file names are kebab-case.\nMeasured: 2 of 6 files, mechanically, over the tracked file list.",
-      "citations": [],
-      "meta": {
-        "area": "conventions",
-        "generated": true,
-        "generator": "daijin-layer1",
-        "layer": 1,
-        "citations": [],
-        "evidenceDigest": "0b2f46129590e39fa057b82c41f9c920b30638d8e02d1f07aafe6b678c2b0617"
-      }
+        "sourceArtifact": "conventions.md",
+        "schema": 1
+      },
+      "core": "Rule: statements are written with terminating semicolons.\nMeasured: 5 of 5 files, mechanically, over the tracked file list."
     },
     {
       "id": "daijin.workflow.history",
       "type": "workflow",
-      "path": ".daijin/brain/workflow/history.md",
+      "path": "workflow.md#daijin.workflow.history",
       "title": "How this repository changes",
       "tags": [
         "workflow",
-        "history",
-        "generated"
+        "history"
       ],
-      "body": "Pattern: 67 commits walked from 4 authors, 2026-07-04T02:59:43+09:00 to 2026-08-14T17:06:00+09:00; the most changed file is src/main.jsx at 34 commits.\nMeasured: git log --numstat, 67 of 67 commits (cap 2000, not reached).\n\n## Most changed files\n\n- src/main.jsx (34 commits, 3 authors, +3989/-926)\n- scripts/fetch-contributions.mjs (2 commits, 1 authors, +160/-2)\n- src/signature-path.js (2 commits, 1 authors, +10/-1)\n- vite.config.js (2 commits, 1 authors, +41/-1)\n- api/visits.mjs (1 commits, 1 authors, +94/-0)\n- src/DaijinMascot.jsx (1 commits, 1 authors, +157/-0)\n\n## Files that change together\n\n- no pair changed together often enough to report\n\n## Authors\n\n- github-actions[bot] (27 commits, 0 files)\n- mohamedfuad16 (21 commits, 3 files)\n- MohamedFuad16 (18 commits, 4 files)\n- Mohamed Fuad (1 commits, 1 files)\n\n## Repair activity\n\n9 commits are described as fixes and 0 as reverts in the window above. They are recorded as evidence and deliberately NOT written up as lessons here: a lesson must be validated against the real commit before it enters the brain, and Layer 1 does no narration.\n\n## Provenance\n\nGenerated by Daijin Layer 1. Deterministic, no model, no network.\nMethod: git log --numstat walk, capped and reported\nReproduce: re-run daijin init on this repo at the same commit; identical input produces identical bytes.\nEvidence digest: 9356ed43efcab0edec243e6a71bf64778ccc2fc2bbfa2fe4014e3d984436d309",
       "content": "# How this repository changes\n\nPattern: 67 commits walked from 4 authors, 2026-07-04T02:59:43+09:00 to 2026-08-14T17:06:00+09:00; the most changed file is src/main.jsx at 34 commits.\nMeasured: git log --numstat, 67 of 67 commits (cap 2000, not reached).\n\n## Most changed files\n\n- src/main.jsx (34 commits, 3 authors, +3989/-926)\n- scripts/fetch-contributions.mjs (2 commits, 1 authors, +160/-2)\n- src/signature-path.js (2 commits, 1 authors, +10/-1)\n- vite.config.js (2 commits, 1 authors, +41/-1)\n- api/visits.mjs (1 commits, 1 authors, +94/-0)\n- src/DaijinMascot.jsx (1 commits, 1 authors, +157/-0)\n\n## Files that change together\n\n- no pair changed together often enough to report\n\n## Authors\n\n- github-actions[bot] (27 commits, 0 files)\n- mohamedfuad16 (21 commits, 3 files)\n- MohamedFuad16 (18 commits, 4 files)\n- Mohamed Fuad (1 commits, 1 files)\n\n## Repair activity\n\n9 commits are described as fixes and 0 as reverts in the window above. They are recorded as evidence and deliberately NOT written up as lessons here: a lesson must be validated against the real commit before it enters the brain, and Layer 1 does no narration.\n\n## Provenance\n\nGenerated by Daijin Layer 1. Deterministic, no model, no network.\nMethod: git log --numstat walk, capped and reported\nReproduce: re-run daijin init on this repo at the same commit; identical input produces identical bytes.\nEvidence digest: 9356ed43efcab0edec243e6a71bf64778ccc2fc2bbfa2fe4014e3d984436d309",
-      "contentHash": "79dba2e6474d842a56fbafe770401e997ca671768de18abe36770eca8f48be26",
-      "core": "Pattern: 67 commits walked from 4 authors, 2026-07-04T02:59:43+09:00 to 2026-08-14T17:06:00+09:00; the most changed file is src/main.jsx at 34 commits.\nMeasured: git log --numstat, 67 of 67 commits (cap 2000, not reached).",
+      "body": "Pattern: 67 commits walked from 4 authors, 2026-07-04T02:59:43+09:00 to 2026-08-14T17:06:00+09:00; the most changed file is src/main.jsx at 34 commits.\nMeasured: git log --numstat, 67 of 67 commits (cap 2000, not reached).\n\n## Most changed files\n\n- src/main.jsx (34 commits, 3 authors, +3989/-926)\n- scripts/fetch-contributions.mjs (2 commits, 1 authors, +160/-2)\n- src/signature-path.js (2 commits, 1 authors, +10/-1)\n- vite.config.js (2 commits, 1 authors, +41/-1)\n- api/visits.mjs (1 commits, 1 authors, +94/-0)\n- src/DaijinMascot.jsx (1 commits, 1 authors, +157/-0)\n\n## Files that change together\n\n- no pair changed together often enough to report\n\n## Authors\n\n- github-actions[bot] (27 commits, 0 files)\n- mohamedfuad16 (21 commits, 3 files)\n- MohamedFuad16 (18 commits, 4 files)\n- Mohamed Fuad (1 commits, 1 files)\n\n## Repair activity\n\n9 commits are described as fixes and 0 as reverts in the window above. They are recorded as evidence and deliberately NOT written up as lessons here: a lesson must be validated against the real commit before it enters the brain, and Layer 1 does no narration.\n\n## Provenance\n\nGenerated by Daijin Layer 1. Deterministic, no model, no network.\nMethod: git log --numstat walk, capped and reported\nReproduce: re-run daijin init on this repo at the same commit; identical input produces identical bytes.\nEvidence digest: 9356ed43efcab0edec243e6a71bf64778ccc2fc2bbfa2fe4014e3d984436d309",
       "citations": [
         "src/main.jsx",
         "scripts/fetch-contributions.mjs",
@@ -1829,7 +1890,6 @@
       "meta": {
         "area": "history",
         "generated": true,
-        "generator": "daijin-layer1",
         "layer": 1,
         "citations": [
           "src/main.jsx",
@@ -1839,8 +1899,10 @@
           "api/visits.mjs",
           "src/DaijinMascot.jsx"
         ],
-        "evidenceDigest": "9356ed43efcab0edec243e6a71bf64778ccc2fc2bbfa2fe4014e3d984436d309"
-      }
+        "sourceArtifact": "workflow.md",
+        "schema": 1
+      },
+      "core": "Pattern: 67 commits walked from 4 authors, 2026-07-04T02:59:43+09:00 to 2026-08-14T17:06:00+09:00; the most changed file is src/main.jsx at 34 commits.\nMeasured: git log --numstat, 67 of 67 commits (cap 2000, not reached)."
     }
   ],
   "evidence": {

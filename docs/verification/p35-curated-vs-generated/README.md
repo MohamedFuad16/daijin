@@ -96,7 +96,56 @@ CURATED brain is measurable only through the narrow non-leaky, non-duplicated se
 and the plan already anticipated the rest of the answer: paraphrase queries belong to the
 auditor, behind the spend boundary.
 
+## RE-MEASURED 2026-08-16, after the adopted-unit shape normalisation
+
+The adopt path was changed so adopted and generated units share one shape (one h1 title plus
+body), which moved heading levels inside adopted records. Re-derived rather than assumed,
+because re-deriving is free and this project does not ship plausible: **every headline number
+above is unchanged.** Generated 25 of 25 with a control of 18 of 25 and a 7-case range;
+adopted 24 of 25 with a control of 4 of 25 and a 20-case range; MRR 0.9600 and 0.8590. Both
+arms were re-run from the same scripts at the same pin with the same embedder.
+
+The re-run did surface one real defect the check caught rather than the numbers moving: the
+brain round trip refused `adopted.decision.decisions.index`, because that record carries an
+`# Decisions` h1 inside its body and a fixed one-level heading demotion turned it into `##`,
+which is the record separator. The reader then read it as a NEW record and truncated the
+index. The shift is now computed per record and recorded in the marker so the reader undoes
+exactly what the writer did. `adopted-report.json` here is the post-fix run.
+
+## The curated arm's OWN budget sweep, per corpus rather than per repo
+
+D-0003's sweep is per CORPUS. P3's chosen 3000 came from an 11-unit brain where everything
+fit; the adopted brain is a different corpus on the same repo. Measured
+(`adopted-budget-sweep.json`, `run-curated-sweep.mjs`), with the discriminating range beside
+each point per D-0030:
+
+| budget | case rate | MRR | control | range | mean spent | content survival |
+| --- | --- | --- | --- | --- | --- | --- |
+| 3000 | 24 of 25 | 0.8590 | 4 of 25 | 20 cases | 2681 of 3000 | **fail** (166 of 184; 5 events, 3 units) |
+| 4000 | 24 of 25 | 0.8590 | 4 of 25 | 20 cases | 3331 of 4000 | **fail** (184 of 197; 1 event, 1 unit) |
+| 6000 | 24 of 25 | 0.8590 | 4 of 25 | 20 cases | 3884 of 6000 | pass (188 of 200) |
+| 8000 | 24 of 25 | 0.8590 | 4 of 25 | 20 cases | 4074 of 8000 | pass (188 of 200) |
+
+The case rate, the MRR and the range are FLAT across the whole sweep, so the rate rule picks
+3000. Content survival is not flat: it fails at 3000 and 4000 and passes at 6000. D-0003 calls
+survival the mechanical raise signal, and this is the first time it has fired to move a
+budget. The honest reading is that **6000 is the smallest budget this corpus can be served at
+without delivering units whose cores were cut**, and that the rate alone would not have told
+anyone.
+
+Same repo, two corpora, two different answers: 3000 for the 11-unit generated brain where the
+sweep is flat and survival passes, 6000 for the 257-unit curated one. That is the per-corpus
+rule earning its existence.
+
+A note on the survival figures, because an earlier version of this diagnosis was WRONG in a
+way that mattered: the failures at 3000 and 4000 are TOTAL BUDGET exhaustion, not the
+per-candidate cap. The cores that were cut are 281, 357 and 622 tokens against a 660-token
+cap they never reached, with a mean of 2681 of 3000 tokens already spent per query. The two
+causes imply opposite fixes, and a user told "these units are too big" would have split units
+that already fit and seen no change.
+
 ## Files
+
 
 | file | what it is |
 | --- | --- |
@@ -105,6 +154,8 @@ auditor, behind the spend boundary.
 | `generated-goldset.yaml` | the 25 mined cases for the generated brain |
 | `adopted-goldset.yaml` | the 25 mined cases for the curated brain |
 | `delivery.json` | units and tokens returned per query on both arms |
+| `adopted-budget-sweep.json` | the curated arm's own 3k/4k/6k/8k sweep with the range and survival beside each point |
+| `run-curated-sweep.mjs` | the script that produced it |
 | `run-generated.mjs`, `run-adopted.mjs` | the two run scripts; they differ only in `mode` |
 
 Both scripts leave the target repo untouched: artifacts to a scratch `artifactRoot`, brain

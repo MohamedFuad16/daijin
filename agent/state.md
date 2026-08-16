@@ -1,5 +1,41 @@
 # Daijin build state (authoritative)
 
+## 2026-08-16 23:15 - The precedent audits its own author: the containment evidence was a habit
+
+gym-porter turned the new install-time precedent into a checkable
+question (which of my mechanisms has a failure direction NEVER
+exercised?) and ran it against its own lane. Thirteen passed. The one
+that failed was the least expected and the most quoted: THE
+CONTAINMENT EVIDENCE ITSELF. The shared-tree before-and-after digest -
+cited all day as proof the battery touches nothing - was a command the
+OPERATOR TYPED around the invocation, never part of the script. A run
+whose operator forgot the wrapper claimed nothing while producing
+output identical to one that proved containment, and the check had
+never been seen to fail. "An evidence check that lives in someone's
+shell history is a habit, not evidence. I have been citing a habit."
+
+CORRECTION to this file's 18:05 entry, dated here: "the check lives in
+the captured output" was true only because the operator put it there;
+it was not structural. The containment FACT for that run stands
+independently (the verifier's 91-sample continuous check was its own
+instrument), but the battery's self-evidence was not what the record
+said it was. Fixed at 9af54c8: the script itself takes the comparison,
+prints it, and counts mismatch as a problem - then EXERCISED, per the
+precedent: a sabotaged restore on a throwaway engine copy reports both
+NOT RESTORED and SHARED TREE CHANGED with both digests; the real tree
+checked untouched after the probe.
+
+Why it hid, in gym-porter's words, kept because it names the next
+level up: every other mechanism was a check on THE CODE and got asked
+whether it could fail; this one was a check on ITS OWN INSTRUMENT and
+its output was treated as measurement rather than as another claim
+needing the same scrutiny. The verification of the verification is
+where everyone stops looking.
+
+Manifest 5dff20b3 UNCHANGED, stated rather than inferred from silence
+("unchanged is also a claim the verifier should be able to check").
+Noted in passing: three init-lane files are mid-work (brain-artifacts,
+floor, init-floor.test) - init-miner is moving on its queue.
 ## 2026-08-16 22:58 - The governance check catches its own author; a latent hole found
 
 THE MECHANICAL CHECK LANDED (gym-porter, 1051f43;

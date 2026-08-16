@@ -172,25 +172,94 @@ The client-side contract, for tui-builder to implement over its own base and to
 correct here if the wording is wrong:
 
 ```
-connectState: 'connecting' | 'attached' | 'spawning' | 'waiting-for-engine' | 'failed'
+connectState: 'connecting' | 'spawning' | 'attached' | 'failed'
+elapsedMs:    milliseconds since the connect attempt began
+failed:       { reason: string, engineStderr: string | null }
 ```
 
-- `connecting`   first connect attempt, no socket contacted yet
-- `attached`     connected to a running daemon
-- `spawning`     no daemon found, this client started one
-- `waiting-for-engine`  entered when the retry has been running longer than
-                 500ms, which is the point tui-builder renders a message rather
-                 than an empty home
-- `failed`       the budget expired; carries the reason, and the daemon's stderr
-                 tail when one was spawned and exited
+- `connecting`  trying to reach an existing daemon, none contacted yet
+- `spawning`    no daemon found, this client started one and is waiting for it
+- `attached`    connected
+- `failed`      the budget expired
 
-The 500ms threshold is the client's to tune; what this side owes is that the
-states are distinguishable and that `failed` carries a reason a user can act on.
+REVISED after tui-builder's review (approved 2026-08-16). The first draft had a
+`waiting-for-engine` state "entered after 500ms", and also said the threshold was
+the client's to tune. Those cannot both hold: if this side performs the
+transition then the number is ours, and a client that chose 300ms would render
+its message 200ms late with neither side wrong in its own file. So the STATE is
+gone and `elapsedMs` replaces it. Waiting is a rendering decision the client
+makes at its own threshold, and this side carries no number belonging to someone
+else's UI.
+
+`connecting` and `spawning` both stay, and the reason is not cosmetic: they are
+different sentences ("Connecting to the engine" against "Starting the engine")
+and they imply different next actions when they never resolve. One means look at
+why the daemon died; the other means look at whether someone else's daemon is
+wedged. The flat enum with `waiting-for-engine` in it destroyed exactly that
+distinction at the moment it mattered most, because a client that spawned and has
+waited 800ms would have had to be in one state and would have lost the ownership
+fact.
+
+`failed.engineStderr` is a plain newline-joined string bounded to the last 20
+lines, matching what the client captures, and it is NULLABLE with a meaning:
+
+  NULL MEANS THIS CLIENT ATTACHED RATHER THAN SPAWNED, so it never had that
+  daemon's stderr. It does NOT mean the engine said nothing.
+
+Rendering null as an empty "the engine said" block would tell a user the daemon
+was silent when it may have written a perfectly good refusal to a terminal two
+windows away. That is the discarded-stderr bug again, one level up, so the shape
+has to let the two cases be told apart; nullability does and an empty string does
+not.
+
+What this side owes: distinguishable states, an honest `elapsedMs`, and a
+`failed` a user can act on.
 
 The engine side of this is small: the socket either exists or it does not, and
 the lock refusal already names the holding pid. The work is making sure a client
 can tell "no daemon yet" from "a daemon that refused to start", because those
 call for different messages.
+
+## Client-side concurrency: no cap, and the measurement behind that
+
+tui-builder asked whether it should cap concurrent calls, noting its repo home
+issues 10 calls on load and its polish pass will make nine of them concurrent, so
+three attached TUIs refreshing at once is 27 in flight. It asked for the number
+from the side that knows the daemon's appetite rather than picking one.
+
+MEASURED, not estimated, against the real socket daemon on this machine:
+
+```
+one client,  9 sequential : 23ms   (2.6ms per call)
+one client,  9 concurrent : 13ms
+3 clients x 9 concurrent  : 37ms   (27 calls, 1.4ms per call)
+one analyze               : 41ms
+3 concurrent analyze      : 40ms   (1.0x the cost of one)
+```
+
+ANSWER: no cap. Ship the concurrency uncapped behind a constant that is trivial
+to change later. 27 cheap reads in flight cost 37ms in total, and three
+concurrent `analyze` calls cost the same wall clock as one, because they are
+filesystem bound and overlap.
+
+Two facts worth having rather than the number alone:
+
+- A burst on ONE connection is chained inside the daemon: handlers for a single
+  connection run one at a time, deliberately, so a slow handler cannot interleave
+  a half-written line into that client's stream. The burst is still faster than
+  the sequential version (13ms against 23ms) because the round trips overlap.
+  Connections do not block each other.
+- The risk is WHICH methods, not how many. Everything measured above is cheap or
+  filesystem bound. The methods that would actually contend are the ones that
+  embed (`search`, `retrievalScore`, `diagnose`), because they queue behind one
+  local Ollama, and those are worth serialising in the CLIENT if a screen ever
+  fires several at once. The long ones (`initBrain`, `gatesDiscover`) are already
+  jobs and return immediately, so they cannot pile up.
+
+BASIS: measured 2026-08-16 on this machine, cheap reads and one filesystem-bound
+method, single daemon, three clients. NOT measured: concurrent embedding calls,
+and a corpus larger than the fixtures. If a screen starts issuing concurrent
+`search`, that is the case to measure before trusting this.
 
 ## Security posture
 

@@ -195,7 +195,12 @@ P8 INTEGRATION (registered 2026-08-16 17:52, pre-registered before any part is
    measurement (repaint cadence recorded from an actual terminal, honest bounds
    stated), per tui-builder's own request that the repaint count not stand in
    for a smoothness claim; (i) both suites green at the pinned commits, zero
-   provider calls throughout, dash and spend sweeps clean. The verifier attacks
+   provider calls throughout, dash and spend sweeps clean [sharpened 2026-08-16
+   per the extractor: "green" means FIVE consecutive clean runs at the pinned
+   commit with the run count recorded, because one green run of a suite that
+   fails one in three is not evidence of green; and the clause-(c) live init
+   targets its OWN state root, never the owner's, since a real init writes
+   repos/<repoId>/ into whatever root it is given]. The verifier attacks
    the registered text; a clause that cannot be demonstrated is reported as
    such, never softened.
 

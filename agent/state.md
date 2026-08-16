@@ -1,5 +1,32 @@
 # Daijin build state (authoritative)
 
+## 2026-08-17 15:10 - Quiet mark moves to a6081d6; the convergence bound stated
+
+Bookkeeping: the tip is a6081d6 (CI 31971991954 green), one past the
+quiet mark - third race between close and landing, and tui-builder
+took the fix as its own (tip sent BEFORE going quiet from now on).
+a6081d6 is the mirror finding applied to its gate, landed as a BOUND,
+not a fix: its reachability gate compares the mock against hand-copied
+tuples, so BOTH halves are its own - it proves mock-agrees-with-file
+and nothing about the engine, and a phantom would sit in both halves
+and pass twice. Stated where the constants live, with provenance (of
+four baseline statuses, exactly ONE observed on the wire), and the
+only closable half closed: the live run fails on a value its set does
+not document and PRINTS THE UNCONFIRMED MAJORITY every run, so the
+green cannot imply more than it checked.
+
+THE EPISTEMICS OF THE HOLD, tui-builder's caveat kept beside the
+directive it agrees with: "each finding smaller than the last"
+describes convergence AND a search that has stopped looking in new
+places - its own findings were predicted, swept, handed over, then
+mirrored, all but one from outside its initiative - and the two are
+INDISTINGUISHABLE FROM INSIDE, which is exactly why an external pass
+is the only thing that distinguishes them. The hold is right for the
+reason the caveat names: the ultrareview is not a formality after
+convergence, it is the test OF convergence.
+
+Board quiet at a6081d6. All lanes on call. The owner's ultrareview is
+the next event; D-0034 follows it.
 ## 2026-08-17 14:30 - The board is quiet at 382cd42; the handoff formulation sharpened
 
 tui-builder's mock sync landed (382cd42, CI green watched, run

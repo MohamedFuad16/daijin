@@ -1,5 +1,33 @@
 # Daijin build state (authoritative)
 
+## 2026-08-16 13:14 - Polish strands 1-2 landed; finding 79 verified closed everywhere
+
+tui-builder's concurrency strand: boot screen blocking cost 635ms to
+142ms at the 60ms/call rank (4.5x), all-views total 2.5x, cap living in
+RpcClient (MAX_IN_FLIGHT 5, provisional, recorded with its remeasure
+basis for the transport doc). Its confession joins the one-rule list: the
+first cap tests asserted peak <= cap, which passes exactly when the cap
+has been removed; mutated to 500 they stayed green; now they assert the
+cap BINDS, and the lesson was propagated to the extractor for any
+server-side limit test, since the natural phrasing is the tautological
+one. Strand 2: workers and skeletons, the settings screen painting with
+its indicator at 304ms while data lands at 881ms; a real banner bug found
+and fixed (a confirmation overwritten by the refetch it triggered;
+user actions are events, not state); a static schedules-without-awaiting
+guard replacing a hang with a 0.02s readable failure. 249 tests.
+
+Finding 79 verified closed by the verifier, driven not awaited: all
+three ruled states produce the ruled value, plus its own fourth probe (a
+rubric carrying an empty axes object, the input closest to the forbidden
+value, returns null), both paths routing through one function so neither
+drifts independently, and the stale comment replaced by a dated note.
+The verifier's closing observation is the next era's default suspicion:
+the findings that mattered were almost all in INSTRUMENTS, not
+mechanisms; the mechanisms were generally right; what needed attacking
+was the machinery that was supposed to prove them right. P3.5 gained one
+pre-run requirement: both brains' controls built by ONE construction, or
+the comparison measures the permutation rather than the brains.
+
 ## 2026-08-16 13:12 - Two principles named at the close of the verdict era
 
 1. gym-porter's unification, one rule where the build kept finding three

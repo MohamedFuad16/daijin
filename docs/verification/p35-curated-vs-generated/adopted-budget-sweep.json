@@ -1,0 +1,127 @@
+{
+  "corpus": "adopted",
+  "units": 257,
+  "curve": [
+    {
+      "tokenBudget": 3000,
+      "caseRate": {
+        "exact": 0.96,
+        "cases": "24 of 25",
+        "hits": 24,
+        "total": 25
+      },
+      "mrr": 0.859047619047619,
+      "violations": 0,
+      "control": {
+        "exact": 0.16,
+        "cases": "4 of 25",
+        "hits": 4,
+        "total": 25
+      },
+      "rangeCases": 20,
+      "rangeExact": 0.7999999999999999,
+      "mrrRange": 0.7633333333333332,
+      "meanTokensConsumed": 2681,
+      "survivalChecked": 184,
+      "survival": "fail",
+      "survivalEvents": {
+        "total": 5,
+        "units": 3,
+        "oversized": 0,
+        "capBound": 0,
+        "budgetBound": 5
+      }
+    },
+    {
+      "tokenBudget": 4000,
+      "caseRate": {
+        "exact": 0.96,
+        "cases": "24 of 25",
+        "hits": 24,
+        "total": 25
+      },
+      "mrr": 0.859047619047619,
+      "violations": 0,
+      "control": {
+        "exact": 0.16,
+        "cases": "4 of 25",
+        "hits": 4,
+        "total": 25
+      },
+      "rangeCases": 20,
+      "rangeExact": 0.7999999999999999,
+      "mrrRange": 0.7633333333333332,
+      "meanTokensConsumed": 3331,
+      "survivalChecked": 197,
+      "survival": "fail",
+      "survivalEvents": {
+        "total": 1,
+        "units": 1,
+        "oversized": 0,
+        "capBound": 0,
+        "budgetBound": 1
+      }
+    },
+    {
+      "tokenBudget": 6000,
+      "caseRate": {
+        "exact": 0.96,
+        "cases": "24 of 25",
+        "hits": 24,
+        "total": 25
+      },
+      "mrr": 0.859047619047619,
+      "violations": 0,
+      "control": {
+        "exact": 0.16,
+        "cases": "4 of 25",
+        "hits": 4,
+        "total": 25
+      },
+      "rangeCases": 20,
+      "rangeExact": 0.7999999999999999,
+      "mrrRange": 0.7633333333333332,
+      "meanTokensConsumed": 3884,
+      "survivalChecked": 200,
+      "survival": "pass",
+      "survivalEvents": {
+        "total": 0,
+        "units": 0,
+        "oversized": 0,
+        "capBound": 0,
+        "budgetBound": 0
+      }
+    },
+    {
+      "tokenBudget": 8000,
+      "caseRate": {
+        "exact": 0.96,
+        "cases": "24 of 25",
+        "hits": 24,
+        "total": 25
+      },
+      "mrr": 0.859047619047619,
+      "violations": 0,
+      "control": {
+        "exact": 0.16,
+        "cases": "4 of 25",
+        "hits": 4,
+        "total": 25
+      },
+      "rangeCases": 20,
+      "rangeExact": 0.7999999999999999,
+      "mrrRange": 0.7633333333333332,
+      "meanTokensConsumed": 4074,
+      "survivalChecked": 200,
+      "survival": "pass",
+      "survivalEvents": {
+        "total": 0,
+        "units": 0,
+        "oversized": 0,
+        "capBound": 0,
+        "budgetBound": 0
+      }
+    }
+  ],
+  "chosen": 3000
+}

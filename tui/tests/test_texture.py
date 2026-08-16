@@ -1,0 +1,142 @@
+"""One texture language: pattern and colour as two independent channels.
+
+The owner asked the charts to read like the dashboard, where every fill is a
+pattern rather than a colour slab. The property that makes that worth doing is
+that a reader with no colour still tells the series apart, so these tests
+assert on the GLYPHS, which is the channel colour cannot carry.
+"""
+
+from __future__ import annotations
+
+import re
+from pathlib import Path
+
+import pytest
+
+from daijin_tui.widgets import texture as T
+from daijin_tui.widgets.dither import DitherBars, StippleLine
+
+PACKAGE = Path(__file__).resolve().parents[1] / "daijin_tui"
+
+
+# Two channels ---------------------------------------------------------------
+
+
+def test_every_texture_is_distinguishable_without_colour():
+    """The point of the exercise: pattern alone must separate the series."""
+    swatches = [t.swatch for t in T.TEXTURES.values()]
+    assert len(set(swatches)) == len(swatches), f"two series share a swatch: {swatches}"
+    caps = [t.cap for t in T.TEXTURES.values() if t is not T.NEUTRAL]
+    assert len(set(caps)) == len(caps), "two outcome series share a cap glyph"
+
+
+def test_every_texture_is_also_distinguishable_by_colour():
+    outcomes = [T.PASS, T.PARTIAL, T.FAIL, T.UNGRADED]
+    colors = [t.color for t in outcomes]
+    assert len(set(colors)) == len(colors), "the colour channel duplicates"
+
+
+def test_a_texture_keeps_its_identity_at_its_cap():
+    """A hatched bar capped with a block would lose what names it."""
+    assert "╱" in T.FAIL.ramp and T.FAIL.cap in ("╱", "╳")
+    assert T.PASS.cap == "█"
+    assert T.PARTIAL.cap.startswith("⠿") or T.PARTIAL.cap in T.PARTIAL.ramp + ("⠿",)
+
+
+def test_an_unknown_verdict_is_not_a_pass():
+    assert T.texture_for_verdict("pass") is T.PASS
+    assert T.texture_for_verdict("partial") is T.PARTIAL
+    assert T.texture_for_verdict("fail") is T.FAIL
+    for unknown in (None, "", "weird", "PASSED"):
+        assert T.texture_for_verdict(unknown) is T.UNGRADED
+
+
+# The fill --------------------------------------------------------------------
+
+
+def test_bars_are_textured_rather_than_solid_slabs():
+    rows = T.dither_columns([9], [T.PASS], height=6, width=2)
+    glyphs = {ch for row in rows for ch in row if ch != " "}
+    assert len(glyphs) > 1, f"the bar is a solid slab of {glyphs}"
+    assert glyphs <= set(T.PASS.ramp) | {T.PASS.cap}
+
+
+def test_a_bar_is_capped_and_denser_toward_the_baseline():
+    rows = [r for r in T.dither_columns([9], [T.PASS], height=6, width=1) if r.strip()]
+    assert rows[0] == T.PASS.cap, "no solid top edge"
+    ranks = [T.PASS.ramp.index(r) for r in rows[1:] if r in T.PASS.ramp]
+    assert ranks == sorted(ranks), f"density is not monotone toward the baseline: {ranks}"
+
+
+def test_two_series_never_render_the_same_glyphs():
+    a = set("".join(T.dither_columns([9], [T.PASS], height=6, width=1)).strip())
+    b = set("".join(T.dither_columns([9], [T.FAIL], height=6, width=1)).strip())
+    assert not (a & b), f"pass and fail share glyphs {a & b}"
+
+
+def test_bar_heights_track_their_values():
+    rows = T.dither_columns([10, 5], [T.NEUTRAL, T.NEUTRAL], height=10, width=1, gap=1)
+    tall = sum(1 for row in rows if row[:1].strip())
+    short = sum(1 for row in rows if len(row) > 2 and row[2:3].strip())
+    assert tall > short, f"the taller value did not draw a taller bar ({tall} vs {short})"
+
+
+def test_an_outcome_series_draws_a_fail_rather_than_nothing():
+    """Zero height reads as a missing attempt, not a failed one."""
+    without = T.stipple_area([0.0, 1.0], height=4, textures=[T.FAIL, T.PASS])
+    with_floor = T.stipple_area([0.0, 1.0], height=4, textures=[T.FAIL, T.PASS], min_column=1)
+    assert not any(T.FAIL.cap in row or "╱" in row for row in without)
+    assert any(T.FAIL.cap in row or "╱" in row for row in with_floor), (
+        "a failed attempt is invisible, which reads as a missing one"
+    )
+
+
+def test_the_legend_shows_patterns_not_colours():
+    text = T.legend([T.PASS, T.FAIL])
+    assert T.PASS.swatch in text and T.FAIL.swatch in text
+    assert "pass" in text and "fail" in text
+
+
+# One vocabulary --------------------------------------------------------------
+
+
+def test_no_chart_invents_its_own_glyphs():
+    """A second vocabulary is no vocabulary, the motion.py rule for texture."""
+    known = set()
+    for tex in T.TEXTURES.values():
+        known.update(tex.ramp)
+        known.update({tex.cap, tex.swatch})
+    offenders = []
+    for path in sorted((PACKAGE / "widgets").glob("*.py")) + sorted((PACKAGE / "screens").glob("*.py")):
+        if path.name in ("texture.py", "sparkline.py", "radar.py", "common.py", "gauge.py", "charts.py"):
+            continue
+        source = path.read_text(encoding="utf-8")
+        for literal in re.findall(r'"([░▒▓█⠂⠒⠶⠿╱╳·∙•]+)"', source):
+            if not set(literal) <= known:
+                offenders.append(f"{path.name}: {literal!r}")
+    assert not offenders, offenders
+
+
+# Through the renderer --------------------------------------------------------
+
+
+def test_the_widget_renders_the_texture_the_data_asks_for():
+    """Asserted through render(), not through the table it reads."""
+    bars = DitherBars(height=6, bar_width=1)
+    bars.set_data(["1", "2"], [10, 10], [T.PASS, T.FAIL])
+    rendered = str(bars.render())
+    assert T.PASS.cap in rendered and T.FAIL.cap in rendered
+    assert "pass" in rendered and "fail" in rendered, "no legend"
+
+
+def test_the_widget_says_no_data_rather_than_drawing_an_empty_frame():
+    assert "no data" in str(DitherBars().render())
+    assert "no data" in str(StippleLine().render())
+
+
+def test_the_stipple_widget_carries_per_point_textures_through_render():
+    line = StippleLine(height=4)
+    line.set_data([0.0, 1.0], textures=[T.FAIL, T.PASS], min_column=1)
+    rendered = str(line.render())
+    assert T.PASS.cap in rendered
+    assert "╱" in rendered or T.FAIL.cap in rendered

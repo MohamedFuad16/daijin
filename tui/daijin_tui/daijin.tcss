@@ -432,3 +432,8 @@ App.-motion-off DataTable > .datatable--cursor {
 #init-progress {
     margin: 0 0 1 0;
 }
+
+.dither-bars, .stipple-line {
+    height: auto;
+    padding: 0 1;
+}

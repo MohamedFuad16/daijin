@@ -18,10 +18,11 @@ from daijin_tui.widgets import (
     EventLog,
     PhaseChecklist,
     PlotextBar,
-    PlotextLine,
+    DitherBars,
     RadarChart,
     RepoCard,
     Sparkline,
+    StippleLine,
 )
 
 MODES = ["home", "init", "brain", "gates", "gym", "exams", "board", "settings"]
@@ -632,7 +633,7 @@ async def test_exam_token_bars_and_history_come_from_exam_detail():
     async with running_app() as (app, pilot):
         await goto(pilot, "6")
         assert app.screen.exam_id == "exam-0058"
-        assert len(app.screen.query_one("#exam-tokens", PlotextBar).values) == 9
+        assert len(app.screen.query_one("#exam-tokens", DitherBars).values) == 9
 
 
 # 7. Board ------------------------------------------------------------------
@@ -994,12 +995,10 @@ async def test_an_ungraded_attempt_is_not_plotted_as_a_failure():
         await goto(pilot, "6")
         await app.screen.show_exam("exam-0074")
         await settle(pilot)
-        history = app.screen.query_one("#exam-history", PlotextLine)
-        assert history.series.get("verdict", []) == [], (
-            "ungraded attempts were plotted, which reads as failures"
-        )
+        history = app.screen.query_one("#exam-history", StippleLine)
+        assert history.values == [], "ungraded attempts were plotted, which reads as failures"
         # Tokens are real for every attempt, graded or not.
-        tokens = app.screen.query_one("#exam-tokens", PlotextBar)
+        tokens = app.screen.query_one("#exam-tokens", DitherBars)
         assert len(tokens.values) == 3
 
 

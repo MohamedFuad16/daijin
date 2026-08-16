@@ -16,7 +16,8 @@ from textual.widgets import Button, DataTable, Select, Static
 
 from ..concurrency import gather_all
 from ..rpc import RpcError
-from ..widgets import Banner, PlotextBar, PlotextLine, RadarChart, SectionTitle
+from ..widgets import Banner, DitherBars, RadarChart, SectionTitle, StippleLine
+from ..widgets.texture import texture_for_verdict
 from .base import DaijinScreen
 from .dialogs import TextPromptScreen
 
@@ -111,10 +112,10 @@ class ExamsScreen(DaijinScreen):
         yield RadarChart([], id="exam-radar")
         yield SectionTitle("Attempts")
         yield DataTable(id="attempt-table", cursor_type="row")
-        yield SectionTitle("Pass and fail history")
-        yield PlotextLine(title="verdict by attempt, 1 pass and 0 fail", height=10, id="exam-history")
-        yield SectionTitle("Tokens per attempt")
-        yield PlotextBar(title="tokens by attempt", height=12, id="exam-tokens")
+        yield SectionTitle("Verdict history", "texture carries the outcome, colour only repeats it")
+        yield StippleLine(title="verdict by attempt", height=5, id="exam-history")
+        yield SectionTitle("Tokens per attempt", "each bar wears its attempt's verdict")
+        yield DitherBars(title="tokens by attempt", height=10, id="exam-tokens")
         yield SectionTitle("Provenance")
         yield Static("[dim]no exam selected[/dim]", id="exam-provenance", markup=True)
 
@@ -250,26 +251,33 @@ class ExamsScreen(DaijinScreen):
             )
         attempts = detail.get("attempts") or []
         self._render_attempts(attempts)
-        history = self.query_one("#exam-history", PlotextLine)
-        tokens = self.query_one("#exam-tokens", PlotextBar)
+        history = self.query_one("#exam-history", StippleLine)
+        tokens = self.query_one("#exam-tokens", DitherBars)
         # An ungraded attempt is not a fail, so it is left out of the pass and
         # fail line rather than plotted as a zero. Tokens are real for every
         # attempt, graded or not, so the token bars keep all of them.
         numbered = [
             (attempt_number(a, i), a) for i, a in enumerate(attempts, start=1)
         ]
-        graded = [(n, a) for n, a in numbered if a.get("verdict") in ("pass", "fail")]
+        # Every graded attempt appears, including a partial, which is neither a
+        # pass nor a fail and was previously not plotted at all. min_column
+        # keeps a fail visible as a fail: drawn at zero height it reads as a
+        # missing attempt rather than a failed one.
+        graded = [(n, a) for n, a in numbered if a.get("verdict")]
         if graded:
+            scale = {"pass": 1.0, "partial": 0.5}
             history.set_data(
-                [n for n, _ in graded],
-                {"verdict": [1 if a["verdict"] == "pass" else 0 for _, a in graded]},
+                [scale.get(str(a["verdict"]).lower(), 0.0) for _, a in graded],
+                textures=[texture_for_verdict(a["verdict"]) for _, a in graded],
+                min_column=1,
             )
         else:
-            history.set_data([], {})
+            history.set_data([])
         if numbered:
             tokens.set_data(
                 [str(n) for n, _ in numbered],
                 [attempt_tokens(a) for _, a in numbered],
+                [texture_for_verdict(a.get("verdict")) for _, a in numbered],
             )
         else:
             tokens.set_data([], [])

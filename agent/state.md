@@ -1,5 +1,31 @@
 # Daijin build state (authoritative)
 
+## 2026-08-16 13:10 - P7 CLOSED: every registered phase now fully accepted
+
+Verifier report 14: findings 77 and 78 closed, verified by re-running the
+INSTRUMENTS THAT FOUND THEM unchanged against the fixed code (the
+strongest delta check: no opportunity to soften the test to match the
+fix). 77 closed without over-correcting: both evasions refuse AND the
+three allow cases still allow, since a normalization collapsing too much
+would refuse genuinely independent graders, the same failure inverted;
+the full URL matrix verified RFC-correct on both sides (host and scheme
+case collapse, path case stays distinct). 78 closed with the counting
+method now an ENFORCED PROPERTY the verifier attacked itself: removing
+either new control fails the property by name, and the named-branch
+table as the single source both the pattern and the property read is,
+in the verifier's words, better than what it suggested. The battery's
+skip-equals-problem hardening verified by exit-code contract; the plant
+instrument still exits 0 against the current scanner, the standing
+commitment held. Full suite 518/518.
+
+FINAL SCOREBOARD: P0 P1 P2 P3 P4 P5 P6 P7 ALL ACCEPTED, every one
+through pre-registered acceptance and adversarial attack. Outstanding
+work: finding-79 implementation (three lanes, verifier checks when
+landed), P3.5's curated-versus-generated measurement, the polish pass,
+the TUI-daemon integration pre-registration, and the owner-gated live
+gym cycle. The narrow-scanner reconstruction settled the last open
+historical question; D-0025 is closed with both arms measured.
+
 ## 2026-08-16 13:08 - The narrow-scanner question, settled by reconstruction
 
 The record had marked the narrow-versus-widened comparison unanswerable;

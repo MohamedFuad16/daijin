@@ -1,5 +1,38 @@
 # Daijin build state (authoritative)
 
+## 2026-08-17 01:30 - gym-porter's handover, kept for its successor
+
+Verified clean before approving (status empty across all gym paths,
+lane head b2f398c, manifest 5dff20b3). Three things for whoever
+inherits the lane:
+
+1. OPEN HOOKS, all gated on others: harvest batch storage lands with
+the wiring that consumes it (an APPLIED batch records what entered the
+brain, nothing regenerates it - record, not derivation); the live
+harness-debug cycle needs repo path, gates.yaml, exam and mode from
+the owner; the ten-minute diff offer stands.
+
+2. THE ONE KNOWINGLY-WEAKER PLACE, stated so nobody rediscovers it as
+a surprise: the platform requires its spend gate tracked in HEAD with
+no uncommitted diff (opening is a reviewed commit); daijin CANNOT,
+because the gym never touches the user's git. Compensating controls:
+blocked-by-default, every malformation refuses, exactly one writer
+that can only write blocked, gate status and reason in every run's
+provenance. The trade is stated at the top of spend-gate.js, where
+someone changing it will read it.
+
+3. THE ENTRY POINT IS THE TABLE, NOT THE REPORTS:
+docs/verification/p4-mutations/README.md, seventeen guards each with
+its watched failure, absence meaning unknowable. A successor runs the
+battery and both plant scripts before trusting any inherited number -
+"the number I was most confident in, 77 of 77, turned out to include
+kills that were never earned, and only re-running with a new guard
+found it."
+
+The corrections that landed hardest, its own list: keying independence
+on role would never have fired; purity is a property of execution, not
+load; a baseline control above the chdir measures the wrong tree; and
+two-a-day was never the limit, the verification was.
 ## 2026-08-17 01:20 - Roster: init-miner and gym-porter retired at owner direction
 
 Both lanes complete, both shutdowns requested. init-miner: P3, P3.5

@@ -193,3 +193,36 @@ def test_the_interior_is_a_stipple_not_a_slab():
         f"{full_cells} cells are fully lit; that is a slab, and a slab hides "
         "anything drawn over it"
     )
+
+
+def test_every_documented_verdict_has_its_own_look_and_is_reachable():
+    """Locked in contract v5: pass | partial | fail | unsubmitted.
+
+    unsubmitted used to fall through to "not graded", giving it the same swatch
+    as an attempt whose verdict was never recorded. Those are different facts:
+    one was never handed in, the other was handed in and never judged.
+    """
+    from daijin_tui import mock_data
+    from daijin_tui.widgets.texture import texture_for_verdict
+
+    documented = ("pass", "partial", "fail", "unsubmitted")
+    textures = {value: texture_for_verdict(value) for value in documented}
+    swatches = {value: tx.swatch for value, tx in textures.items()}
+    assert len(set(swatches.values())) == len(documented), f"two verdicts share a swatch: {swatches}"
+    labels = {tx.label for tx in textures.values()}
+    assert "not graded" not in labels, "a documented verdict is rendered as an absent one"
+
+    # A pattern reader with no colour must still tell them apart.
+    ramps = {value: tuple(tx.ramp) for value, tx in textures.items()}
+    assert len(set(ramps.values())) == len(documented), f"two verdicts share a pattern: {ramps}"
+
+    unknown = texture_for_verdict("banana")
+    assert unknown.swatch not in swatches.values(), "an unknown verdict borrowed a documented one's swatch"
+    assert unknown.label == "not graded"
+
+    seen = set()
+    for exam in mock_data.EXAM_DETAIL.values():
+        for attempt in exam.get("attempts") or []:
+            seen.add(attempt.get("verdict"))
+    missing = set(documented) - seen
+    assert not missing, f"the mock never produces these, so their rendering rots: {missing}"

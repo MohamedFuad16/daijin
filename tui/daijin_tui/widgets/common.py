@@ -16,7 +16,7 @@ HEALTH_GLYPH: dict[str, tuple[str, str]] = {
     "warn": ("●", "health-warn"),
     "critical": ("●", "health-critical"),
     "no-brain": ("○", "health-none"),
-    "unknown": ("◌", "health-none"),
+    "unknown": ("◌", "health-unknown"),
 }
 
 

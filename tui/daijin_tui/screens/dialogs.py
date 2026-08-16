@@ -117,6 +117,47 @@ class TextPromptScreen(ModalScreen[str | None]):
         self.dismiss(None)
 
 
+class GatesFileEditScreen(ModalScreen[str | None]):
+    """Edit the whole of gates.yaml.
+
+    The engine refuses a structural patch with -32602 whatever the file's state
+    and replaces the document entire, because gates.yaml is the user's and the
+    engine only reads it. So the edit is the whole document or nothing, and this
+    dialog is the only way a classification changes from the client.
+    """
+
+    BINDINGS = [Binding("escape", "cancel", "Cancel")]
+
+    def __init__(self, *, path: str, content: str, parse_error: str | None = None, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self.path = path
+        self.content = content
+        self.parse_error = parse_error
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="gates-file-dialog", classes="dialog"):
+            yield Static(f"[b]{self.path}[/b]", markup=True)
+            if self.parse_error:
+                yield Static(f"[red]{self.parse_error}[/red]", markup=True, id="gates-file-error")
+            yield Static(
+                "[dim]Saving replaces the whole document. Classification and baseline "
+                "evidence are written by discovery, not by this editor, so a row you "
+                "add here stays unclassified until discovery runs again.[/dim]",
+                markup=True,
+            )
+            yield TextArea(self.content, id="gates-file-text")
+            with Horizontal(classes="dialog-actions"):
+                yield Button("Save", id="gates-file-save", variant="primary")
+                yield Button("Cancel", id="gates-file-cancel")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        event.stop()
+        if event.button.id == "gates-file-save":
+            self.dismiss(self.query_one("#gates-file-text", TextArea).text)
+        else:
+            self.dismiss(None)
+
+
 class AgentFileEditScreen(ModalScreen[str | None]):
     """Edit one .daijin/agents instruction file."""
 

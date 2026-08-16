@@ -52,19 +52,28 @@ PASS = Texture("pass", ("░", "▒", "▓"), "█", "green", "▓", "pass")
 PARTIAL = Texture("partial", ("⠂", "⠒", "⠶"), "⠿", "blue", "⠿", "partial")
 FAIL = Texture("fail", ("╱", "╱", "╳"), "╳", "magenta", "╱", "fail")
 UNGRADED = Texture("ungraded", ("·", "·", "∙"), "•", "bright_black", "·", "not graded")
+# unsubmitted is a VERDICT the engine sends, not the absence of one. An attempt
+# that was never handed in and an attempt whose verdict was never recorded are
+# different facts, so they do not share a swatch. Open glyphs read as "nothing
+# arrived" without reading as a grade.
+UNSUBMITTED = Texture("unsubmitted", ("╌", "╌", "═"), "═", "yellow", "╌", "unsubmitted")
 # The neutral series, for quantities that are not outcomes: tokens, counts.
 NEUTRAL = Texture("neutral", ("░", "▒", "▓"), "█", "cyan", "▒", "tokens")
 
 TEXTURES: dict[str, Texture] = {
-    t.name: t for t in (PASS, PARTIAL, FAIL, UNGRADED, NEUTRAL)
+    t.name: t for t in (PASS, PARTIAL, FAIL, UNSUBMITTED, UNGRADED, NEUTRAL)
 }
 
 # How a verdict maps to a texture. Anything unrecognised is not graded, which
 # is the honest default: an unknown verdict is not a pass.
+# Locked in contract v5: pass | partial | fail | unsubmitted. A value outside
+# that set falls to UNGRADED, which is the honest default because an unknown
+# verdict is not a pass.
 VERDICT_TEXTURE: dict[str, Texture] = {
     "pass": PASS,
     "partial": PARTIAL,
     "fail": FAIL,
+    "unsubmitted": UNSUBMITTED,
 }
 
 

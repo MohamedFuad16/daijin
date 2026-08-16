@@ -50,11 +50,24 @@ class RepoCard(Vertical):
     def repo_path(self) -> str:
         return str(self.repo.get("path", ""))
 
+    # serveStatus rows carry health, and health names whether a brain exists.
+    # Locked in contract v5: no-brain | warn | ok | critical, where critical is
+    # a brain that could NOT BE OPENED. Verified against the daemon on
+    # 2026-08-17 that the row carries no hasBrain field, so health is the only
+    # thing that can answer this.
+    HEALTH_HAS_BRAIN = {"no-brain": False, "ok": True, "warn": True, "critical": True}
+
     @property
     def needs_brain(self) -> bool:
         if self.has_brain is not None:
             return not self.has_brain
-        return self.repo.get("health") == "no-brain" or self.repo.get("floorScore") is None
+        known = self.HEALTH_HAS_BRAIN.get(str(self.repo.get("health") or ""))
+        if known is not None:
+            # A critical repo HAS a brain that will not open. Offering to
+            # initialize one would put the destructive action under the thumb
+            # of the user whose brain just failed to load.
+            return not known
+        return self.repo.get("floorScore") is None
 
     def compose(self) -> ComposeResult:
         glyph, klass = health_glyph(self.repo.get("health"))
@@ -66,15 +79,22 @@ class RepoCard(Vertical):
         yield Static(self._mcp_text(), markup=True, classes="card-mcp")
         with Horizontal(classes="card-actions"):
             yield Button(
-                "Initialize brain" if self.needs_brain else "Open brain",
+                "Initialize brain" if self.needs_brain else self._open_label(),
                 id=f"card-action-{abs(hash(self.repo_path))}",
                 variant="primary" if self.needs_brain else "default",
                 classes="card-action",
             )
             yield Button("Detach", id=f"card-detach-{abs(hash(self.repo_path))}", classes="card-detach")
 
+    def _open_label(self) -> str:
+        return "Inspect brain" if self.repo.get("health") == "critical" else "Open brain"
+
     def _floor_text(self) -> str:
         """Show the count form when it is available, never a rounded percentage."""
+        if self.repo.get("health") == "critical":
+            # A floor from a brain that will not open is a number about
+            # nothing, so the state is named instead of scored.
+            return "[red]brain could not be opened[/red]  [dim]no floor can be measured from it[/dim]"
         if self.case_rate is not None:
             value = case_rate_value(self.case_rate)
             tone = "green" if (value or 0) >= MCP_THRESHOLD else "yellow"

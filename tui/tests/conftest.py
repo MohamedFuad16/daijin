@@ -36,6 +36,7 @@ async def running_app(
     repo: str | None = DEFAULT_REPO,
     contract_version: str | None = None,
     deferred: dict[str, str] | None = None,
+    size: tuple[int, int] = TERMINAL_SIZE,
 ):
     """Boot the app against a zero delay mock engine.
 
@@ -50,7 +51,7 @@ async def running_app(
     engine = MockEngine(**kwargs)
     client = MockRpcClient(engine)
     app = DaijinApp(client, is_mock=True, repo=repo)
-    async with app.run_test(size=TERMINAL_SIZE) as pilot:
+    async with app.run_test(size=size) as pilot:
         await pilot.pause()
         await pilot.pause()
         yield app, pilot

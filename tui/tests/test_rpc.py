@@ -677,31 +677,91 @@ async def test_the_mock_produces_all_three_gate_discovery_states():
     await client.aclose()
 
 
+
+
 @run_async
-async def test_gates_cannot_be_patched_into_a_file_that_does_not_parse():
+async def test_gates_set_replaces_the_document_and_refuses_to_merge_into_it():
+    """Checked against the daemon on 2026-08-17.
+
+    A structural patch is refused with -32602 in every file state, and the
+    accepted form is patch.content carrying the whole document. The mock had
+    this backwards in both directions, which would have made three buttons work
+    in the TUI and fail against the engine.
+    """
     client = MockRpcClient(MockEngine(speed=0.0))
     with pytest.raises(RpcError) as caught:
         await client.call(
             "gatesSet",
-            {
-                "repoPath": "/Users/owner/code/lantern-ios",
-                "patch": {"gates": [{"id": "swiftlint", "enabled": False}]},
-            },
+            {"repoPath": DEFAULT_REPO, "patch": {"gates": [{"id": "react-doctor", "enabled": True}]}},
         )
-    assert "parse" in caught.value.hint.lower()
+    assert caught.value.code == ERR_INVALID_PARAMS
+    updated = await client.call(
+        "gatesSet",
+        {"repoPath": DEFAULT_REPO, "patch": {"content": "version: 1\ngates:\n  - id: only\n    command: make check\n"}},
+    )
+    assert [g["id"] for g in updated["discovered"]["gates"]] == ["only"]
+    assert updated["content"].endswith("make check\n"), "the document is not stored byte for byte"
     await client.aclose()
 
 
 @run_async
-async def test_gates_set_is_treated_as_data():
+async def test_an_edited_row_carries_no_classification_it_did_not_earn():
+    """Rows come back AS WRITTEN. Discovery writes the classification, not the editor."""
     client = MockRpcClient(MockEngine(speed=0.0))
     updated = await client.call(
         "gatesSet",
-        {"repoPath": DEFAULT_REPO, "patch": {"gates": [{"id": "react-doctor", "classification": "measured", "enabled": True}]}},
+        {"repoPath": DEFAULT_REPO, "patch": {"content": "version: 1\ngates:\n  - id: only\n    command: make check\n"}},
     )
-    gate = next(g for g in updated["discovered"]["gates"] if g["id"] == "react-doctor")
-    assert gate["classification"] == "measured"
-    assert gate["enabled"] is True
+    row = updated["discovered"]["gates"][0]
+    for earned in ("classification", "baseline", "enabled"):
+        assert earned not in row, f"the mock invented {earned} for a row the user just typed"
+    assert updated["discovered"]["summary"] is None, (
+        "a summary here would be a tally of a baseline nobody ran"
+    )
+    await client.aclose()
+
+
+@run_async
+async def test_a_broken_gates_file_can_still_be_written_over():
+    """The repair path. Refusing the write locks the user out of the fix.
+
+    An earlier version of this mock refused exactly this call as a safety, and
+    the daemon accepts it: gatesSet is the only way back from a file the user
+    broke.
+    """
+    client = MockRpcClient(MockEngine(speed=0.0))
+    broken = await client.call("gatesGet", {"repoPath": "/Users/owner/code/lantern-ios"})
+    assert broken["discovered"] is None, "this repo is meant to start unreadable"
+    repaired = await client.call(
+        "gatesSet",
+        {
+            "repoPath": "/Users/owner/code/lantern-ios",
+            "patch": {"content": "version: 1\ngates:\n  - id: swiftlint\n    command: swiftlint\n"},
+        },
+    )
+    assert repaired["parseError"] is None and repaired["discovered"] is not None
+    assert [g["id"] for g in repaired["discovered"]["gates"]] == ["swiftlint"]
+    await client.aclose()
+
+
+@run_async
+async def test_no_gate_carries_a_status_or_classification_outside_the_contract():
+    """Values are a contract too, and this mock shipped an invented one.
+
+    baseline.status was "violations", which is not on the wire: a tool with
+    pre-existing violations is a MEASURED gate, and measured is a
+    classification rather than a status.
+    """
+    client = MockRpcClient(MockEngine(speed=0.0))
+    seen_status, seen_class = set(), set()
+    for repo in ("orchard-web", "kiln-api", "lantern-ios"):
+        record = await client.call("gatesGet", {"repoPath": f"/Users/owner/code/{repo}"})
+        for gate in ((record["discovered"] or {}).get("gates") or []):
+            seen_class.add(gate["classification"])
+            seen_status.add(gate["baseline"]["status"])
+    assert seen_status <= set(mock_data.BASELINE_STATUS), f"invented statuses: {seen_status - set(mock_data.BASELINE_STATUS)}"
+    assert seen_class <= set(mock_data.GATE_CLASSIFICATION), f"invented classifications: {seen_class - set(mock_data.GATE_CLASSIFICATION)}"
+    assert len(seen_status) > 1 and len(seen_class) > 1, "the check saw too little to mean anything"
     await client.aclose()
 
 

@@ -75,6 +75,8 @@
 #repo-cards {
     height: auto;
     padding: 1 0;
+    overflow-x: auto;
+    overflow-y: hidden;
 }
 
 .repo-card {
@@ -138,6 +140,12 @@
 
 .health-none {
     color: $text-muted;
+}
+
+/* A health value the contract does not name must not borrow the badge of one
+   it does: reading "no brain" off a state nobody understood is a claim. */
+.health-unknown {
+    color: $text-disabled;
 }
 
 /* Init and gym activity */

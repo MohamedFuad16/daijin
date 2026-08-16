@@ -3,7 +3,7 @@
 from .base import DaijinScreen, NavBar
 from .board import BoardScreen
 from .brain import BrainScreen
-from .dialogs import AgentFileEditScreen, SpendConfirmScreen, TextPromptScreen
+from .dialogs import AgentFileEditScreen, GatesFileEditScreen, SpendConfirmScreen, TextPromptScreen
 from .exams import ExamsScreen
 from .gates import GatesScreen
 from .gym import GymScreen
@@ -14,6 +14,7 @@ from .upgrade import UpgradeScreen
 
 __all__ = [
     "AgentFileEditScreen",
+    "GatesFileEditScreen",
     "BoardScreen",
     "BrainScreen",
     "DaijinScreen",

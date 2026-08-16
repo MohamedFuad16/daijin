@@ -621,6 +621,64 @@ def default_socket_path(state_root: str) -> str:
     return str(Path(state_root).expanduser().resolve() / "daemon.sock")
 
 
+
+def _read_gates_document(content: str) -> tuple[dict[str, Any] | None, str | None]:
+    """Map an edited document onto the three states the wire can be in.
+
+    This is a line recognizer, NOT a YAML parser. Parsing stays engine side
+    where the classification lives, and the mock only has to make each state
+    reachable so no branch rots. It reproduces two behaviours that were checked
+    against the daemon: rows come back AS WRITTEN, with classification, enabled
+    and baseline ABSENT until discovery runs, and summary is null whenever no
+    baseline has been measured.
+    """
+    lines = content.splitlines()
+    if not any(line.startswith("gates:") for line in lines):
+        return None, "gates.yaml has no `gates:` list, so there is nothing to classify"
+    member_indent: int | None = None
+    for index, line in enumerate(lines):
+        stripped = line.lstrip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        indent = len(line) - len(stripped)
+        if stripped.startswith("- "):
+            member_indent = None  # a new item sets its own member column
+            continue
+        if indent == 0:
+            member_indent = None
+            continue
+        if member_indent is None:
+            member_indent = indent
+        elif indent != member_indent:
+            # A member of the same item at a different column. This is the
+            # shape of the malformed file the engine rejects.
+            return None, (
+                f"gates.yaml is not valid YAML (Nested mappings are not allowed in "
+                f"compact mappings at line {index + 1}, column {indent + 1}:)"
+            )
+    gates: list[dict[str, Any]] = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("- id:"):
+            gates.append({"id": stripped.split(":", 1)[1].strip()})
+        elif gates and ":" in stripped and not stripped.startswith("- "):
+            key, _, value = stripped.partition(":")
+            if key.strip() in ("command", "role", "cwd", "availabilityCommand"):
+                gates[-1][key.strip()] = value.strip() or None
+    return (
+        {
+            "version": 1,
+            "discoveredAt": None,
+            "timeoutMs": None,
+            "gates": gates,
+            # No baseline has run over an edited file, so there is nothing to
+            # tally and a zeroed summary would be a measurement nobody took.
+            "summary": None,
+        },
+        None,
+    )
+
+
 class MockEngine:
     """A local stand in for the Node engine, speaking RPC v3.
 
@@ -1048,23 +1106,34 @@ class MockEngine:
         return copy.deepcopy(record)
 
     async def _rpc_gatesSet(self, params: dict[str, Any]) -> dict[str, Any]:
+        """Replace the whole document, in any state the file is currently in.
+
+        Verified against the daemon on 2026-08-17: a structural patch is
+        refused with -32602 whatever the file's state, and a full content write
+        is accepted even when the file on disk does not parse, because that is
+        the only way a user repairs a file they broke. An earlier version of
+        this mock had it exactly backwards and refused the repair.
+        """
         repo = params.get("repoPath")
         record = self.gates.get(repo)
         if record is None:
             raise RpcError(ERR_INVALID_PARAMS, "no gates discovered", {"hint": f"No gates.yaml exists for {repo}."})
-        discovered = record.get("discovered")
-        if discovered is None:
-            # Patching a file the engine could not read would write over text
-            # the user still needs to fix.
+        patch = params.get("patch") or {}
+        if "content" not in patch:
             raise RpcError(
                 ERR_INVALID_PARAMS,
-                "gates.yaml could not be parsed",
-                {"hint": f"{record.get('path')} does not parse, so no gate in it can be patched. Fix the file first."},
+                "gatesSet takes the full gates.yaml content",
+                {"hint": (
+                    "gatesSet takes the full gates.yaml content; the engine treats it as "
+                    "data it does not author and replaces the document rather than merging "
+                    "into it. Send patch.content."
+                )},
             )
-        for gate_patch in (params.get("patch") or {}).get("gates", []):
-            for gate in discovered["gates"]:
-                if gate["id"] == gate_patch.get("id"):
-                    gate.update({k: v for k, v in gate_patch.items() if k != "id"})
+        content = str(patch.get("content") or "")
+        record["content"] = content
+        discovered, parse_error = _read_gates_document(content)
+        record["discovered"] = discovered
+        record["parseError"] = parse_error
         return copy.deepcopy(record)
 
     # Gym and exams --------------------------------------------------------

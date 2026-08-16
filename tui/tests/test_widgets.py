@@ -181,7 +181,12 @@ def test_formatters():
     assert format_ratio(31 / 34) == "0.9118"
     assert format_ratio(None) == "not measured"
     assert health_glyph("ok")[1] == "health-ok"
-    assert health_glyph(None)[1] == "health-none"
+    # An undocumented or absent health gets its OWN badge rather than borrowing
+    # the no-brain one: rendering "this repo has no brain" off a value nobody
+    # understood is a claim, not a fallback.
+    assert health_glyph(None)[1] == "health-unknown"
+    assert health_glyph("no-brain")[1] == "health-none"
+    assert health_glyph("critical")[1] == "health-critical"
 
 
 def test_a_phase_that_never_ran_is_not_reported_as_done():

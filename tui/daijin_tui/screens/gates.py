@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from typing import Any, Iterable
 
+from textual import work
 from textual.containers import Horizontal
 from textual.widgets import Button, DataTable, Static
 
@@ -18,6 +19,7 @@ from ..stream import FLUSH_INTERVAL, StreamCoalescer
 from ..widgets.activity import IDLE_UNTIL_INFERRED
 from ..widgets import Banner, EventLog, PhaseChecklist, SectionTitle
 from .base import DaijinScreen
+from .dialogs import GatesFileEditScreen
 
 GATE_COLUMNS = ("gate", "role", "classification", "enabled", "baseline", "command")
 
@@ -42,6 +44,7 @@ class GatesScreen(DaijinScreen):
         self.summary: dict[str, Any] | None = None
         self.parse_error: str | None = None
         self.raw_content = ""
+        self.file_path = ""
         self.job_id: str | None = None
         self._subscribed = False
         self.coalescer = StreamCoalescer(self._render_events)
@@ -50,9 +53,10 @@ class GatesScreen(DaijinScreen):
         yield Banner("", tone="info", id="gates-notice")
         with Horizontal(id="gates-controls"):
             yield Button("Discover gates", id="gates-discover", variant="primary")
-            yield Button("Mark measured", id="gates-measured")
-            yield Button("Mark pre-broken", id="gates-prebroken")
-            yield Button("Toggle enabled", id="gates-toggle")
+            # There is no per-row action. The engine refuses a structural patch
+            # with -32602 in every file state, because gates.yaml is the user's
+            # document and it replaces the whole of it or nothing.
+            yield Button("Edit gates.yaml", id="gates-edit")
         yield SectionTitle("gates.yaml", "the engine treats this as data")
         yield DataTable(id="gates-table", cursor_type="row")
         yield Static("", id="gates-raw", markup=True)
@@ -89,6 +93,7 @@ class GatesScreen(DaijinScreen):
         # gates.yaml is a file the user is invited to edit and taking their text
         # away at the moment they need to read it would be the worse failure.
         self.raw_content = str(record.get("content") or "")
+        self.file_path = str(record.get("path") or "gates.yaml")
         # Three distinct states, and the difference between the second and the
         # third is the whole point: a file that describes no gates and a file
         # that could not be read both produce an empty list, and only one of
@@ -139,11 +144,15 @@ class GatesScreen(DaijinScreen):
         table.clear()
         for gate in self.gates:
             baseline = gate.get("baseline") or {}
+            # A row the user just wrote carries only what they typed. The
+            # classification and the baseline are written by discovery, so
+            # until it runs these keys are ABSENT rather than false, and a
+            # blank cell would read as a verdict nobody reached.
             table.add_row(
                 gate.get("id", ""),
                 gate.get("role") or "-",
-                gate.get("classification", ""),
-                "yes" if gate.get("enabled") else "no",
+                gate.get("classification") or "not classified",
+                "yes" if gate.get("enabled") else ("no" if "enabled" in gate else "-"),
                 baseline.get("status") or "not run",
                 gate.get("command", ""),
                 key=gate.get("id"),
@@ -178,13 +187,21 @@ class GatesScreen(DaijinScreen):
             )
             self.query_one("#gate-evidence", Static).update(f"[dim]No gate to explain: {reason}.[/dim]")
             return
-        classification = str(gate.get("classification", ""))
+        classification = str(gate.get("classification") or "")
         baseline = gate.get("baseline") or {}
-        # The measurement's own words, not a paraphrase of them.
-        evidence = [
-            f"status {baseline.get('status', 'not run')}, exit {baseline.get('exitCode')}, "
-            f"{baseline.get('durationMs')} ms of a {baseline.get('timeoutMs')} ms budget"
-        ]
+        # The measurement's own words, not a paraphrase of them. When discovery
+        # has not run over this row there is no measurement to quote, and
+        # saying so beats printing None four times.
+        if not baseline:
+            evidence = [
+                "No baseline has been run over this row, so nothing here is "
+                "measured yet. Run discovery to classify it."
+            ]
+        else:
+            evidence = [
+                f"status {baseline.get('status', 'not run')}, exit {baseline.get('exitCode')}, "
+                f"{baseline.get('durationMs')} ms of a {baseline.get('timeoutMs')} ms budget"
+            ]
         if baseline.get("unavailableReason"):
             evidence.append(f"unavailable: {baseline['unavailableReason']}")
         if gate.get("unavailableHint"):
@@ -193,9 +210,13 @@ class GatesScreen(DaijinScreen):
             tail = str(baseline.get(stream) or "").strip()
             if tail:
                 evidence.append(f"{stream}: {tail.splitlines()[-1][:100]}")
+        # source is written by discovery too, so a hand-typed row has none and
+        # "from None" is the word None leaking into copy.
+        origin = f"  [dim]from {gate['source']}[/dim]" if gate.get("source") else "  [dim]hand written[/dim]"
         self.query_one("#gate-evidence", Static).update(
-            f"[b]{gate.get('id')}[/b]  {gate.get('command')}  [dim]from {gate.get('source')}[/dim]\n"
-            f"classification [b]{classification}[/b]  [dim]{CLASSIFICATION_NOTE.get(classification, '')}[/dim]\n"
+            f"[b]{gate.get('id')}[/b]  {gate.get('command')}{origin}\n"
+            f"classification [b]{classification or 'not classified'}[/b]  "
+            f"[dim]{CLASSIFICATION_NOTE.get(classification, '')}[/dim]\n"
             + "\n".join(evidence)
         )
 
@@ -224,32 +245,39 @@ class GatesScreen(DaijinScreen):
         event.stop()
         if button_id == "gates-discover":
             await self.discover()
-        elif button_id == "gates-measured":
-            await self.patch_selected({"classification": "measured", "metric": "GATE_METRIC:down:0", "enabled": True})
-        elif button_id == "gates-prebroken":
-            await self.patch_selected({"classification": "pre-broken", "metric": None, "enabled": False})
-        elif button_id == "gates-toggle":
-            gate = self._selected_gate()
-            if gate is not None:
-                await self.patch_selected({"enabled": not gate.get("enabled")})
+        elif button_id == "gates-edit":
+            self.edit_document()
 
-    async def patch_selected(self, patch: dict[str, Any]) -> None:
+    @work
+    async def edit_document(self) -> None:
+        """Edit the whole document, which is the only write the engine accepts.
+
+        Reachable in every state including the unreadable one, because that is
+        the state the user most needs to edit out of and gatesSet is the only
+        way back.
+        """
         repo = getattr(self.app, "selected_repo", None)
-        gate = self._selected_gate()
         notice = self.query_one("#gates-notice", Banner)
-        if not repo or gate is None:
-            notice.set_notice("Select a gate row first.", "warn")
+        if not repo:
+            notice.set_notice("No repo selected.", "warn")
+            return
+        content = await self.app.push_screen_wait(
+            GatesFileEditScreen(
+                path=self.file_path or "gates.yaml",
+                content=self.raw_content,
+                parse_error=self.parse_error,
+            )
+        )
+        if content is None:
             return
         try:
-            await self.client.call(
-                "gatesSet",
-                {"repoPath": repo, "patch": {"gates": [{"id": gate["id"], **patch}]}},
-            )
+            await self.client.call("gatesSet", {"repoPath": repo, "patch": {"content": content}})
         except RpcError as error:
             self.report_rpc_error(error)
             return
         self.set_pending_notice(
-            f"{gate['id']} updated: {', '.join(f'{k} {v}' for k, v in patch.items())}."
+            "gates.yaml saved. Classification and baseline evidence come from "
+            "discovery, so rows you edited read as unclassified until it runs."
         )
         self.start_load()
 

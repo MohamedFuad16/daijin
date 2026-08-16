@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Iterable
 
-from textual.containers import Horizontal
+from textual.containers import Horizontal, HorizontalScroll
 from textual.widgets import Button, Input, Static
 
 from ..concurrency import gather_all, gather_iter
@@ -21,7 +21,11 @@ class RepoHomeScreen(DaijinScreen):
 
     def content(self) -> Iterable[Any]:
         yield SectionTitle("Connected repos", "click a card, or tab and press enter")
-        yield Horizontal(id="repo-cards")
+        # Scrollable, not a plain row. Four cards at 42 columns already exceed
+        # a 170 column terminal, and a card past the right edge is reachable by
+        # neither the mouse nor the keyboard, which fails the one acceptance
+        # rule that covers every screen.
+        yield HorizontalScroll(id="repo-cards")
         with Horizontal(id="attach-row"):
             yield Input(placeholder="path to a repo to attach", id="attach-input")
             yield Button("Attach repo", id="attach-go", variant="primary")
@@ -30,7 +34,7 @@ class RepoHomeScreen(DaijinScreen):
         yield Banner("", tone="info", id="home-notice")
 
     async def load(self) -> None:
-        container = self.query_one("#repo-cards", Horizontal)
+        container = self.query_one("#repo-cards", HorizontalScroll)
         await container.remove_children()
         try:
             status = await self.client.call("serveStatus", {})

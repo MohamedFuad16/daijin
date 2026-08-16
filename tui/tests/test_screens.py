@@ -9,7 +9,7 @@ from __future__ import annotations
 import pytest
 from conftest import DEFAULT_REPO, SUB_75_REPO, goto, run_async, running_app, screen_text, scroll_to, settle
 
-from textual.widgets import Button, DataTable, Input, Select, Static, TabbedContent
+from textual.widgets import Button, DataTable, Input, Select, Static, TabbedContent, TextArea
 
 from daijin_tui import mock_data
 from daijin_tui.rpc import SUPPORTED_CONTRACT_VERSION
@@ -67,7 +67,7 @@ async def test_reloading_a_screen_never_spends():
 async def test_repo_home_shows_a_card_per_repo_with_one_primary_action():
     async with running_app() as (app, pilot):
         cards = list(app.screen.query(RepoCard))
-        assert len(cards) == 3
+        assert len(cards) == len(mock_data.REPOS)
         without_brain = [card for card in cards if card.needs_brain]
         assert len(without_brain) == 1
         assert without_brain[0].repo_path.endswith("kiln-api")
@@ -116,6 +116,42 @@ async def test_the_budget_sweep_lives_on_the_brain_view_with_its_own_caption():
         assert "not a trend over time" in rendered
 
 
+
+@run_async
+async def test_every_repo_card_can_be_reached_on_a_standard_terminal():
+    """Four cards at 42 columns overflow a 170 column terminal.
+
+    The row was a plain Horizontal, so the overflowing cards were reachable by
+    neither the mouse nor the keyboard: not clipped visibly, just gone. That
+    fails the one acceptance rule covering every screen, and it fails silently,
+    which is why it survived three repos.
+    """
+    async with running_app() as (app, pilot):
+        cards = list(app.screen.query(RepoCard))
+        container = app.screen.query_one("#repo-cards")
+        widest = max(card.region.right for card in cards)
+        assert widest > app.screen.size.width, (
+            "the cards fit, so this check proves nothing; seed another repo"
+        )
+        # The container must be ABLE to scroll. Intersecting a region with its
+        # container and asserting containment is a tautology, which is what the
+        # first version of this check did.
+        assert container.max_scroll_x > 0, (
+            "the card row cannot scroll, so the cards past the right edge are "
+            "reachable by neither the mouse nor the keyboard"
+        )
+        last = cards[-1]
+        last.scroll_visible(animate=False)
+        await settle(pilot)
+        assert last.region.right <= app.screen.size.width, (
+            f"the last card still ends at {last.region.right} on a "
+            f"{app.screen.size.width} column screen after scrolling to it"
+        )
+        button = last.query_one(".card-action", Button)
+        await pilot.click(button)
+        await settle(pilot)
+        assert app.current_mode != "home", "the card scrolled into view but its action did not fire"
+
 @run_async
 async def test_attaching_and_detaching_a_repo_changes_the_cards():
     async with running_app() as (app, pilot):
@@ -128,12 +164,57 @@ async def test_attaching_and_detaching_a_repo_changes_the_cards():
         await settle(pilot)
         assert len(list(app.screen.query(RepoCard))) == before + 1
         card = next(c for c in app.screen.query(RepoCard) if c.repo_path.endswith("newthing"))
+        # Past the right edge on a standard terminal, so it is scrolled to
+        # first. That the scroll REACHES it is the point.
+        card.scroll_visible(animate=False)
+        await settle(pilot)
         await pilot.click(card.query_one(".card-detach", Button))
         await app.screen.wait_for_load()
         await settle(pilot)
         assert len(list(app.screen.query(RepoCard))) == before
         assert "Detached" in text_of(app.screen.query_one("#home-notice", Banner))
 
+
+
+@run_async
+async def test_a_critical_repo_is_not_offered_a_fresh_brain_over_the_one_it_has():
+    """critical is a brain that could not be OPENED, not a brain that is missing.
+
+    serveStatus rows carry no hasBrain field (checked against the daemon on
+    2026-08-17), so health is the only thing that can answer this, and falling
+    back to a null floorScore made critical look like no-brain. That put
+    "Initialize brain" under the thumb of the user whose brain just failed to
+    load, which is the destructive reading of an ambiguous state.
+    """
+    async with running_app() as (app, pilot):
+        card = next(c for c in app.screen.query(RepoCard) if c.repo.get("health") == "critical")
+        assert card.needs_brain is False
+        labels = [str(b.label) for b in card.query(Button)]
+        assert "Initialize brain" not in labels, f"a fresh brain was offered over a broken one: {labels}"
+        assert "Inspect brain" in labels
+        rendered = " ".join(text_of(s) for s in card.query(Static))
+        assert "could not be opened" in rendered
+        assert "floor" not in rendered.split("could not be opened")[0][-40:], (
+            "a floor was scored from a brain that will not open"
+        )
+
+
+@run_async
+async def test_every_documented_health_value_renders_and_none_of_them_crash():
+    """Locked vocabulary: no-brain | warn | ok | critical.
+
+    The mock reaches all four, so no branch here is carried by a default that
+    nobody exercises.
+    """
+    from daijin_tui.widgets import health_glyph
+
+    seen = {r["health"] for r in mock_data.REPOS}
+    assert seen == {"no-brain", "warn", "ok", "critical"}, f"a documented state is unreachable: {seen}"
+    classes = {value: health_glyph(value)[1] for value in seen}
+    assert len(set(classes.values())) == len(classes), f"two states look alike: {classes}"
+    # An undocumented value must not crash and must not borrow a real state's look.
+    unknown_glyph, unknown_class = health_glyph("banana")
+    assert unknown_class not in classes.values(), "an unknown health borrowed a documented state's badge"
 
 @run_async
 async def test_clicking_initialize_brain_opens_the_init_screen():
@@ -566,15 +647,70 @@ async def test_gates_screen_names_the_gates_that_carry_no_signal():
 
 
 @run_async
-async def test_gates_can_be_reclassified_and_the_change_persists():
+async def test_the_gates_screen_offers_no_per_row_write_the_engine_would_refuse():
+    """The engine refuses a structural patch with -32602 in every file state.
+
+    Three buttons here used to send exactly that. They worked against the mock
+    and would have failed against the engine on every press, which is the
+    live-only class again.
+    """
     async with running_app() as (app, pilot):
         await goto(pilot, "4")
-        await pilot.click("#gates-prebroken")
+        ids = {button.id for button in app.screen.query(Button)}
+        assert "gates-edit" in ids
+        for gone in ("gates-measured", "gates-prebroken", "gates-toggle"):
+            assert gone not in ids, f"{gone} sends a patch the engine always refuses"
+        sent: list[dict] = []
+        original = app.client.call
+
+        async def record(method, params=None):
+            if method == "gatesSet":
+                sent.append(params or {})
+            return await original(method, params)
+
+        app.client.call = record
+        try:
+            await pilot.click("#gates-edit")
+            await settle(pilot)
+            app.screen_stack[-1].query_one("#gates-file-text", TextArea).text = (
+                "version: 1\ngates:\n  - id: only\n    command: make check\n"
+            )
+            await pilot.click("#gates-file-save")
+            await app.screen.wait_for_load()
+            await settle(pilot)
+        finally:
+            app.client.call = original
+        assert sent, "the save sent nothing"
+        assert "content" in sent[0]["patch"], f"the write was not a document write: {sent[0]}"
+        assert "gates" not in sent[0]["patch"], "a structural patch went out anyway"
+        assert [g["id"] for g in app.screen.gates] == ["only"]
+
+
+@run_async
+async def test_a_row_the_user_just_typed_is_not_shown_as_classified():
+    """Discovery writes the classification; the editor does not.
+
+    Verified against the daemon on 2026-08-17: rows come back with
+    classification, enabled and baseline ABSENT after a write. A blank cell
+    would read as a verdict, so the table names the absence.
+    """
+    async with running_app() as (app, pilot):
+        await goto(pilot, "4")
+        await app.client.call(
+            "gatesSet",
+            {"repoPath": DEFAULT_REPO, "patch": {"content": "version: 1\ngates:\n  - id: only\n    command: make check\n"}},
+        )
+        app.screen.start_load()
         await app.screen.wait_for_load()
         await settle(pilot)
-        gate = next(g for g in app.screen.gates if g["id"] == "eslint")
-        assert gate["classification"] == "pre-broken"
-        assert gate["enabled"] is False
+        table = app.screen.query_one("#gates-table", DataTable)
+        row = table.get_row_at(0)
+        assert str(row[GATE_COLUMNS.index("classification")]) == "not classified"
+        assert str(row[GATE_COLUMNS.index("baseline")]) == "not run"
+        assert str(row[GATE_COLUMNS.index("enabled")]) == "-", "an absent flag was rendered as a no"
+        evidence = text_of(app.screen.query_one("#gate-evidence", Static))
+        assert "No baseline has been run" in evidence
+        assert "None" not in evidence, f"a null was printed as the word None: {evidence!r}"
 
 
 @run_async

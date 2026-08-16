@@ -203,6 +203,10 @@ async def test_an_action_confirmation_survives_the_reload_it_triggers():
         assert "Attached" in str(screen.query_one("#home-notice", Banner).render())
 
         card = next(c for c in screen.query(RepoCard) if c.repo_path.endswith("newthing"))
+        # Five cards overflow a 170 column terminal, so the new one has to be
+        # scrolled to. That the row CAN scroll is asserted in test_screens.
+        card.scroll_visible(animate=False)
+        await settle(pilot)
         await pilot.click(card.query_one(".card-detach"))
         await screen.wait_for_load()
         await settle(pilot)

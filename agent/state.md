@@ -1,5 +1,46 @@
 # Daijin build state (authoritative)
 
+## 2026-08-17 01:45 - THE P8 JOINT CLAIM IS POSTED at 85cc576; handed to the verifier
+
+All nine clauses stated demonstrated, with evidence paths, by
+tui-builder carrying the extractor's confirmed-pending rows. The tui
+five-run set: detached worktree at the pin, fresh venv (Python 3.14.6,
+Textual 8.2.8), five green runs, 295 collected with the per-directory
+census recorded, source digest identical before and after
+(7d8acca9..). Engine five-run set: 592/592 five times, digests stable,
+zero mutation processes. Clauses (a)-(h) as demonstrated in the live
+half and engine half entries below.
+
+TWO THINGS EXPLICITLY NOT CLAIMED, in the claim's own words: the
+fixture's 25/25 floor is a property of the fixture (permuted control
+13/25, 12 cases of headroom - the control is what makes the saturated
+number meaningful rather than suspicious); and NOTHING DEMONSTRATES
+GRADING - the rubric is hand-authored, seeded through the real import
+API, and clause (e) supports "graded axes render from real storage"
+only.
+
+PIN STANDS at 85cc576, re-cut declined a second time with tui-builder
+concurring: the two post-pin commits (c860f95 comment-only, af4e19b
+styling) are part of no clause, and re-cutting costs the extractor
+five engine runs and buys nothing a clause depends on.
+
+SETUP FACT for the acceptance script: a tui worktree needs
+engine/node_modules linked or three socket tests fail with
+ConnectionError - the CI missing-engine-deps class, reappearing in
+worktrees.
+
+TWO SEAM FINDINGS from the live defects, QUEUED POST-ATTACK (disclosed
+in the claim, not churned into the pin): the examDetail attempts row
+diverges from engine reality (contract says tokens/grades, engine
+sends work_tokens/axes and an id; client reads both names as interim)
+- needs a dated contract amendment after byte verification plus an
+engine-side shape assertion per D-0033; and the stream has NO TERMINAL
+EVENT, so every client must infer finished-versus-stalled - the tui
+infers and labels, and the engine emitting a terminal event is the
+right fix.
+
+THE CLAIM IS WITH THE VERIFIER. Attack scope: the nine registered
+clauses at the current plan bytes, pin 85cc576.
 ## 2026-08-17 01:30 - gym-porter's handover, kept for its successor
 
 Verified clean before approving (status empty across all gym paths,

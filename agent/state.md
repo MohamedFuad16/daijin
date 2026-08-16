@@ -1,5 +1,31 @@
 # Daijin build state (authoritative)
 
+## 2026-08-16 17:48 - P3.5 PASSED; finding 82; the per-corpus sharpening
+
+Verifier report 17: PASS, with the same-construction requirement
+verified in the strongest available form (one diff line between the two
+run scripts, the arm selector; permuteAnswers promoted to shared engine
+code, the requirement now structural rather than procedural). The
+verifier corrected its own check-4 language: the saturation mechanism
+BOUNDS rather than predicts (right direction, right arm ordering,
+understates the level in both arms, systematically, across corpora 23x
+apart), because a permuted answer is a gold answer for some other query
+and such units are semantically central (5.7x random rate on the
+curated arm); consequence in the safe direction: the reported
+discriminating range UNDER-estimates the gauge's real range, the
+correct direction for an instrument's error to run. FINDING 82: the
+survival diagnosis contradicted its own artifact (no truncated core
+exceeded the cap; the TOTAL BUDGET bound at 89 percent consumption; 3
+units not 4; the 1625 was the corpus max), and the two diagnoses imply
+OPPOSITE fixes, so the text is corrected before any user sees it.
+RULING SHARPENED from its question 2: the budget sweep is PER CORPUS,
+not per repo (D-0003's correct form); the adopted brain gets its own
+sweep with the D-0030 range beside each point, because a chosen budget
+is measured on the brain it serves, never inherited from a sibling. The
+title-ownership premise guard (homes.length !== 1 emits no case rather
+than an arbitrary answer) was the line the verifier most wanted to
+find, and found.
+
 ## 2026-08-16 17:44 - P3.5 MEASURED: curated 20 cases of range, generated 7
 
 The curated-versus-generated question is answered on one repo, one

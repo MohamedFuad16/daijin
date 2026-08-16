@@ -1,5 +1,28 @@
 # Daijin build state (authoritative)
 
+## 2026-08-16 12:46 - P7 built and frozen; gym RPC live; rerank measurement running
+
+Three lanes converged: (1) gym-porter built all 21 registered P7 clauses
+(122 gym tests, 61 mutations killed, one honest survival: a positive
+control matching four scan branches at once, a gate that cannot fail one
+level up, rewritten per-branch). Design wins recorded: clause 4 keyed on
+model-and-endpoint because role-keying could never fire; a refusal the
+platform lacks (a rubric citing a document the exclusion withheld is
+grading against the gold); the checked-not-trusted exemption pattern.
+Frozen for the verifier's attack; rubric/batch tables land with the RPC
+wiring jointly with the extractor. (2) The extractor wired the gym RPC:
+NO method answers -32001 anymore; gymStart's blocker moved to the real
+missing piece (the paid engineer seam) with the refusal naming what DID
+work; measurement-protecting refusals kept (empty axes, null denominator,
+harness-debug default). Next: the MCP serve entry, the last unclosed
+product loop. (3) The rerank backend is provisioned and live (llama-server
+plus bge-reranker-v2-m3 at :8012, verified discriminating); D-0025
+amended IN ADVANCE (1f912bf): the portfolio-mine arm can only falsify,
+promotion decides on the platform corpus only; the real A/B is running.
+Suite 503/503 at 03:46Z. Verifier holds three ready-gated attacks: P7
+(frozen now), P6 delta (awaiting adapter re-freeze), P3 (awaiting
+artifacts).
+
 ## 2026-08-16 12:27 - P3 LIVE RUN COMPLETE: 25 of 25, and the control says why that is not the point
 
 init-miner ran the constants-generalization init on portfolio-mine pinned

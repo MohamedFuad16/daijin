@@ -41,6 +41,25 @@ export async function contractRow(method, { file = METHODS_MD } = {}) {
   return null;
 }
 
+/**
+ * The WHOLE row for a method, params and returns together.
+ *
+ * `contractRow` returns the returns cell, which is the right scope for a shape. It is the
+ * wrong scope for a VOCABULARY: `initBrain`'s modes are named in the params cell, and an
+ * enum check reading only the returns cell reported them missing when a reader would find
+ * them immediately. The question an enum check asks is whether the contract names the value
+ * where someone reading the method would see it, and the row is that place.
+ */
+export async function contractLine(method, { file = METHODS_MD } = {}) {
+  const text = await readFile(file, 'utf8');
+  for (const line of text.split('\n')) {
+    if (!line.startsWith('|')) continue;
+    const cells = line.split(/(?<!\\)\|/).map((cell) => cell.trim());
+    if (cells[1] === `\`${method}\``) return line;
+  }
+  return null;
+}
+
 /// Strip the prose additions, which open with a dated marker.
 ///
 /// NOT "cut at the first `[`": a shape can legitimately contain one, and

@@ -451,3 +451,68 @@ test('discovered and parseError are mutually exclusive, always', async () => {
   assert.equal(junk.parseError, null);
   assert.equal(junk.discovered.gates.length, 3);
 });
+
+// ---- the enum sweep: every value a client can receive is named in its row -----------------
+//
+// The THIRD row failure mode, closed rather than instanced. A row can carry the right shape
+// and an accurate claim and still leave a client guessing an ENUM, and nothing else notices,
+// because the gate compares key sets and prose describes methods rather than vocabularies.
+// It fired twice in one row: the client assumed baseline.status was pass/fail/violations,
+// wrong on all three counts, since violations never occurs and timeout and unavailable do.
+//
+// Each enum is bound to its SOURCE OF TRUTH, not to a list typed here. An imported constant
+// cannot drift; a harvested literal fails this test when the code grows a value the row does
+// not name. That is what makes the mode closed rather than swept once.
+
+test('every enum a client can receive is named in its contract row', async () => {
+  // The WHOLE row, params and returns: initBrain's modes are named in its params cell, and
+  // reading only the returns cell reported them missing when a reader would find them at
+  // once. A vocabulary check asks whether the contract names the value where someone
+  // reading the method would see it.
+  const { contractLine } = await import('./helpers/contract-shape.js');
+  const { RUN_MODES } = await import('../src/gym/run-mode.js');
+  const { RUN_STATUSES } = await import('../src/gym/ledger.js');
+  const { VERDICTS } = await import('../src/gym/grading.js');
+  const { AUTHORING_STATUSES, BENCHMARK_STATUSES } = await import('../src/gym/exams.js');
+  const { MODES } = await import('../src/init/pipeline.js');
+  const { ungradedExplanation } = await import('../src/rpc/methods.js');
+
+  // Harvested from source, so a new literal in the code fails here rather than reaching a
+  // client. These two enums live as literals rather than as constants.
+  const { readFile: read } = await import('node:fs/promises');
+  const { fileURLToPath } = await import('node:url');
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'src');
+  const discovery = await read(path.join(root, 'init', 'gate-discovery.js'), 'utf8');
+  const classifications = [...discovery.matchAll(/classification:\s*'([a-z-]+)'/g)].map((match) => match[1]);
+  const methods = await read(path.join(root, 'rpc', 'methods.js'), 'utf8');
+  const healths = [...methods.matchAll(/health = '([a-z-]+)'|return '([a-z-]+)';/g)]
+    .map((match) => match[1] ?? match[2]).filter((value) => ['no-brain', 'warn', 'ok', 'critical'].includes(value));
+
+  const ENUMS = [
+    { method: 'examDetail', field: 'mode', values: RUN_MODES, source: 'RUN_MODES' },
+    { method: 'examDetail', field: 'status', values: RUN_STATUSES, source: 'RUN_STATUSES' },
+    { method: 'examDetail', field: 'verdict', values: VERDICTS, source: 'VERDICTS' },
+    { method: 'examDetail', field: 'ungradedCode', source: 'ungradedExplanation over every run status',
+      values: [...new Set(RUN_STATUSES.map((status) => ungradedExplanation({ status }).code))] },
+    { method: 'examList', field: 'status', values: AUTHORING_STATUSES, source: 'AUTHORING_STATUSES' },
+    { method: 'examList', field: 'benchmarkStatus', values: BENCHMARK_STATUSES, source: 'BENCHMARK_STATUSES' },
+    { method: 'initBrain', field: 'mode', values: MODES, source: 'MODES' },
+    { method: 'gatesGet', field: 'classification', values: classifications, source: 'harvested from classifyBaselineRun' },
+    { method: 'serveStatus', field: 'health', values: healths, source: 'harvested from serveStatus' },
+  ];
+
+  const unnamed = [];
+  for (const { method, field, values, source } of ENUMS) {
+    // A harvest that yields nothing would pass this test vacuously, which is the dead-gate
+    // shape one level up: the check would report every row as compliant precisely because it
+    // had stopped reading the code.
+    assert.ok(values.length >= 2, `${method}.${field}: ${source} yielded ${values.length} values, so the harvest is broken`);
+    const row = await contractLine(method);
+    assert.ok(row, `${method} has no contract row`);
+    for (const value of values) {
+      if (!row.includes(value)) unnamed.push(`${method}.${field} does not name ${value} (from ${source})`);
+    }
+  }
+  assert.deepEqual(unnamed, [],
+    'a client receiving one of these would have to guess it, which is how baseline.status was guessed wrong twice');
+});

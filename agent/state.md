@@ -1,5 +1,37 @@
 # Daijin build state (authoritative)
 
+## 2026-08-16 18:25 - Conversion verified by the strong instrument; envelope gains a line
+
+The verifier verified gym-porter's D-0032 conversion with the
+instrument its own audit demanded: NOT before-and-after (documented
+blind to contained windows) but CONTINUOUS SAMPLING - 91 shared-tree
+digest samples at 0.5s intervals across the whole 77-mutation battery,
+zero differing, ends identical. The untouched property holds against
+the strong instrument. Second unplanned counter fire noted for the
+record: converting to a private copy broke $0 resolution and the F81
+declared-vs-executed counter caught it on the first run - the guard
+firing on the very change that could have disarmed it silently.
+
+gym-porter wrote the containment bound beside its own digest check
+(ab7ceee) unprompted: the digest proves the tree unchanged AT THE ENDS;
+the containment is the private copy, which works by there being no
+window, not by catching one. Its offer to write the D-0032 diff against
+init-miner's mutate-all.mjs (written, not landed, theirs to accept or
+refuse) is ACCEPTED - the pattern moves as a reviewable diff instead of
+a pointer.
+
+PROTOCOL ADOPTED, from gym-porter's caveat on the externalized-cost
+lesson: the worker return envelope gains a fourth line - EMISSIONS:
+what does this change write, and who else reads it. The testable form
+of the lesson (ask what an instrument writes and who reads that) would
+have found the battery defect in a minute; audit-your-emissions joins
+audit-your-inputs. Effective for all lanes from next report.
+
+Verifier's P8 posture confirmed: it will re-read all nine clauses at
+claim time rather than from its earlier audit (three have moved), and
+will specifically check clause (e)'s seeding goes through the import
+API rather than a direct insert - "the storage layer accepted this"
+versus "someone wrote a row".
 ## 2026-08-16 18:15 - CI evidence resolves one defect and exposes a third cause
 
 TWO LEADER CORRECTIONS FROM RAW CI LOGS, both dated here.

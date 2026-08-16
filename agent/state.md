@@ -1,5 +1,58 @@
 # Daijin build state (authoritative)
 
+## 2026-08-17 10:25 - tui-builder's closing sweep: two fixes became eight
+
+Both closing fixes landed plus six more the probe exposed (0bb4b53,
+b2752f6; 339 green + live conformance). The probe-first discipline
+found what prose could not:
+
+THE BUTTONS THAT NEVER WORKED: gatesSet accepts patch.content (not
+top-level content - the first probe's refusal was the prober's own
+param shape, caught by re-probing), and THREE screen buttons (mark
+measured, mark pre-broken, toggle enabled) sent patch.gates - the
+structural patch the engine refuses in EVERY state. They worked
+against the mock and would have failed on every press against the
+engine: the mock was not merely permissive, it was teaching a whole
+interaction the wire does not have. Replaced with a whole-document
+editor, reachable in the unreadable state because that is the state a
+user most needs to edit out of. Post-save rows come back AS WRITTEN
+(classification absent until discovery), and the blank no longer
+renders as a verdict.
+
+THE DESTRUCTIVE MISREADING: a critical repo (brain exists, will not
+open) read as no-brain and the card offered INITIALIZE BRAIN to
+exactly the user whose brain just failed to load. Now "Inspect brain"
+with the state named. An unknown health no longer borrows the
+no-brain badge (a value nobody understood rendered as a claim).
+unsubmitted gained its own texture: never-handed-in and never-judged
+are different facts.
+
+THE FOURTH CARD: four repo cards exceeded the terminal width in a
+plain Horizontal - cards past the edge reachable by NEITHER mouse nor
+keyboard, not clipped visibly, just gone; three repos hid it. Now a
+HorizontalScroll with a scroll test.
+
+TWO CONFESSED ERRORS: a TAUTOLOGICAL reachability test (a region
+intersected with its container is always inside it), caught only
+because the mutation was killed by the WRONG test - "a mutation killed
+by a different test than the one written for it is the signal the new
+test is dead", a sharper detector than pass/fail of the whole run.
+And the SECOND git-checkout-destroys-work instance of the session,
+across two lanes - the structural counter (mutate-once) now has two
+demonstrations of its necessity.
+
+RULINGS on the three questions: (1) the mock's attempts carry BOTH
+grades and axes, identical, per the mock-matches-seam rule; (2) the
+null-summary sentence names the state and the action: "N gates, not
+yet measured; run discovery to classify" - the ordinary post-edit
+state must not read as an error; (3) the conformance assertion goes
+CONDITIONAL on summary presence WITH a non-vacuity guard (the fixture
+must provide at least one summary-bearing repo) - a gate that fails
+on a legitimate state is a false gate, and a gate skipping everything
+is a dead one; the pair is the pattern. Assumption 2 RATIFIED:
+unsubmitted keeps its swatch - different facts render differently is
+the ruled reading. Suggested, not ordered: adopt mutate-once for tui
+mutations; it is language-agnostic and the class has now fired twice.
 ## 2026-08-17 03:15 - The counter built, and the leader's framing corrected
 
 The extractor built the tenth-use counter (106ec15,

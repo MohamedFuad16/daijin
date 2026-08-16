@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Process entry point for the RPC daemon.
 //
-//   node engine/src/rpc/daemon.js [--state-root=<dir>] [--no-probe]
+//   node engine/src/rpc/daemon.js [--state-root=<dir>] [--no-probe] [--socket]
 //
 // The TUI spawns exactly this and speaks JSON-RPC over the pipe. Kept separate from
 // server.js so the server can be imported and driven in-process by tests without a
@@ -10,6 +10,7 @@
 import os from 'node:os';
 import path from 'node:path';
 
+import { serveSocket } from './socket.js';
 import { serveStdio } from './server.js';
 
 function argument(flag, fallback = null) {
@@ -43,7 +44,24 @@ const deps = process.argv.includes('--no-probe')
   }
   : {};
 
-serveStdio({ stateRoot, deps }).catch((error) => {
+// `--socket` serves the ATTACH transport: one daemon, many clients. Opt in, never
+// inferred, so a client cannot get the other transport by accident. stdio remains the
+// default and remains what the tests drive.
+const wanted = process.argv.includes('--socket') ? serveSocket : serveStdio;
+
+wanted({ stateRoot, deps }).then((served) => {
+  if (served?.socketPath) {
+    // stdout is the protocol on the stdio transport, so anything a human reads goes to
+    // stderr on both, keeping one rule rather than two.
+    console.error(`daijin-rpc listening on ${served.socketPath}`);
+    const stop = async () => {
+      await served.close().catch(() => {});
+      process.exit(0);
+    };
+    process.once('SIGINT', stop);
+    process.once('SIGTERM', stop);
+  }
+}).catch((error) => {
   // The lock refusal is the expected failure here and it is already a complete sentence
   // naming the holding pid, so it is printed as written rather than wrapped in a trace.
   console.error(error.message);

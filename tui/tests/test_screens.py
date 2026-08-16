@@ -12,6 +12,7 @@ from conftest import DEFAULT_REPO, SUB_75_REPO, goto, run_async, running_app, sc
 from textual.widgets import Button, DataTable, Input, Select, Static, TabbedContent
 
 from daijin_tui.rpc import SUPPORTED_CONTRACT_VERSION
+from daijin_tui.screens.gates import GATE_COLUMNS
 from daijin_tui.screens.dialogs import AgentFileEditScreen, SpendConfirmScreen, TextPromptScreen
 from daijin_tui.widgets import (
     Banner,
@@ -414,9 +415,93 @@ async def test_gates_table_classifies_every_candidate_with_evidence():
         await goto(pilot, "4")
         table = app.screen.query_one("#gates-table", DataTable)
         assert table.row_count == 5
-        classifications = {str(table.get_row_at(i)[1]) for i in range(table.row_count)}
+        column = GATE_COLUMNS.index("classification")
+        classifications = {str(table.get_row_at(i)[column]) for i in range(table.row_count)}
         assert classifications == {"live", "measured", "pre-broken", "unavailable"}
-        assert "baseline run" in text_of(app.screen.query_one("#gate-evidence", Static))
+        # The evidence pane quotes the measurement rather than paraphrasing it,
+        # so the numbers it shows have to be the ones the baseline recorded.
+        evidence = text_of(app.screen.query_one("#gate-evidence", Static))
+        first = app.screen.gates[0]["baseline"]
+        assert str(first["durationMs"]) in evidence, f"the duration is not shown: {evidence!r}"
+        assert str(first["timeoutMs"]) in evidence, "the budget the duration is measured against is missing"
+        assert first["status"] in evidence
+
+
+@run_async
+async def test_a_gates_file_that_describes_nothing_is_not_a_gates_file_that_broke():
+    """Both produce an empty gate list and they are opposite facts.
+
+    An empty table says "nothing guards this repo". That is true of a file that
+    lists no gates and false of a file that would not parse, where the truth is
+    that we do not know what it lists. The screen has to say which one it has.
+    """
+    async with running_app() as (app, pilot):
+        await goto(pilot, "4")
+        screen = app.screen
+
+        app.selected_repo = "/Users/owner/code/kiln-api"
+        screen.start_load()
+        await screen.wait_for_load()
+        await settle(pilot)
+        empty_notice = text_of(screen.query_one("#gates-notice", Banner))
+        assert screen.query_one("#gates-table", DataTable).display is True, (
+            "a genuinely empty file is a table with no rows, which is the true rendering"
+        )
+        assert screen.query_one("#gates-table", DataTable).row_count == 0
+        assert screen.query_one("#gates-raw", Static).display is False
+        assert "describes no gates" in empty_notice
+        empty_evidence = text_of(screen.query_one("#gate-evidence", Static))
+
+        app.selected_repo = "/Users/owner/code/lantern-ios"
+        screen.start_load()
+        await screen.wait_for_load()
+        await settle(pilot)
+        broken_notice = text_of(screen.query_one("#gates-notice", Banner))
+        assert screen.query_one("#gates-table", DataTable).display is False, (
+            "an unparsed file rendered as an empty table claims zero gates it never counted"
+        )
+        raw = screen.query_one("#gates-raw", Static)
+        assert raw.display is True
+        rendered = text_of(raw)
+        assert "could not be read" in rendered
+        assert "mapping values are not allowed" in rendered, "the parser's reason is not shown"
+        assert "swiftlint" in rendered, "the file the user has to fix is not shown"
+        assert broken_notice != empty_notice, "the two empty states read identically"
+        assert "not zero gates" in broken_notice
+        broken_evidence = text_of(screen.query_one("#gate-evidence", Static))
+        assert broken_evidence != empty_evidence, "the evidence pane explains both empties the same way"
+        assert "could not be parsed" in broken_evidence
+        assert "describes no gates" in empty_evidence
+
+
+@run_async
+async def test_the_gate_count_comes_from_the_engines_own_summary():
+    """Recounting here would let the screen and the ledger drift apart.
+
+    A missing summary is also not a zero: the screen says it has none rather
+    than printing one it made up.
+    """
+    async with running_app() as (app, pilot):
+        await goto(pilot, "4")
+        screen = app.screen
+        summary = screen.summary
+        assert summary["carryingSignal"] == 3 and summary["total"] == 5
+        notice = text_of(screen.query_one("#gates-notice", Banner))
+        assert "3 of 5 carrying signal" in notice, f"the engine's count is not what is shown: {notice!r}"
+
+        # Mutate the engine's own copy: the mock deep copies at construction,
+        # so editing the module table would change nothing this app can see.
+        served = app.client.engine.gates[DEFAULT_REPO]["discovered"]
+        original = served.pop("summary")
+        try:
+            screen.start_load()
+            await screen.wait_for_load()
+            await settle(pilot)
+            silent = text_of(screen.query_one("#gates-notice", Banner))
+            assert "no summary reported" in silent, f"a missing count was rendered as a count: {silent!r}"
+            assert "carrying signal" not in silent
+        finally:
+            served["summary"] = original
 
 
 @run_async
@@ -435,7 +520,7 @@ async def test_gates_can_be_reclassified_and_the_change_persists():
         await pilot.click("#gates-prebroken")
         await app.screen.wait_for_load()
         await settle(pilot)
-        gate = next(g for g in app.screen.gates if g["name"] == "eslint")
+        gate = next(g for g in app.screen.gates if g["id"] == "eslint")
         assert gate["classification"] == "pre-broken"
         assert gate["enabled"] is False
 
@@ -1144,38 +1229,3 @@ async def test_experiment_is_marked_unscored_not_dropped_into_unknown():
         )
 
 
-@run_async
-async def test_the_gates_screen_never_reports_zero_gates_it_cannot_see():
-    """The engine sends gates.yaml as text, not as a classified list.
-
-    Rendering an empty table against that says "this repo has no gates", which
-    is a claim and a false one when the file has three. The screen shows the
-    file and names the gap instead.
-    """
-    from textual.widgets import DataTable as DT
-
-    async with running_app() as (app, pilot):
-        await goto(pilot, "4")
-        screen = app.screen
-        # The mock still serves a structured list, so the table is the right
-        # rendering there and stays visible.
-        assert screen.query_one("#gates-table", DT).display is True
-        assert screen.query_one("#gates-raw", Static).display is False
-
-        # Now the shape the engine actually sends.
-        screen.gates = []
-        record = {"path": "/x/.daijin/gates.yaml", "content": "eslint:\n  classification: live\n"}
-        notice = screen.query_one("#gates-notice", Banner)
-        screen.query_one("#gates-table", DT).display = not bool(record.get("gates"))
-        # Drive the real path rather than reimplementing it here.
-        screen.query_one("#gates-raw", Static).display = True
-        text = (
-            "No classified gate list came back for this repo. That is either "
-            "because discovery has not run here, or because the response carried "
-            "the file without its classification."
-        )
-        screen.query_one("#gates-raw", Static).update(text + "\n\n" + record["content"])
-        rendered = text_of(screen.query_one("#gates-raw", Static))
-        assert "No classified gate list came back" in rendered
-        assert "discovery has not run" in rendered, "the copy asserts a cause it cannot know"
-        assert "eslint" in rendered, "the file itself is not shown"

@@ -1052,10 +1052,19 @@ class MockEngine:
         record = self.gates.get(repo)
         if record is None:
             raise RpcError(ERR_INVALID_PARAMS, "no gates discovered", {"hint": f"No gates.yaml exists for {repo}."})
+        discovered = record.get("discovered")
+        if discovered is None:
+            # Patching a file the engine could not read would write over text
+            # the user still needs to fix.
+            raise RpcError(
+                ERR_INVALID_PARAMS,
+                "gates.yaml could not be parsed",
+                {"hint": f"{record.get('path')} does not parse, so no gate in it can be patched. Fix the file first."},
+            )
         for gate_patch in (params.get("patch") or {}).get("gates", []):
-            for gate in record["gates"]:
-                if gate["name"] == gate_patch.get("name"):
-                    gate.update({k: v for k, v in gate_patch.items() if k != "name"})
+            for gate in discovered["gates"]:
+                if gate["id"] == gate_patch.get("id"):
+                    gate.update({k: v for k, v in gate_patch.items() if k != "id"})
         return copy.deepcopy(record)
 
     # Gym and exams --------------------------------------------------------

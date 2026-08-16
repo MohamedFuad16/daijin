@@ -37,16 +37,27 @@ pytestmark = pytest.mark.skipif(
 )
 
 # (method, params-builder, paths the screens read off the RESULT).
-# A path is dotted; a leading "[]" means "every row of the returned list".
+# A path is dotted; a "[]" segment means "the rows of the list at this point".
 READS = [
     ("analyze", lambda repo: {"repoPath": repo}, ["hasBrainFolder"]),
     ("serveStatus", lambda repo: {}, ["repos", "ollama", "db", "spendGate.open", "spendGate.path"]),
     ("documents", lambda repo: {"repoPath": repo}, ["[].id", "[].type", "[].area", "[].title", "[].tags"]),
     ("retrievalScore", lambda repo: {"repoPath": repo}, ["caseRate.exact", "caseRate.cases", "mrr", "violations", "chosenBudget", "rationale", "perCase"]),
     ("mcpSnippet", lambda repo: {"repoPath": repo}, ["unlocked", "threshold"]),
-    # NOT "gates": the engine returns the file as text, and the screen no
-    # longer pretends otherwise. Listing it here would encode the wrong belief.
-    ("gatesGet", lambda repo: {"repoPath": repo}, ["path", "content"]),
+    # The classification arrived on the wire in 0c64509, so the screen reads it
+    # again. content stays listed because it is the fallback when discovered is
+    # null, and a fallback nobody checks is the one that rots.
+    ("gatesGet", lambda repo: {"repoPath": repo}, [
+        "path", "content", "discovered.gates", "discovered.summary.total",
+        "discovered.summary.carryingSignal", "discovered.gates.[].id",
+        "discovered.gates.[].command", "discovered.gates.[].role",
+        "discovered.gates.[].classification", "discovered.gates.[].enabled",
+        "discovered.gates.[].source", "discovered.gates.[].unavailableHint",
+        "discovered.gates.[].baseline.status", "discovered.gates.[].baseline.exitCode",
+        "discovered.gates.[].baseline.durationMs", "discovered.gates.[].baseline.timeoutMs",
+        "discovered.gates.[].baseline.stdoutTail", "discovered.gates.[].baseline.stderrTail",
+        "discovered.gates.[].baseline.unavailableReason",
+    ]),
     ("examList", lambda repo: {"repoPath": repo}, ["[].examId", "[].title", "[].status", "[].benchmarkStatus", "[].heldOut", "[].tier", "[].provenance"]),
     ("examDetail", lambda repo: {"examId": "exam-0001", "repoPath": repo}, ["axes", "attempts", "provenance"]),
     ("board", lambda repo: {}, ["rows", "total"]),
@@ -56,16 +67,26 @@ READS = [
 
 def _resolve(value, path: str) -> bool:
     """Does this dotted path exist in the response?"""
-    if path.startswith("[]."):
+    head, _, rest = path.partition(".")
+    if head == "[]":
         if not isinstance(value, list):
             return False
         if not value:
             return True  # an empty list cannot contradict the shape
-        return _resolve(value[0], path[3:])
-    head, _, rest = path.partition(".")
+        return _resolve(value[0], rest) if rest else True
     if not isinstance(value, dict) or head not in value:
         return False
     return _resolve(value[head], rest) if rest else True
+
+
+def _empty_at(value, prefix: str) -> bool:
+    """Is the list this path fans out over empty (or absent) in the response?"""
+    node = value
+    for head in [part for part in prefix.split(".") if part]:
+        if not isinstance(node, dict) or head not in node:
+            return True
+        node = node[head]
+    return not isinstance(node, list) or not node
 
 
 @run_async
@@ -76,6 +97,7 @@ async def test_every_field_a_screen_reads_exists_on_the_live_engine():
     subprocess.run(["node", str(FIXTURE), str(repo)], capture_output=True, timeout=120)
     client = StdioRpcClient(["node", str(ENGINE), f"--state-root={root}"])
     missing: list[str] = []
+    vacuous: set[str] = set()
     try:
         await client.start()
         await asyncio.wait_for(client.handshake(), timeout=30)
@@ -100,6 +122,13 @@ async def test_every_field_a_screen_reads_exists_on_the_live_engine():
             for path in paths:
                 if not _resolve(result, path):
                     missing.append(f"{method}.{path}")
+            # A "[]" path over an empty list passes without checking anything.
+            # That is the shape of every vacuous gate this project has shipped,
+            # so the emptiness is named rather than counted as coverage.
+            for path in paths:
+                prefix, sep, _ = path.partition("[]")
+                if sep and _empty_at(result, prefix.rstrip(".")):
+                    vacuous.add(f"{method}.{prefix or 'result'}")
     finally:
         await client.aclose()
         shutil.rmtree(root, ignore_errors=True)
@@ -109,3 +138,10 @@ async def test_every_field_a_screen_reads_exists_on_the_live_engine():
         "these are read by a screen and absent from the live response, so the "
         f"screen renders nothing against real data: {missing}"
     )
+    # gatesGet is the one this check was extended for, and a run where the
+    # fixture repo has no gates would have proved nothing about the fields.
+    assert "gatesGet.discovered.gates." not in vacuous, (
+        "the fixture repo returned zero gates, so every per-gate field above "
+        "passed without being looked at"
+    )
+    assert not vacuous, f"these paths were never actually checked: {sorted(vacuous)}"

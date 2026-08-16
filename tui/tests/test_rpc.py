@@ -39,7 +39,7 @@ CONTRACT_METHODS = [
     ("search", {"repoPath": DEFAULT_REPO, "query": "upload queue backoff"}, ["chunks", "tokensUsed"]),
     ("serveStatus", {}, ["repos", "ollama", "db", "spendGate"]),
     ("mcpSnippet", {"repoPath": DEFAULT_REPO}, ["unlocked", "threshold", "snippet"]),
-    ("gatesGet", {"repoPath": DEFAULT_REPO}, ["path", "gates"]),
+    ("gatesGet", {"repoPath": DEFAULT_REPO}, ["path", "content", "discovered", "parseError"]),
     ("gymStatus", {}, ["cycles", "activeRun", "ledger"]),
     ("examDetail", {"examId": "exam-0058"}, ["axes", "attempts", "provenance"]),
     ("settingsGet", {}, ["roles", "retrieval", "storage"]),
@@ -635,12 +635,60 @@ async def test_job_cancel_on_a_finished_job_reports_false():
 async def test_gates_carry_a_classification_and_liveness_evidence():
     client = MockRpcClient(MockEngine(speed=0.0))
     record = await client.call("gatesGet", {"repoPath": DEFAULT_REPO})
-    classifications = {gate["classification"] for gate in record["gates"]}
+    gates = record["discovered"]["gates"]
+    classifications = {gate["classification"] for gate in gates}
     assert {"live", "measured", "pre-broken", "unavailable"} <= classifications
-    for gate in record["gates"]:
-        assert gate["evidence"], f"{gate['name']} has no liveness evidence"
-    dead = [g for g in record["gates"] if g["classification"] in ("pre-broken", "unavailable")]
+    for gate in gates:
+        # The evidence is the measurement itself, not a sentence about it, so
+        # the fields the screen reads have to be the ones that are present.
+        baseline = gate["baseline"]
+        assert baseline["status"], f"{gate['id']} has no baseline status"
+        assert baseline["timeoutMs"], f"{gate['id']} has no timeout budget to report"
+        assert "durationMs" in baseline and "exitCode" in baseline
+    dead = [g for g in gates if g["classification"] in ("pre-broken", "unavailable")]
     assert dead and all(not g["enabled"] for g in dead), "a dead gate must not stay enabled"
+    await client.aclose()
+
+
+@run_async
+async def test_the_mock_produces_all_three_gate_discovery_states():
+    """A mock that only ever emits well formed output lets a branch rot.
+
+    The empty-because-nothing-is-there case and the empty-because-it-would-not-
+    parse case look identical in a gate list and are opposite facts, so both
+    have to be reachable, along with the ordinary one.
+    """
+    client = MockRpcClient(MockEngine(speed=0.0))
+    states = {}
+    for repo in ("orchard-web", "kiln-api", "lantern-ios"):
+        record = await client.call("gatesGet", {"repoPath": f"/Users/owner/code/{repo}"})
+        assert "content" in record, "content is always present, including when parsing failed"
+        discovered = record["discovered"]
+        if discovered is None:
+            assert record["parseError"], "an unreadable file must say why"
+            states["unparsed"] = repo
+        elif not discovered["gates"]:
+            assert discovered["summary"]["total"] == 0
+            assert record["parseError"] is None
+            states["empty"] = repo
+        else:
+            states["populated"] = repo
+    assert set(states) == {"populated", "empty", "unparsed"}, f"a state is unreachable: {states}"
+    await client.aclose()
+
+
+@run_async
+async def test_gates_cannot_be_patched_into_a_file_that_does_not_parse():
+    client = MockRpcClient(MockEngine(speed=0.0))
+    with pytest.raises(RpcError) as caught:
+        await client.call(
+            "gatesSet",
+            {
+                "repoPath": "/Users/owner/code/lantern-ios",
+                "patch": {"gates": [{"id": "swiftlint", "enabled": False}]},
+            },
+        )
+    assert "parse" in caught.value.hint.lower()
     await client.aclose()
 
 
@@ -649,9 +697,9 @@ async def test_gates_set_is_treated_as_data():
     client = MockRpcClient(MockEngine(speed=0.0))
     updated = await client.call(
         "gatesSet",
-        {"repoPath": DEFAULT_REPO, "patch": {"gates": [{"name": "react-doctor", "classification": "measured", "enabled": True}]}},
+        {"repoPath": DEFAULT_REPO, "patch": {"gates": [{"id": "react-doctor", "classification": "measured", "enabled": True}]}},
     )
-    gate = next(g for g in updated["gates"] if g["name"] == "react-doctor")
+    gate = next(g for g in updated["discovered"]["gates"] if g["id"] == "react-doctor")
     assert gate["classification"] == "measured"
     assert gate["enabled"] is True
     await client.aclose()

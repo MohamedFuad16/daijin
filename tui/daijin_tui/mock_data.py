@@ -315,86 +315,175 @@ MCP_SNIPPET: dict[str, dict[str, Any]] = {
     },
 }
 
+# gatesGet returns the file AND the engine's reading of it, and the two can
+# disagree. Three states are reachable and the mock produces all three, because
+# a mock that only ever emits well formed discovery output lets the broken file
+# branch rot unexercised in exactly the way this screen was already wrong once.
+#
+#   orchard-web  discovered.gates non-empty   the table
+#   kiln-api     discovered, gates: []        genuinely zero, and zero is true
+#   lantern-ios  discovered null, parseError  unreadable, which is not zero
+BROKEN_GATES_YAML = """version: 1
+gates:
+  - id: swiftlint
+    command: swiftlint
+    role: lint
+  - id: xcodebuild-test
+    command: make test
+     role: test
+    enabled: true
+"""
+
 GATES: dict[str, dict[str, Any]] = {
     "/Users/owner/code/orchard-web": {
-        "path": ".daijin/gates.yaml",
-        "gates": [
-            {
-                "name": "eslint",
-                "command": "npm run lint",
-                "source": "package.json",
-                "classification": "measured",
-                "metric": "GATE_METRIC:down:0",
-                "baselineViolations": 14,
-                "evidence": "baseline run 2026-08-16T06:11:02Z, exit 1, 14 warnings, 8.4s",
-                "enabled": True,
+        "path": "/Users/owner/code/orchard-web/.daijin/gates.yaml",
+        "content": "version: 1\ngates:\n  - id: eslint\n    command: npm run lint\n",
+        "parseError": None,
+        "discovered": {
+            "version": 1,
+            "discoveredAt": "2026-08-16T06:11:02Z",
+            "timeoutMs": 300000,
+            "gates": [
+                {
+                    "id": "eslint",
+                    "command": "npm run lint",
+                    "role": "lint",
+                    "cwd": None,
+                    "availabilityCommand": "npm --version && test -d node_modules",
+                    "source": "package.json",
+                    "classification": "measured",
+                    "enabled": True,
+                    "unavailableHint": None,
+                    "baseline": {
+                        "status": "violations",
+                        "exitCode": 1,
+                        "durationMs": 8400,
+                        "timeoutMs": 300000,
+                        "stdoutTail": "14 problems (0 errors, 14 warnings)\n",
+                        "stderrTail": "",
+                        "unavailableReason": None,
+                    },
+                },
+                {
+                    "id": "tsc",
+                    "command": "npm run typecheck",
+                    "role": "typecheck",
+                    "cwd": None,
+                    "availabilityCommand": "npm --version && test -d node_modules",
+                    "source": "package.json",
+                    "classification": "live",
+                    "enabled": True,
+                    "unavailableHint": None,
+                    "baseline": {
+                        "status": "pass",
+                        "exitCode": 0,
+                        "durationMs": 12100,
+                        "timeoutMs": 300000,
+                        "stdoutTail": "",
+                        "stderrTail": "",
+                        "unavailableReason": None,
+                    },
+                },
+                {
+                    "id": "vitest",
+                    "command": "npm test",
+                    "role": "test",
+                    "cwd": None,
+                    "availabilityCommand": "npm --version && test -d node_modules",
+                    "source": "package.json",
+                    "classification": "live",
+                    "enabled": True,
+                    "unavailableHint": None,
+                    "baseline": {
+                        "status": "pass",
+                        "exitCode": 0,
+                        "durationMs": 41700,
+                        "timeoutMs": 300000,
+                        "stdoutTail": "Tests  318 passed (318)\n",
+                        "stderrTail": "",
+                        "unavailableReason": None,
+                    },
+                },
+                {
+                    "id": "react-doctor",
+                    "command": "npx react-doctor",
+                    "role": "lint",
+                    "cwd": None,
+                    "availabilityCommand": "npx react-doctor --version",
+                    "source": "package.json",
+                    "classification": "pre-broken",
+                    "enabled": False,
+                    "unavailableHint": None,
+                    "baseline": {
+                        "status": "fail",
+                        "exitCode": 1,
+                        "durationMs": 5200,
+                        "timeoutMs": 300000,
+                        "stdoutTail": "31 issues\n",
+                        "stderrTail": "",
+                        "unavailableReason": None,
+                    },
+                },
+                {
+                    "id": "playwright",
+                    "command": "npx playwright test",
+                    "role": "e2e",
+                    "cwd": None,
+                    "availabilityCommand": "npx playwright --version",
+                    "source": "package.json",
+                    "classification": "unavailable",
+                    "enabled": False,
+                    "unavailableHint": "run npx playwright install to fetch the browsers",
+                    "baseline": {
+                        "status": "unavailable",
+                        "exitCode": None,
+                        "durationMs": 94,
+                        "timeoutMs": 300000,
+                        "stdoutTail": "",
+                        "stderrTail": "Executable doesn't exist at ms-playwright/chromium\n",
+                        "unavailableReason": "availability command exited 127",
+                    },
+                },
+            ],
+            "summary": {
+                "total": 5,
+                "live": 2,
+                "measured": 1,
+                "preBroken": 1,
+                "unavailable": 1,
+                "carryingSignal": 3,
             },
-            {
-                "name": "tsc",
-                "command": "npm run typecheck",
-                "source": "package.json",
-                "classification": "live",
-                "metric": None,
-                "baselineViolations": 0,
-                "evidence": "baseline run 2026-08-16T06:11:14Z, exit 0, 12.1s",
-                "enabled": True,
-            },
-            {
-                "name": "vitest",
-                "command": "npm test",
-                "source": "package.json",
-                "classification": "live",
-                "metric": None,
-                "baselineViolations": 0,
-                "evidence": "baseline run 2026-08-16T06:11:31Z, exit 0, 41.7s, 318 tests",
-                "enabled": True,
-            },
-            {
-                "name": "react-doctor",
-                "command": "npx react-doctor",
-                "source": "package.json",
-                "classification": "pre-broken",
-                "metric": None,
-                "baselineViolations": 31,
-                "evidence": "fails on baseline AND candidate alike, exit 1 both runs, carries no signal",
-                "enabled": False,
-            },
-            {
-                "name": "playwright",
-                "command": "npx playwright test",
-                "source": "package.json",
-                "classification": "unavailable",
-                "metric": None,
-                "baselineViolations": None,
-                "evidence": "browser binaries not installed, command exits 127",
-                "enabled": False,
-            },
-        ],
+        },
     },
+    # Case 2. The file parsed and describes nothing. Zero is a real answer here,
+    # so the table is the right rendering of it.
+    "/Users/owner/code/kiln-api": {
+        "path": "/Users/owner/code/kiln-api/.daijin/gates.yaml",
+        "content": "version: 1\ngates: []\n",
+        "parseError": None,
+        "discovered": {
+            "version": 1,
+            "discoveredAt": "2026-08-16T07:02:19Z",
+            "timeoutMs": 300000,
+            "gates": [],
+            "summary": {
+                "total": 0,
+                "live": 0,
+                "measured": 0,
+                "preBroken": 0,
+                "unavailable": 0,
+                "carryingSignal": 0,
+            },
+        },
+    },
+    # Case 3. The file cannot be interpreted, so no gate in it has a
+    # classification. This is NOT zero gates, and the difference is the whole
+    # reason the two states render differently.
     "/Users/owner/code/lantern-ios": {
-        "path": ".daijin/gates.yaml",
-        "gates": [
-            {
-                "name": "swiftlint",
-                "command": "swiftlint",
-                "source": "Makefile",
-                "classification": "measured",
-                "metric": "GATE_METRIC:down:0",
-                "baselineViolations": 62,
-                "evidence": "baseline run 2026-08-16T06:22:40Z, exit 1, 62 violations, 6.9s",
-                "enabled": True,
-            },
-            {
-                "name": "xcodebuild-test",
-                "command": "make test",
-                "source": "Makefile",
-                "classification": "live",
-                "metric": None,
-                "baselineViolations": 0,
-                "evidence": "baseline run 2026-08-16T06:24:02Z, exit 0, 233.5s, fresh DerivedData",
-                "enabled": True,
-            },
-        ],
+        "path": "/Users/owner/code/lantern-ios/.daijin/gates.yaml",
+        "content": BROKEN_GATES_YAML,
+        "parseError": "line 8, column 6: mapping values are not allowed in this context",
+        "discovered": None,
     },
 }
 

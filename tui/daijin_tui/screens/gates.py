@@ -16,10 +16,10 @@ from .. import mock_data
 from ..rpc import RpcError
 from ..stream import FLUSH_INTERVAL, StreamCoalescer
 from ..widgets.activity import IDLE_UNTIL_INFERRED
-from ..widgets import Banner, EventLog, PhaseChecklist, SectionTitle, format_count
+from ..widgets import Banner, EventLog, PhaseChecklist, SectionTitle
 from .base import DaijinScreen
 
-GATE_COLUMNS = ("gate", "classification", "metric", "baseline violations", "enabled", "command")
+GATE_COLUMNS = ("gate", "role", "classification", "enabled", "baseline", "command")
 
 CLASSIFICATION_NOTE = {
     "live": "passes on baseline, fails on a regression. Real coverage.",
@@ -38,6 +38,9 @@ class GatesScreen(DaijinScreen):
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self.gates: list[dict[str, Any]] = []
+        self.discovered: dict[str, Any] | None = None
+        self.summary: dict[str, Any] | None = None
+        self.parse_error: str | None = None
         self.raw_content = ""
         self.job_id: str | None = None
         self._subscribed = False
@@ -77,71 +80,119 @@ class GatesScreen(DaijinScreen):
             self.gates = []
             table.clear()
             return
-        self.gates = record.get("gates") or []
+        discovered = record.get("discovered")
+        self.discovered = discovered if isinstance(discovered, dict) else None
+        self.gates = (self.discovered or {}).get("gates") or []
+        self.summary = (self.discovered or {}).get("summary")
+        self.parse_error = record.get("parseError")
+        # content is always present, including when the YAML is broken, because
+        # gates.yaml is a file the user is invited to edit and taking their text
+        # away at the moment they need to read it would be the worse failure.
         self.raw_content = str(record.get("content") or "")
-        # Two different situations produce no structured list, and this client
-        # cannot tell them apart: a repo whose gates were never discovered, and
-        # a response that does not carry the classification. So the copy states
-        # only what is observable, which stays true in both cases and stays
-        # true after the wire gains the structured rows.
-        #
-        # What it must never do is render an empty TABLE, because that says
-        # "this repo has no gates", which is a claim and a false one when the
-        # file has three in it.
-        structured = bool(self.gates)
-        self.query_one("#gates-table", DataTable).display = structured
-        raw = self.query_one("#gates-raw", Static)
-        raw.display = not structured
-        if not structured:
-            raw.update(
-                "[b]No classified gate list came back for this repo.[/b] That is "
-                "either because discovery has not run here, or because the "
-                "response carried the file without its classification. Either "
-                "way the file is worth reading, so here it is verbatim:\n\n"
+        # Three distinct states, and the difference between the second and the
+        # third is the whole point: a file that describes no gates and a file
+        # that could not be read both produce an empty list, and only one of
+        # them makes "zero gates" a true statement.
+        text_panel = self.query_one("#gates-raw", Static)
+
+        if self.discovered is None:
+            # Case 3: unreadable. The user broke a file we invited them to edit,
+            # so they need the text and the error, not a zero.
+            table.display = False
+            text_panel.display = True
+            text_panel.update(
+                f"[b]This gates.yaml could not be read.[/b]\n"
+                f"[red]{self.parse_error or 'no reason given'}[/red]\n\n"
+                f"The file as it stands:\n\n"
                 + (self.raw_content or "[dim]the file is empty[/dim]")
             )
             notice.set_notice(
-                f"{record.get('path', 'gates.yaml')}: showing the file itself, "
-                f"because nothing is a safer thing to table than a zero this "
-                f"screen cannot stand behind. Run discovery if it has not run.",
+                f"{record.get('path', 'gates.yaml')} could not be parsed, so no "
+                f"gate can be classified from it. This is not zero gates: it is "
+                f"a file that needs fixing, and the reason is above.",
+                "error",
+            )
+            self._show_gate({})
+            return
+
+        if not self.gates:
+            # Case 2: readable and genuinely empty. Zero is TRUE here, so the
+            # table is the right rendering and says so.
+            table.display = True
+            text_panel.display = False
+            table.clear()
+            notice.set_notice(
+                f"{record.get('path', 'gates.yaml')} describes no gates. Nothing "
+                f"guards this repo's work, which is a real answer rather than a "
+                f"missing one.",
                 "warn",
             )
             self._show_gate({})
             return
+
+        table.display = True
+        text_panel.display = False
         table.clear()
         for gate in self.gates:
+            baseline = gate.get("baseline") or {}
             table.add_row(
-                gate.get("name", ""),
+                gate.get("id", ""),
+                gate.get("role") or "-",
                 gate.get("classification", ""),
-                gate.get("metric") or "-",
-                format_count(gate.get("baselineViolations")),
                 "yes" if gate.get("enabled") else "no",
+                baseline.get("status") or "not run",
                 gate.get("command", ""),
-                key=gate.get("name"),
+                key=gate.get("id"),
             )
         dead = [g for g in self.gates if g.get("classification") in ("pre-broken", "unavailable")]
-        live = [g for g in self.gates if g.get("classification") in ("live", "measured")]
-        tone = "warn" if dead else "info"
+        # The engine counts carryingSignal itself. Preferring its number over a
+        # recount here means the screen and the ledger cannot drift; a summary
+        # of nothing and no summary are different facts, so a missing one is
+        # said rather than replaced with a zero.
+        summary = self.summary if isinstance(self.summary, dict) else None
+        if summary:
+            carrying = summary.get("carryingSignal")
+            counted = f"{carrying} of {summary.get('total')} carrying signal"
+        else:
+            counted = f"{len(self.gates)} gates, no summary reported"
         notice.set_notice(
-            f"{record.get('path', 'gates.yaml')}: {len(live)} carrying signal, "
-            f"{len(dead)} excluded and labelled ({', '.join(g['name'] for g in dead) or 'none'}).",
-            tone,
+            f"{record.get('path', 'gates.yaml')}: {counted}, "
+            f"{len(dead)} excluded and labelled ({', '.join(g['id'] for g in dead) or 'none'}).",
+            "warn" if dead else "info",
         )
         if self.gates:
             self._show_gate(self.gates[0])
 
     def _show_gate(self, gate: dict[str, Any]) -> None:
         if not gate:
-            self.query_one("#gate-evidence", Static).update(
-                "[dim]No structured gate to explain: the wire carries the file, "
-                "not its classification.[/dim]"
+            # Which empty this is matters. One says the file has nothing in it,
+            # the other says we could not find out what is in it.
+            reason = (
+                "the file could not be parsed, so nothing in it has been classified"
+                if self.discovered is None
+                else "the file describes no gates, so there is nothing to explain"
             )
+            self.query_one("#gate-evidence", Static).update(f"[dim]No gate to explain: {reason}.[/dim]")
             return
         classification = str(gate.get("classification", ""))
+        baseline = gate.get("baseline") or {}
+        # The measurement's own words, not a paraphrase of them.
+        evidence = [
+            f"status {baseline.get('status', 'not run')}, exit {baseline.get('exitCode')}, "
+            f"{baseline.get('durationMs')} ms of a {baseline.get('timeoutMs')} ms budget"
+        ]
+        if baseline.get("unavailableReason"):
+            evidence.append(f"unavailable: {baseline['unavailableReason']}")
+        if gate.get("unavailableHint"):
+            evidence.append(f"hint: {gate['unavailableHint']}")
+        for stream in ("stdoutTail", "stderrTail"):
+            tail = str(baseline.get(stream) or "").strip()
+            if tail:
+                evidence.append(f"{stream}: {tail.splitlines()[-1][:100]}")
         self.query_one("#gate-evidence", Static).update(
-            f"[b]{gate.get('name')}[/b]  {gate.get('command')}  [dim]from {gate.get('source')}[/dim]\n"
+            f"[b]{gate.get('id')}[/b]  {gate.get('command')}  [dim]from {gate.get('source')}[/dim]\n"
             f"classification [b]{classification}[/b]  [dim]{CLASSIFICATION_NOTE.get(classification, '')}[/dim]\n"
-            f"{gate.get('evidence', 'no evidence recorded')}"
+            + "\n".join(evidence)
         )
 
     def _selected_gate(self) -> dict[str, Any] | None:
@@ -153,14 +204,14 @@ class GatesScreen(DaijinScreen):
         except Exception:
             return None
         for gate in self.gates:
-            if gate.get("name") == key:
+            if gate.get("id") == key:
                 return gate
         return None
 
     def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
         key = event.row_key.value if event.row_key else None
         for gate in self.gates:
-            if gate.get("name") == key:
+            if gate.get("id") == key:
                 self._show_gate(gate)
                 return
 
@@ -188,13 +239,13 @@ class GatesScreen(DaijinScreen):
         try:
             await self.client.call(
                 "gatesSet",
-                {"repoPath": repo, "patch": {"gates": [{"name": gate["name"], **patch}]}},
+                {"repoPath": repo, "patch": {"gates": [{"id": gate["id"], **patch}]}},
             )
         except RpcError as error:
             self.report_rpc_error(error)
             return
         self.set_pending_notice(
-            f"{gate['name']} updated: {', '.join(f'{k} {v}' for k, v in patch.items())}."
+            f"{gate['id']} updated: {', '.join(f'{k} {v}' for k, v in patch.items())}."
         )
         self.start_load()
 

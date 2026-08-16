@@ -11,6 +11,8 @@ import { randomUUID } from 'node:crypto';
 import { appendFile, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
+import { checkKeyRef, KEY_REF_FORMS, parseKeyRef } from '../roles/keys.js';
+
 export const ROLES = Object.freeze(['engineer', 'teacher', 'auditor', 'watcher']);
 export const AGENT_FILES = Object.freeze(['student', 'teacher', 'auditor', 'watcher']);
 
@@ -175,13 +177,24 @@ export class EngineState {
     return { ...structuredClone(DEFAULT_SETTINGS), ...stored };
   }
 
-  /// The display form: every role's key is a masked pointer, never a value.
+  /**
+   * The display form: every role's key is a masked pointer, never a value.
+   *
+   * `keyResolvable` answers "can this role reach its key" WITHOUT handing the key over, so
+   * a settings screen can render ready or not-ready without a secret crossing the RPC
+   * boundary. It is a filesystem read per configured role, which is why an unconfigured
+   * role short-circuits to null rather than reporting false: never configured is not the
+   * same claim as configured and broken.
+   */
   async settings() {
     const settings = await this.rawSettings();
-    settings.roles = (settings.roles || []).map((role) => ({
+    settings.roles = await Promise.all((settings.roles || []).map(async (role) => ({
       ...role,
       keyMasked: maskKeyRef(role.keyRef),
-    }));
+      ...(role.keyRef
+        ? await checkKeyRef(role.keyRef).then((checked) => ({ keyResolvable: checked.resolvable, keyReason: checked.reason }))
+        : { keyResolvable: null, keyReason: null }),
+    })));
     return settings;
   }
 
@@ -198,6 +211,17 @@ export class EngineState {
       // client mark its own roles ready without a provider ever answering.
       for (const [key, value] of Object.entries(rolePatch)) {
         if (key === 'role' || key === 'ping' || key === 'keyMasked') continue;
+        // Derived, never stored: writing them back would let a client claim a role is
+        // reachable without anything having checked.
+        if (key === 'keyResolvable' || key === 'keyReason') continue;
+        // A malformed pointer is refused AT SET TIME. Stored unchecked it fails later, at
+        // the moment of a provider call, where the user reads it as the provider being
+        // down rather than as a setting they mistyped. A bare name is the common mistake
+        // and is deliberately not accepted: it reads as an environment variable to one
+        // person and a relative path to another.
+        if (key === 'keyRef' && value !== null && !parseKeyRef(value)) {
+          throw new Error(`Unusable key pointer for the ${role.role} role. Expected one of: ${KEY_REF_FORMS.join(', ')}.`);
+        }
         role[key] = value;
       }
     }

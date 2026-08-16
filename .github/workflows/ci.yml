@@ -69,15 +69,23 @@ jobs:
       - name: gate-writer scanner acceptance (verifier's plants)
         run: node docs/verification/p4-mutations/gate-scanner-plants.mjs
       - name: forbid em and en dashes
+        # The rule governs what WE author. Evidence artifacts under
+        # docs/verification (*.json, *.yaml) quote target repos VERBATIM and
+        # are never rewritten to satisfy our style rule: rewriting evidence to
+        # pass a sweep would corrupt the artifact (the P3.5 adopted-brain
+        # report quotes the owner's own curated prose, dashes included).
+        # Authored files in docs/ (.md, .mjs, .sh) stay fully swept.
         run: |
           set +e
-          grep -rnP '[\x{2013}\x{2014}]' . --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=.venv
-          status=$?
+          grep -rnP '[\x{2013}\x{2014}]' . --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=.venv --exclude-dir=docs
+          s1=$?
+          grep -rnP '[\x{2013}\x{2014}]' docs --include='*.md' --include='*.mjs' --include='*.sh'
+          s2=$?
           set -e
-          if [ "$status" -eq 1 ]; then
-            echo "clean"; exit 0
-          elif [ "$status" -eq 0 ]; then
+          if [ "$s1" -eq 0 ] || [ "$s2" -eq 0 ]; then
             echo "em or en dash found"; exit 1
+          elif [ "$s1" -eq 1 ] && [ "$s2" -eq 1 ]; then
+            echo "clean"; exit 0
           else
-            echo "grep itself failed with exit $status; the gate cannot report coverage"; exit 1
+            echo "grep itself failed (s1=$s1 s2=$s2); the gate cannot report coverage"; exit 1
           fi

@@ -736,3 +736,40 @@ can neither pull foreign files in nor drop yours out. Empirical basis:
 three sweeps in a row under the add-then-commit form, zero under this
 one. The pre-commit lane hook remains the backstop for lanes that have
 not adopted the technique.
+
+## D-0032 addendum 2 (2026-08-16) The drift is retracted; the real second cause is traced
+
+Two same-day corrections to the addendum above, recorded together
+because they arrived together and point opposite directions.
+
+RETRACTED: the chunk-count drift never existed. The extractor's own
+retraction (docs/verification/init-chunk-drift.md, 5007e52): the 44 and
+45 were read from two error messages at two different times with NO
+PINNED COMMIT, straddling 9056789, which rewrote the brain to durable
+markdown and moved the file's chunk totals by hundreds. At any fixed
+commit the count is identical six-for-six, and an independent harness
+over six fresh fixture copies produces byte-identical decision lists.
+The async-hop "lever" discriminated nothing: a longer run is also a
+wider window for a concurrent writer, so it was equally consistent with
+the explanation it was deployed against. Report 18's dissolution was
+right about the drift after all.
+
+TRACED: a second mechanism exists anyway, and it is not the drift.
+Verifier report 20, every link verified: rpc-surface.test.js's surface
+sweep fires gatesDiscover and initBrain as UN-AWAITED JOBS against the
+file's one shared temp repo, then twenty-two later tests use that same
+repo; the discovery job's write (the literal string at
+gate-discovery.js:334, character for character what CI read back) lands
+wherever contention puts it. CI fired it because CI is slow. The class
+produces green-that-means-nothing as readily as red: a test passing
+while a job is mid-write proves nothing about the contract. Fix ruled:
+remove the sharing, never sequence around it (the sweep gets its own
+throwaway repo, and un-awaited work must not outlive the file) - the
+private-copies-over-locks argument, third appearance today.
+
+CONSEQUENCE for P8 clause (i), the extractor's procedural point,
+adopted: "npm test passes" on a shared working tree describes an
+INSTANT, not a commit. The five acceptance runs execute in a DETACHED
+WORKTREE at the pinned commit (git worktree add --detach, node_modules
+linked); the hash and no-battery assertions are retained as
+corroboration inside the worktree.

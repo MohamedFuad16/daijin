@@ -232,7 +232,16 @@ P8 INTEGRATION (registered 2026-08-16 17:52, pre-registered before any part is
    against the shared tree (no in-place override set, no battery-artifact
    siblings in src/ at start and end); D-0032's private-copy conversion is the
    fix, and this assertion detects its violation rather than standing in for
-   it]. The verifier attacks
+   it. Fourth sharpening, same day, per the extractor's retraction artifact
+   (docs/verification/init-chunk-drift.md): a suite run against a shared
+   working tree that other agents are editing describes an INSTANT, not a
+   commit, so the five runs execute in a DETACHED WORKTREE at the pinned
+   commit (git worktree add --detach, node_modules linked), which removes the
+   sharing rather than sequencing around it; the hash-stability and
+   no-battery assertions are retained inside the worktree as corroboration,
+   and the rpc-surface un-awaited-job race (verifier report 20) must carry a
+   landed fix before the runs, since that defect is load-dependent and five
+   quiet-machine greens cannot exclude it]. The verifier attacks
    the registered text; a clause that cannot be demonstrated is reported as
    such, never softened.
 

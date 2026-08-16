@@ -1,5 +1,58 @@
 # Daijin build state (authoritative)
 
+## 2026-08-16 18:35 - The drift is retracted; the race is traced; clause (i) goes to worktrees
+
+TWO CORRECTIONS ARRIVED IN ONE ROUND, pointing opposite directions, and
+the record now holds both (D-0032 addendum 2).
+
+THE EXTRACTOR RETRACTED THE CHUNK DRIFT, and the retraction is the
+build's best self-correction to date: the 44 and 45 were two error
+messages read at two different times with no pinned commit, straddling
+9056789, which moved the file's chunk totals by hundreds. At any fixed
+commit: six-for-six identical counts, byte-identical decision lists
+over six fresh fixture copies. Its three confessed method failures are
+kept verbatim in the retraction artifact: unpinned cross-time
+comparison in a repo where four lanes commit hourly; RUNNING THE RIGHT
+CONTROL AND NOT BELIEVING IT (the clean-tree 18-for-18 was the whole
+answer, recorded as one datum among several); and a lever that
+discriminated nothing (a longer run is also a wider window for a
+concurrent writer). Report 18 was right about the drift; report 19's
+second mechanism rested on the bad datum. The verifier writes the
+correction into its own report chain, citing the retraction artifact.
+
+AND YET A SECOND MECHANISM EXISTS - verifier report 20 traced it fully,
+which is why the two corrections do not cancel: rpc-surface.test.js's
+surface sweep fires gatesDiscover and initBrain as UN-AWAITED JOBS
+against the file's single shared temp repo; twenty-two later tests use
+that repo; the discovery job's write lands wherever contention puts it
+(CI is slow, hence CI is where it fired; fast local machines win the
+race, hence nobody reproduced it). The read-back content matched
+gate-discovery.js:334 character for character. The graver half of the
+finding: this class produces GREEN THAT MEANS NOTHING as readily as
+red, in the file whose job is proving the frozen contract is wired.
+The verifier's refuted prediction is the epistemics worth keeping: a
+mechanism-specific conditional could be killed by one CI occurrence;
+"this test looks fragile" would have been unfalsifiably right.
+
+FIX ASSIGNED to the extractor (its file): the sweep gets its OWN
+throwaway repo - remove the sharing, never sequence around it - plus
+un-awaited work must not outlive the file (sweep cancels or its own
+cleanup is asserted), plus the pattern check across the four other
+gates.yaml-touching test files (init-gates, init-pipeline, rpc-events,
+rpc-spend) so this is known to be instance or pattern.
+
+CLAUSE (i) SHARPENED A FOURTH TIME, adopting the extractor's procedural
+point: the five acceptance runs execute in a DETACHED WORKTREE at the
+pinned commit ("npm test passes" on a shared tree describes an instant,
+not a commit), with the prior assertions retained as corroboration and
+the report-20 fix required to land BEFORE the runs, since a
+load-dependent race cannot be excluded by five quiet-machine greens.
+
+gym-porter ruled its lane OUT as the gates.yaml writer in bytes (no
+write calls; every gym test writes under mkdtemp; clause 19 enforces
+the property on every run) - consistent with report 20, which found the
+writer in the discovery job. Ruling a lane out cheaply because its
+owner can is the negative-result habit working as intended.
 ## 2026-08-16 18:25 - Conversion verified by the strong instrument; envelope gains a line
 
 The verifier verified gym-porter's D-0032 conversion with the

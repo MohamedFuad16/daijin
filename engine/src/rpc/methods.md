@@ -79,6 +79,19 @@ the init activity feed and the gym live view:
 
 `{ ts, jobId, phase, step, detail, counts?, level }`
 
+[Added 2026-08-17, v5, the terminal-event invariant] Every job emits EXACTLY
+ONE event with `phase: "done"`, and it is the last event for that jobId. The
+step names what happened: `finished` (the runner's, `level: "info"`, when the
+job completed without announcing its own ending), or the job's own terminal
+step (`written`, `kept-yours`), or `failed` (the work threw; `level: "error"`,
+detail carries the message), or `cancelled` (`level: "warn"`). CLIENTS KEY ON
+THE PHASE, NEVER ON THE STEP: the step is what happened, the phase is that it
+ended. Events emitted by a job after its own done event are DROPPED by the
+runner, so a client that has rendered the ending will not receive more. The
+single exception: a job that announces done and then throws produces two done
+events, `failed` second, because suppressing a failure to preserve the count
+would hide the thing the user most needs.
+
 Gym adds: round events, per-file edit events, check verdicts, extension grants
 and refusals, boundary check results, rollback events with discarded-edit
 counts, the criteria audit at submit.

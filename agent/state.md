@@ -1,5 +1,26 @@
 # Daijin build state (authoritative)
 
+## 2026-08-16 13:12 - Two principles named at the close of the verdict era
+
+1. gym-porter's unification, one rule where the build kept finding three
+costumes: the boundary check that only demonstrated its passing branch,
+the step-0 test that passed for a reason unrelated to the step, and the
+positive control that matched four alternatives at once are ALL the same
+defect, A CHECK THAT CANNOT FAIL FOR THE REASON IT CLAIMS TO TEST, and
+each was found by an instrument rather than by reading, which is the
+argument for the instruments. 2. Its governance corollary, adopted as
+standing: WHICH OF AN AUTHOR'S OWN OPEN QUESTIONS GET CLOSED IS A
+LEADER'S CALL, never the author's, because an author choosing is the
+same conflict as an author grading their own exam ("I would not have run
+the reconstruction if it had been mine to decide whether it was worth
+running"). 3. The verifier's pin logic on the P7 alignment is the model
+for doc-only claims: the tree-sha being identical across a window that
+SPANS the change verifies doc-only more strongly than reading the diff;
+and it executed the handover snippet itself, noting the frozen AXES
+export gives the canonical order the same single-source property that
+made the branch table work. Verification debt remains zero; rubric
+persistence, P3.5, and polish are the open work.
+
 ## 2026-08-16 13:10 - P7 CLOSED: every registered phase now fully accepted
 
 Verifier report 14: findings 77 and 78 closed, verified by re-running the

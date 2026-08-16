@@ -210,3 +210,74 @@ test('a client cannot patch itself into looking reachable', async () => {
     await cleanup();
   }
 });
+
+// ---- the boundary guard gym-porter asked for ---------------------------------------------
+//
+// Their framing, adopted: the gate scan covering src/roles does NOT mean spend paths in
+// roles are scanned, because the gate scanner detects gate WRITES and a provider call would
+// sail past it. And "roles must not call providers" is false, since the daemon must call
+// providers and roles exists to resolve keys for exactly those calls. The true rule is the
+// inverse and is this module's own header: A KEY VALUE MAY ONLY REACH A CALLER THAT IS
+// MAKING A PROVIDER CALL.
+//
+// WHAT THIS GUARD CAN AND CANNOT DO, stated so nobody relies on the wrong instrument. It
+// enforces that `resolveKey` has no callers outside a DECLARED set, so a key cannot start
+// flowing into a settings path, a response builder or a log without someone changing this
+// list. It cannot police what a declared provider seam does with the key AFTER it has it;
+// that is a different guard, and when a seam exists it needs one.
+
+test('resolveKey has no undeclared callers: a key cannot start flowing somewhere new', async () => {
+  const { readdir, readFile: read } = await import('node:fs/promises');
+  const { fileURLToPath } = await import('node:url');
+  const srcRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src');
+
+  // The declared provider seams. EMPTY TODAY, and that is the honest state: no provider
+  // driver exists yet, so nothing legitimately needs a key value. When engineer.next()
+  // lands it gets added here, and adding it is the moment someone states that this is a
+  // place a key may reach.
+  const PROVIDER_SEAMS = [];
+
+  const offenders = [];
+  const walk = async (directory) => {
+    for (const entry of await readdir(directory, { withFileTypes: true })) {
+      const full = path.join(directory, entry.name);
+      if (entry.isDirectory()) { await walk(full); continue; }
+      if (!entry.name.endsWith('.js')) continue;
+      const relative = path.relative(srcRoot, full);
+      // roles/keys.js defines it; roles/ is where the resolution lives by design.
+      if (relative.startsWith('roles/')) continue;
+      const source = await read(full, 'utf8');
+      if (/\bresolveKey\s*\(/.test(source) && !PROVIDER_SEAMS.includes(relative)) {
+        offenders.push(relative);
+      }
+    }
+  };
+  await walk(srcRoot);
+
+  assert.deepEqual(offenders, [],
+    'a module outside a declared provider seam calls resolveKey; a key value reaching it is the thing this rule forbids');
+
+  // THE SCAN CAN FAIL, demonstrated rather than asserted. checkKeyRef is the shape a
+  // non-provider caller should use, and it returns a boolean; resolveKey returns the key.
+  const planted = [
+    "const key = await resolveKey(role.keyRef);",
+    "return { ...role, key: await resolveKey(role.keyRef) };",
+    "logger.debug(`using ${await resolveKey(ref)}`);",
+  ];
+  for (const line of planted) {
+    assert.ok(/\bresolveKey\s*\(/.test(line), `the scan must see this shape: ${line}`);
+  }
+  // And it does not fire on the safe call, so it is not passing by flagging everything.
+  assert.ok(!/\bresolveKey\s*\(/.test('const { resolvable } = await checkKeyRef(role.keyRef);'));
+});
+
+test('the settings surface reaches for the CHECK, never the value', async () => {
+  // The one caller today is EngineState.settings(), and what it calls is checkKeyRef, which
+  // returns a boolean and a reason. If it ever calls resolveKey the scan above fires; this
+  // asserts the positive half, that the check is actually wired rather than merely allowed.
+  const { readFile: read } = await import('node:fs/promises');
+  const { fileURLToPath } = await import('node:url');
+  const stateSource = await read(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/rpc/state.js'), 'utf8');
+  assert.match(stateSource, /checkKeyRef/, 'the settings surface uses the boolean check');
+  assert.ok(!/\bresolveKey\s*\(/.test(stateSource), 'and never the value');
+});

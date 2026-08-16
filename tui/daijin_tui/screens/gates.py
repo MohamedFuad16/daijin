@@ -167,7 +167,10 @@ class GatesScreen(DaijinScreen):
             carrying = summary.get("carryingSignal")
             counted = f"{carrying} of {summary.get('total')} carrying signal"
         else:
-            counted = f"{len(self.gates)} gates, no summary reported"
+            # The ORDINARY state after any edit, not an error: no baseline has
+            # run over these rows yet. "no summary reported" read like something
+            # had failed, and nothing had.
+            counted = f"{len(self.gates)} gates, not yet measured; run discovery to classify"
         notice.set_notice(
             f"{record.get('path', 'gates.yaml')}: {counted}, "
             f"{len(dead)} excluded and labelled ({', '.join(g['id'] for g in dead) or 'none'}).",

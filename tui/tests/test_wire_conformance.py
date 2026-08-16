@@ -61,8 +61,7 @@ READS = [
     # again. content stays listed because it is the fallback when discovered is
     # null, and a fallback nobody checks is the one that rots.
     ("gatesGet", lambda repo: {"repoPath": repo}, [
-        "path", "content", "discovered.gates", "discovered.summary.total",
-        "discovered.summary.carryingSignal", "discovered.gates.[].id",
+        "path", "content", "discovered.gates", "discovered.gates.[].id",
         "discovered.gates.[].command", "discovered.gates.[].role",
         "discovered.gates.[].classification", "discovered.gates.[].enabled",
         "discovered.gates.[].source", "discovered.gates.[].unavailableHint",
@@ -114,6 +113,7 @@ async def test_every_field_a_screen_reads_exists_on_the_live_engine():
     vacuous: set[str] = set()
     checked_paths = 0
     answered: list[str] = []
+    gates_records: list[dict] = []
     skip_reason: str | None = None
     try:
         await client.start()
@@ -159,6 +159,8 @@ async def test_every_field_a_screen_reads_exists_on_the_live_engine():
                         refused.append(f"{method}: {error.hint[:70]}")
                         continue
                     answered.append(method)
+                    if method == "gatesGet":
+                        gates_records.append(result)
                     for path in paths:
                         if not _resolve(result, path):
                             missing.append(f"{method}.{path}")
@@ -203,6 +205,23 @@ async def test_every_field_a_screen_reads_exists_on_the_live_engine():
             "passed without being looked at"
         )
     assert not vacuous, f"these paths were never actually checked: {sorted(vacuous)}"
+
+    # summary is null whenever no baseline has been run, which is a legitimate
+    # state and the ordinary one after any edit. Asserting its fields
+    # unconditionally would be a gate that fails on a legitimate state; only
+    # asserting them when present would be a gate that can skip everything. So:
+    # conditional, plus a separate check that the fixture reaches the branch.
+    summary_bearing = [r for r in gates_records if (r.get("discovered") or {}).get("summary")]
+    for record in summary_bearing:
+        summary = record["discovered"]["summary"]
+        for field in ("total", "carryingSignal", "live", "measured", "preBroken", "unavailable"):
+            assert field in summary, f"a present summary is missing {field}: {sorted(summary)}"
+    if "gatesGet" in answered:
+        assert summary_bearing, (
+            "no repo returned a summary, so the summary fields above were never "
+            "checked. The conditional went vacuous; the fixture needs a repo "
+            "whose gates have been baselined"
+        )
 
     # Coverage is stated whether or not it is complete, because a refusal that
     # nobody reads is the same as a field nobody checked.

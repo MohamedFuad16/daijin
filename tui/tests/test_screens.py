@@ -675,7 +675,8 @@ async def test_a_missing_summary_is_a_real_state_not_a_defensive_branch():
         assert screen.query_one("#gates-table", DataTable).row_count == 5, (
             "the rows are known even when the tally is not"
         )
-        assert "no summary reported" in notice, f"a count was invented: {notice!r}"
+        assert "not yet measured" in notice, f"a count was invented: {notice!r}"
+        assert "run discovery" in notice, "the state is named but not the way out of it"
         assert "carrying signal" not in notice
 
 @run_async
@@ -702,7 +703,8 @@ async def test_the_gate_count_comes_from_the_engines_own_summary():
             await screen.wait_for_load()
             await settle(pilot)
             silent = text_of(screen.query_one("#gates-notice", Banner))
-            assert "no summary reported" in silent, f"a missing count was rendered as a count: {silent!r}"
+            assert "not yet measured" in silent, f"a missing count was rendered as a count: {silent!r}"
+            assert "run discovery" in silent, "the state is named but not the way out of it"
             assert "carrying signal" not in silent
         finally:
             served["summary"] = original

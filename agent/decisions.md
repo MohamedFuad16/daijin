@@ -855,3 +855,26 @@ the terminal event missing from both) are the argument that "the
 contract is a document that no test executes" is a standing defect,
 not four incidents. Queued post-verdict beside the acceptance script;
 D-0033 named the per-method seam rule, this is its surface-wide form.
+
+## D-0033 addendum (2026-08-17) A mock more permissive than its original certifies the wrong behavior
+
+From the vetoReason incident's second finding: tui-builder's veto
+dialog accepted a one-character reason because ITS MOCK only required
+non-empty while the engine requires twenty characters. A mock more
+permissive than what it stands in for does not merely fail to test a
+boundary - it CERTIFIES the wrong behavior, because every test passing
+against it is evidence for a claim the real system will refuse. The
+dead-gate family with the permissiveness moved into the double; the
+same failure D-0033 names, one seam out. Rule: a mock's refusals are
+part of the seam it doubles - when the real side enforces a bound, the
+mock enforces the same bound, and the mock's validators are checked
+against the contract the way wire shapes are.
+
+Also recorded, the corrected READERSHIP RULE from the same incident:
+before removing a field, check EVERY consumer including test suites (a
+test is a consumer with a stronger claim than a screen: it is the
+thing that would otherwise catch the break), and separately ask
+whether the field is the only path to something a user was COMPELLED
+to produce - a field with no reader because nobody could reach it is
+not unread, it is unreachable, and removing it converts a required
+record into a toll.

@@ -715,6 +715,7 @@ class MockEngine:
         self.unopenable_brains: set[str] = set()
         self.failing_inits: set[str] = set()
         self.failing_cycles = False
+        self.failing_discoveries: set[str] = set()
         self.agent_files = copy.deepcopy(mock_data.AGENT_FILES)
         self.repos = copy.deepcopy(mock_data.REPOS)
         self.board_rows = copy.deepcopy(mock_data.BOARD_ROWS)
@@ -889,6 +890,10 @@ class MockEngine:
     def fail_next_init(self, path: str) -> None:
         """Make this repo's init break partway, as a refused embedder does."""
         self.failing_inits.add(path)
+
+    def fail_next_discovery(self, path: str) -> None:
+        """Make this repo's gate discovery break partway."""
+        self.failing_discoveries.add(path)
 
     def fail_next_cycle(self) -> None:
         """Make the next gym cycle break after the provider has been called."""
@@ -1137,7 +1142,12 @@ class MockEngine:
     async def _rpc_gatesDiscover(self, params: dict[str, Any]) -> dict[str, Any]:
         repo = str(params.get("repoPath") or "")
         job_id = self._new_job_id("gates")
-        self._start_stream(job_id, mock_data.gates_script(job_id, repo))
+        self._start_stream(
+            job_id,
+            mock_data.gates_failure_script(job_id, repo)
+            if repo in self.failing_discoveries
+            else mock_data.gates_script(job_id, repo),
+        )
         return {"jobId": job_id}
 
     async def _rpc_gatesGet(self, params: dict[str, Any]) -> dict[str, Any]:

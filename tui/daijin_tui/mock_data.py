@@ -1336,6 +1336,25 @@ def gym_script(job_id: str, exam_id: str) -> list[dict[str, Any]]:
     ]
 
 
+def gates_failure_script(job_id: str, repo_path: str) -> list[dict[str, Any]]:
+    """Discovery that breaks partway. The fourth double that could only succeed.
+
+    Predicted rather than found: a double that only scripts happy paths leaves
+    every failure branch unreachable, so those branches are not merely untested,
+    they are free to be wrong. This one was: nothing read discovery's ending at
+    all, so the banner claimed the job was still running forever.
+    """
+    return [
+        {"ts": 0, "jobId": job_id, "phase": "probe", "step": "manifests",
+         "detail": f"reading package manifests in {repo_path}", "level": "info"},
+        {"ts": 600, "jobId": job_id, "phase": "baseline", "step": "run",
+         "detail": "running npm run lint to measure the baseline", "level": "info"},
+        {"ts": 1_200, "jobId": job_id, "phase": "done", "step": "failed",
+         "detail": "the baseline run exceeded its 300000 ms budget and was killed",
+         "level": "error"},
+    ]
+
+
 def gates_script(job_id: str, repo_path: str) -> list[dict[str, Any]]:
     """gatesDiscover streams on the same channel as init and gym."""
 

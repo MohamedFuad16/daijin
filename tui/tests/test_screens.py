@@ -837,6 +837,53 @@ async def test_a_row_the_user_just_typed_is_not_shown_as_classified():
         assert "None" not in evidence, f"a null was printed as the word None: {evidence!r}"
 
 
+
+@run_async
+async def test_gate_discovery_reads_its_own_ending_and_reloads_what_it_wrote():
+    """Nothing here read discovery's terminal event at all.
+
+    The banner claimed "Discovery running for X, job Y" forever, and the table
+    kept showing the state from BEFORE the run that had just rewritten the file
+    this screen exists to display. Discovery is the only action on this screen
+    that changes what it shows, so not reloading meant the action appeared to
+    do nothing.
+    """
+    async with running_app() as (app, pilot):
+        await goto(pilot, "4")
+        await pilot.click("#gates-discover")
+        await settle(pilot, 30)
+        notice = text_of(app.screen.query_one("#gates-notice", Banner))
+        assert "running" not in notice, f"the banner still claims a finished job is running: {notice!r}"
+        assert "finished" in notice or "carrying signal" in notice, (
+            f"the run ended and the screen said nothing about it: {notice!r}"
+        )
+        checklist = app.screen.query_one("#gates-checklist", PhaseChecklist)
+        assert checklist.terminal_level == "info"
+
+
+@run_async
+async def test_gate_discovery_that_broke_does_not_pass_off_stale_rows_as_fresh():
+    """The fourth double that could only succeed, predicted rather than found.
+
+    A failed discovery leaves the previous classification on screen. Saying
+    nothing would let the user read those rows as the result of the run they
+    just watched fail.
+    """
+    async with running_app() as (app, pilot):
+        app.client.engine.fail_next_discovery(DEFAULT_REPO)
+        await goto(pilot, "4")
+        await pilot.click("#gates-discover")
+        await settle(pilot, 30)
+        notice = text_of(app.screen.query_one("#gates-notice", Banner))
+        assert "FAILED" in notice, f"a broken discovery was announced as: {notice!r}"
+        assert "not a fresh classification" in notice, (
+            "stale rows are left on screen with nothing said about them"
+        )
+        assert "exceeded its" in notice, "the engine's own reason is not carried"
+        checklist = app.screen.query_one("#gates-checklist", PhaseChecklist)
+        assert checklist.terminal_level == "error"
+        assert "failed" in {entry["status"] for entry in checklist.state.values()}
+
 @run_async
 async def test_gates_discovery_streams_into_the_checklist():
     async with running_app() as (app, pilot):

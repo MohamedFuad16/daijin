@@ -16,7 +16,7 @@ from textual.widgets import Button, DataTable, Static
 from .. import mock_data
 from ..rpc import RpcError
 from ..stream import FLUSH_INTERVAL, StreamCoalescer
-from ..widgets.activity import IDLE_UNTIL_INFERRED
+from ..widgets.activity import IDLE_UNTIL_INFERRED, TERMINAL_PHASES
 from ..widgets import Banner, EventLog, PhaseChecklist, SectionTitle
 from .base import DaijinScreen
 from .dialogs import GatesFileEditScreen
@@ -313,7 +313,15 @@ class GatesScreen(DaijinScreen):
             return
         checklist = self.query_one('#gates-checklist', PhaseChecklist)
         if checklist.infer_finish_if_idle():
-            pass
+            # A stream that simply stopped still ends the claim that it is
+            # running. Saying so is not the same as saying it succeeded, so the
+            # copy names the inference rather than reporting a result.
+            self.query_one("#gates-notice", Banner).set_notice(
+                f"Discovery stream went quiet for job {self.job_id}. It may have "
+                f"finished; the engine never said so. Reload to see the file as "
+                f"it stands.",
+                "warn",
+            )
 
     def _render_events(self, batch: list[dict[str, Any]]) -> None:
         """Render a batch. A burst costs one repaint, not one per event."""
@@ -322,6 +330,37 @@ class GatesScreen(DaijinScreen):
         checklist.apply_events(batch)
         for event in batch:
             log.append_event(event)
+
+        done = next((e for e in batch if e.get("phase") in TERMINAL_PHASES), None)
+        if done is None:
+            return
+        # Discovery WRITES the classification this screen exists to show, and
+        # nothing here read its ending: the banner went on claiming the job was
+        # running forever, and the table went on showing the state from before
+        # it ran. The phase says it ended; level says how.
+        level = str(done.get("level") or "info")
+        notice = self.query_one("#gates-notice", Banner)
+        if level == "error":
+            detail = str(done.get("detail") or "").strip()
+            notice.set_notice(
+                f"Discovery FAILED for job {self.job_id}. The gates below are "
+                f"whatever was there before it ran, not a fresh classification. "
+                f"{detail}".strip(),
+                "error",
+            )
+            return
+        if level == "warn":
+            notice.set_notice(
+                f"Discovery cancelled, job {self.job_id}. The gates below are "
+                f"whatever was there before it ran.",
+                "warn",
+            )
+            return
+        # Only a run that ENDED WELL has written something new to read.
+        self.set_pending_notice(
+            f"Discovery finished in {checklist.elapsed:.1f}s, job {self.job_id}."
+        )
+        self.start_load()
 
     async def discover(self) -> None:
         repo = getattr(self.app, "selected_repo", None)

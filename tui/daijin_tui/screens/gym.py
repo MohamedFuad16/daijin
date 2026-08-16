@@ -11,9 +11,11 @@ from textual.widgets import Button, DataTable, Static, TabbedContent, TabPane
 from .. import mock_data
 from ..concurrency import gather_all
 from ..rpc import RpcError
+from ..stream import FLUSH_INTERVAL, StreamCoalescer
 from ..widgets import (
     Banner,
     EventLog,
+    Gauge,
     PhaseChecklist,
     PlotextLine,
     SectionTitle,
@@ -22,6 +24,10 @@ from ..widgets import (
 )
 from .base import DaijinScreen
 from .dialogs import budget_estimate_lines
+
+
+# The extension ceiling a cycle works against, from the ADR-0167 defaults.
+GYM_TOKEN_BUDGET = 400_000
 
 
 class GymScreen(DaijinScreen):
@@ -35,6 +41,7 @@ class GymScreen(DaijinScreen):
         self.job_id: str | None = None
         self.gate_open = False
         self._subscribed = False
+        self.coalescer = StreamCoalescer(self._render_events)
 
     def content(self) -> Iterable[Any]:
         yield Banner("", tone="info", id="gym-notice")
@@ -46,6 +53,7 @@ class GymScreen(DaijinScreen):
         with TabbedContent(id="gym-tabs"):
             with TabPane("Live", id="gym-tab-live"):
                 yield PhaseChecklist(mock_data.GYM_PHASES, id="gym-checklist")
+                yield Gauge(caption="token budget", id="gym-tokens")
                 yield EventLog(id="gym-events")
             with TabPane("Run detail", id="gym-tab-run"):
                 yield Static("", id="run-summary", markup=True)
@@ -186,6 +194,9 @@ class GymScreen(DaijinScreen):
     def _subscribe(self) -> None:
         if not self._subscribed:
             self.client.on_event(self._on_step_event)
+            # Drains whatever the last burst left buffered. Without it the tail
+            # of a stream waits for an event that never comes.
+            self.set_interval(FLUSH_INTERVAL, self.coalescer.flush)
             self._subscribed = True
 
     def on_unmount(self) -> None:
@@ -198,10 +209,37 @@ class GymScreen(DaijinScreen):
             return
         if not self.accepts_step_event(event):
             return
+        self.coalescer.push(event)
+
+    def _render_events(self, batch: list[dict[str, Any]]) -> None:
+        """Render a batch. A burst costs one repaint, not one per event."""
         checklist = self.query_one("#gym-checklist", PhaseChecklist)
-        checklist.apply_event(event)
-        self.query_one("#gym-events", EventLog).append_event(event)
-        if event.get("phase") == "done":
+        log = self.query_one("#gym-events", EventLog)
+        checklist.apply_events(batch)
+        for event in batch:
+            log.append_event(event)
+        # The budget is what a watcher is actually tracking, so it climbs
+        # rather than jumping. An extension GRANT is a distinct event, so it
+        # gets one pulse on top of the movement.
+        motion = getattr(self.app, "motion", None)
+        gauge = self.query_one("#gym-tokens", Gauge)
+        latest = next(
+            (e for e in reversed(batch) if isinstance(e.get("counts"), dict) and "tokens" in e["counts"]),
+            None,
+        )
+        if latest is not None:
+            spent = int(latest["counts"]["tokens"])
+            gauge.set_value(
+                spent / GYM_TOKEN_BUDGET,
+                motion=motion,
+                caption=f"{spent:,} of {GYM_TOKEN_BUDGET:,} tokens",
+            )
+        if any(e.get("step") == "extension" and "granted" in (e.get("counts") or {}) for e in batch):
+            gauge.pulse(motion)
+
+        done = next((e for e in batch if e.get("phase") == "done"), None)
+        if done is not None:
+            event = done
             self.query_one("#gym-notice", Banner).set_notice(
                 f"Cycle complete in {checklist.elapsed:.1f}s, job {self.job_id}. "
                 f"Press Refresh status to reload the ledger.",

@@ -110,7 +110,13 @@ class PhaseChecklist(Static):
             )
         self.refresh_view()
 
-    def apply_event(self, event: dict[str, Any]) -> None:
+    def apply_events(self, batch: list[dict[str, Any]]) -> None:
+        """Advance from a batch, repainting once rather than per event."""
+        for event in batch:
+            self.apply_event(event, refresh=False)
+        self.refresh_view()
+
+    def apply_event(self, event: dict[str, Any], *, refresh: bool = True) -> None:
         """Advance the checklist from one step event."""
         phase = str(event.get("phase") or "")
         if not phase:
@@ -128,7 +134,8 @@ class PhaseChecklist(Static):
                     entry["status"] = "warn" if entry["warns"] else "done"
                     entry["ended"] = now
             self.finished_at = now
-            self.refresh_view()
+            if refresh:
+                self.refresh_view()
             return
 
         entry = self._ensure(phase)
@@ -163,7 +170,8 @@ class PhaseChecklist(Static):
         elif level == "error":
             entry["status"] = "failed"
             entry["ended"] = now
-        self.refresh_view()
+        if refresh:
+            self.refresh_view()
 
     @property
     def elapsed(self) -> float:

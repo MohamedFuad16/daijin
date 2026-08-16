@@ -14,6 +14,7 @@ from textual.widgets import Button, DataTable, Static
 
 from .. import mock_data
 from ..rpc import RpcError
+from ..stream import FLUSH_INTERVAL, StreamCoalescer
 from ..widgets import Banner, EventLog, PhaseChecklist, SectionTitle, format_count
 from .base import DaijinScreen
 
@@ -38,6 +39,7 @@ class GatesScreen(DaijinScreen):
         self.gates: list[dict[str, Any]] = []
         self.job_id: str | None = None
         self._subscribed = False
+        self.coalescer = StreamCoalescer(self._render_events)
 
     def content(self) -> Iterable[Any]:
         yield Banner("", tone="info", id="gates-notice")
@@ -162,6 +164,9 @@ class GatesScreen(DaijinScreen):
     def _subscribe(self) -> None:
         if not self._subscribed:
             self.client.on_event(self._on_step_event)
+            # Drains whatever the last burst left buffered. Without it the tail
+            # of a stream waits for an event that never comes.
+            self.set_interval(FLUSH_INTERVAL, self.coalescer.flush)
             self._subscribed = True
 
     def on_unmount(self) -> None:
@@ -174,8 +179,15 @@ class GatesScreen(DaijinScreen):
             return
         if not self.accepts_step_event(event):
             return
-        self.query_one("#gates-checklist", PhaseChecklist).apply_event(event)
-        self.query_one("#gates-events", EventLog).append_event(event)
+        self.coalescer.push(event)
+
+    def _render_events(self, batch: list[dict[str, Any]]) -> None:
+        """Render a batch. A burst costs one repaint, not one per event."""
+        checklist = self.query_one("#gates-checklist", PhaseChecklist)
+        log = self.query_one("#gates-events", EventLog)
+        checklist.apply_events(batch)
+        for event in batch:
+            log.append_event(event)
 
     async def discover(self) -> None:
         repo = getattr(self.app, "selected_repo", None)

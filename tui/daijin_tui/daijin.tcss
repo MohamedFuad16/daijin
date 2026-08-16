@@ -392,3 +392,39 @@ SpendConfirmScreen, TextPromptScreen, AgentFileEditScreen {
     height: auto;
     padding: 0 1;
 }
+
+/* Interaction feedback. Generated from motion.py tokens: micro 160ms,
+   view 300ms, press 90ms. Do not hand-edit these numbers; change the
+   tokens and regenerate, or the no-stray-durations rule stops meaning anything. */
+
+Button {
+    transition: background 160ms in_out_cubic, color 160ms in_out_cubic;
+}
+
+Button:hover {
+    text-style: bold;
+}
+
+Button:focus {
+    text-style: bold reverse;
+}
+
+Button.-active {
+    transition: background 90ms linear;
+}
+
+.repo-card {
+    transition: border 160ms in_out_cubic;
+}
+
+DataTable > .datatable--cursor {
+    transition: background 160ms in_out_cubic;
+}
+
+/* Motion off removes the transitions too: a setting that silences the
+   animator but leaves CSS moving would be a half-kept promise. */
+App.-motion-off Button,
+App.-motion-off .repo-card,
+App.-motion-off DataTable > .datatable--cursor {
+    transition: none;
+}

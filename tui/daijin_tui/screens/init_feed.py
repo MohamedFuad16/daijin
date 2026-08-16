@@ -10,6 +10,7 @@ from textual.widgets import Button, Input, Select, Static
 
 from .. import mock_data
 from ..rpc import RpcError
+from ..stream import FLUSH_INTERVAL, StreamCoalescer
 from ..widgets import Banner, EventLog, PhaseChecklist, SectionTitle
 from .base import DaijinScreen
 from .dialogs import budget_estimate_lines
@@ -30,6 +31,7 @@ class InitFeedScreen(DaijinScreen):
         super().__init__(**kwargs)
         self.job_id: str | None = None
         self._subscribed = False
+        self.coalescer = StreamCoalescer(self._render_events)
 
     def content(self) -> Iterable[Any]:
         yield Banner("Pick a repo on the repo home, then start.", tone="info", id="init-notice")
@@ -61,6 +63,9 @@ class InitFeedScreen(DaijinScreen):
     def _subscribe(self) -> None:
         if not self._subscribed:
             self.client.on_event(self._on_step_event)
+            # Drains whatever the last burst left buffered. Without it the tail
+            # of a stream waits for an event that never comes.
+            self.set_interval(FLUSH_INTERVAL, self.coalescer.flush)
             self._subscribed = True
 
     def on_unmount(self) -> None:
@@ -73,10 +78,18 @@ class InitFeedScreen(DaijinScreen):
             return
         if not self.accepts_step_event(event):
             return
+        self.coalescer.push(event)
+
+    def _render_events(self, batch: list[dict[str, Any]]) -> None:
+        """Render a batch. A burst costs one repaint, not one per event."""
         checklist = self.query_one("#init-checklist", PhaseChecklist)
-        checklist.apply_event(event)
-        self.query_one("#init-events", EventLog).append_event(event)
-        if event.get("phase") == "done":
+        log = self.query_one("#init-events", EventLog)
+        checklist.apply_events(batch)
+        for event in batch:
+            log.append_event(event)
+        done = next((e for e in batch if e.get("phase") == "done"), None)
+        if done is not None:
+            event = done
             cancelled = event.get("step") == "cancelled"
             self.query_one("#init-notice", Banner).set_notice(
                 (

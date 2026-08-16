@@ -1014,7 +1014,7 @@ SETTINGS: dict[str, Any] = {
     ],
     "storage": {"driver": "sqlite-vec", "embedder": "bge-m3", "dimension": 1024},
     "spendGate": dict(SPEND_GATE),
-    "charts": {"radarMode": "radar"},
+    "charts": {"radarMode": "radar", "motion": "full"},
 }
 
 # budgetEstimate is a contract method as of v5, and it is ZERO-SPEND on purpose:

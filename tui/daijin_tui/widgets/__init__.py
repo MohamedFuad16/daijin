@@ -6,6 +6,7 @@ the drawing can be asserted in a test without a running app.
 
 from .activity import EventLog, PhaseChecklist
 from .charts import PlotextBar, PlotextLine, plot_bar, plot_line
+from .gauge import Gauge
 from .common import (
     HEALTH_GLYPH,
     MCP_THRESHOLD,
@@ -28,6 +29,7 @@ __all__ = [
     "MCP_THRESHOLD",
     "Banner",
     "EventLog",
+    "Gauge",
     "HEALTH_GLYPH",
     "KeyValue",
     "PhaseChecklist",

@@ -22,6 +22,7 @@ from textual.app import App
 from textual.binding import Binding
 
 from . import mock_data
+from .motion import DEFAULT_MODE, OFF, Motion
 from .rpc import (
     SUPPORTED_CONTRACT_VERSION,
     MockEngine,
@@ -81,6 +82,9 @@ class DaijinApp(App):
         self.is_mock = is_mock
         self.selected_repo = repo
         self.critical_findings: list[dict[str, Any]] = []
+        # One Motion for the whole app: every animation goes through it, so
+        # "off" is a single switch rather than a convention screens must keep.
+        self.motion = Motion(DEFAULT_MODE)
         # Textual's header joins title and sub_title with an em dash, which this
         # project forbids, so the engine mode rides inside the title instead.
         self.title = "Daijin, mock engine" if is_mock else "Daijin, engine over stdio"
@@ -100,7 +104,29 @@ class DaijinApp(App):
             )
             return
         self.client.on_board_finding(self._on_board_finding)
+        await self._load_motion_mode()
         self.switch_mode("home")
+
+    async def _load_motion_mode(self) -> None:
+        """charts.motion is the user's accessibility setting, not a preference
+        the app may quietly override."""
+        try:
+            settings = await self.client.call("settingsGet", {})
+        except Exception:  # noqa: BLE001 - a missing setting must not stop boot
+            return
+        mode = ((settings or {}).get("charts") or {}).get("motion")
+        if mode:
+            self.set_motion_mode(str(mode))
+
+    def set_motion_mode(self, mode: str) -> None:
+        """Apply the mode to the animator AND to the stylesheet.
+
+        CSS transitions do not run through Motion, so a mode that only silenced
+        the animator would leave the interface still moving and the setting
+        only half kept.
+        """
+        self.motion.set_mode(mode)
+        self.set_class(self.motion.mode == OFF, "-motion-off")
 
     async def on_unmount(self) -> None:
         await self.client.aclose()

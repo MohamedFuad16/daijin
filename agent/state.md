@@ -1,5 +1,41 @@
 # Daijin build state (authoritative)
 
+## 2026-08-17 14:30 - The board is quiet at 382cd42; the handoff formulation sharpened
+
+tui-builder's mock sync landed (382cd42, CI green watched, run
+31971160931, 349 local / 348+skip). It probed the daemon for the five
+sentences rather than copying them from the relay, and the probe
+caught an invented-copy defect OF ITS OWN, introduced the same
+session while fixing the same class: the brain family does NOT share
+a sentence (search/retrievalScore/diagnose each have their own), and
+its mock had answered all three with one line it wrote itself - "the
+vetoReason defect relocated from a field location to a hint string",
+put there BY the sweep that found the fifth double, because a shared
+refusal helper reached for one sentence to serve three methods
+without asking whether the engine did. Narrowness copied with the
+wording; codes asserted beside sentences (right words + wrong code
+looks correct and routes wrongly); the corrupt-ledger case guarded as
+deliberately unmocked.
+
+One mutation survived AND WAS ITS OWN NO-OP (string replaced with
+itself plus a comment), self-caught: "a mutation SURVIVING something
+I was confident about is worth more suspicion than a kill" - the
+second no-op-read-as-result of the day, both caught by the same
+suspicion.
+
+THE HANDOFF FORMULATION SHARPENED, kept over "both passes necessary":
+the two passes are not independent agreement but A HANDOFF WHERE EACH
+SEES WHAT THE OTHER CANNOT - and the actionable half is that the
+outside pass must report SYMPTOMS WITHOUT DIAGNOSING, which is what
+let the inside pass look at the seam rather than at the two named
+methods.
+
+THE BOARD IS QUIET at tip 382cd42. Standing directive to all lanes:
+HOLD AT ON-CALL - the self-audit loops have hit diminishing returns
+(each finding smaller than the last, which is convergence), and no
+further sweeps launch without a checkable lead or a shipped-defect
+claim. The highest-value next input is external: THE OWNER'S
+ULTRAREVIEW, then D-0034.
 ## 2026-08-17 14:05 - The count was the unverified part: two was four
 
 The extractor swept its own instruments for the floor-shape rather

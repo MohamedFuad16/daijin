@@ -41,6 +41,24 @@ LEVEL_STYLE = {
     "success": "green",
 }
 
+# Some steps deserve visual weight that their LEVEL should not carry.
+#
+# gatesDiscover emits kept-yours when a user-edited gates.yaml wins over the
+# freshly discovered one. It is the only step in that job reporting generated
+# work being thrown away, so it needs to stand out, but it stays at the default
+# level on purpose: raising it to warn would tell a user something went wrong
+# at the moment the engine is honouring their edit. Style by NAME, not level.
+#
+# Cyan is used by no level, so the weight comes from the palette rather than
+# from borrowing the warning colour. The marker carries the same distinction
+# without colour, for a reader who has none.
+STEP_STYLE: dict[str, str] = {
+    "kept-yours": "bold cyan",
+}
+STEP_MARKER: dict[str, str] = {
+    "kept-yours": "keep",
+}
+
 # Verbs cycle on the active line so the eye can tell a slow phase from a hung
 # one. They describe the phase, never a number, so they cannot mislead.
 PHASE_VERBS: dict[str, Sequence[str]] = {
@@ -352,9 +370,21 @@ class EventLog(RichLog):
         tail = ""
         if counts:
             tail = "  " + ", ".join(f"{k} {v}" for k, v in counts.items())
-        return f"{stamp}  {event.get('phase', '?'):<16}{event.get('step', '?'):<12}{event.get('detail', '')}{tail}"
+        step = str(event.get("step", "?"))
+        marker = STEP_MARKER.get(step, "")
+        prefix = f"[{marker}] " if marker else ""
+        return f"{stamp}  {event.get('phase', '?'):<16}{step:<12}{prefix}{event.get('detail', '')}{tail}"
+
+    @staticmethod
+    def style_for(event: dict[str, Any]) -> str:
+        """Step name wins over level: a step can be notable without being wrong.
+
+        A single function so a test can assert the STYLE THAT IS USED rather
+        than the contents of a table something else might ignore.
+        """
+        step = str(event.get("step") or "")
+        return STEP_STYLE.get(step) or LEVEL_STYLE.get(str(event.get("level") or "info"), "white")
 
     def append_event(self, event: dict[str, Any]) -> None:
         self.event_count += 1
-        style = LEVEL_STYLE.get(str(event.get("level") or "info"), "white")
-        self.write(Text(self.format_event(event), style=style))
+        self.write(Text(self.format_event(event), style=self.style_for(event)))

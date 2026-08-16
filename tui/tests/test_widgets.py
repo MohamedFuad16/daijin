@@ -230,3 +230,51 @@ def test_the_idle_threshold_clears_the_measured_worst_gap():
         f"{IDLE_UNTIL_INFERRED}s leaves no margin over the measured 9.6s gap; "
         "a live run would be declared finished in the middle of it"
     )
+
+
+def test_a_notable_step_is_styled_by_name_not_by_level():
+    """kept-yours reports generated work being discarded for the user's edit.
+
+    It has to stand out, and it must not wear the warning colour: nothing went
+    wrong when the engine honours an edit it promised to honour.
+    """
+    from daijin_tui.widgets.activity import LEVEL_STYLE
+
+    # Asserted through the function the renderer actually calls, not through
+    # the table: a table the renderer ignores is a table that proves nothing.
+    kept = EventLog.style_for(
+        {"step": "kept-yours", "level": "info", "phase": "classify", "detail": "", "ts": 0}
+    )
+    ordinary = EventLog.style_for(
+        {"step": "classify", "level": "info", "phase": "classify", "detail": "", "ts": 0}
+    )
+    assert kept != ordinary, "kept-yours renders exactly like every other step"
+    assert kept not in LEVEL_STYLE.values(), "it borrowed a level colour"
+    assert "yellow" not in kept and "red" not in kept, (
+        "a step the engine emits at the default level must not read as a warning"
+    )
+    # And the level still drives everything that has no name-based style.
+    assert EventLog.style_for({"step": "x", "level": "warn"}) == LEVEL_STYLE["warn"]
+
+
+def test_the_kept_yours_line_is_distinguishable_without_colour():
+    line = EventLog.format_event(
+        {
+            "ts": 1000,
+            "jobId": "j",
+            "phase": "classify",
+            "step": "kept-yours",
+            "detail": "your gates.yaml wins; the discovered one was discarded",
+            "level": "info",
+        }
+    )
+    assert "kept-yours" in line
+    assert "[keep]" in line, "no marker, so a reader without colour sees nothing special"
+    assert "your gates.yaml wins" in line
+
+
+def test_an_ordinary_step_keeps_its_level_styling_and_no_marker():
+    line = EventLog.format_event(
+        {"ts": 1000, "jobId": "j", "phase": "classify", "step": "classify", "detail": "eslint live", "level": "info"}
+    )
+    assert "[" not in line.split("classify", 2)[-1][:3]

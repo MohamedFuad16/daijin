@@ -40,6 +40,20 @@ import { createSqliteStore } from '../store/sqlite.js';
 import { noteOrigin, repoLayout } from '../state/layout.js';
 import { invalidParams, notImplemented, spendRefused } from './errors.js';
 
+/**
+ * The health states a repo row can report, and the only source of them.
+ *
+ * A CONSTANT rather than four literals, because the enum gate could not see them all: two
+ * live in a ternary and its harvest read `return 'x'` forms, so it found three of four and
+ * reported the fourth as documented-but-unproducible. The floor that says a harvest must
+ * yield at least two values passed, because three is not zero.
+ *
+ * That is the harvest's own fails-invisible shape, and the fix is to stop harvesting. A
+ * named export cannot be missed by a regex, and the gate imports it the way it imports
+ * RUN_MODES.
+ */
+export const HEALTH_STATES = Object.freeze(['no-brain', 'warn', 'ok', 'critical']);
+
 /// The contract version hello reports.
 ///
 /// A constant rather than a parse of methods.md, because the daemon must not need its own
@@ -715,17 +729,21 @@ export function createMethods({
       for (const repo of repos) {
         const history = await readHistory(repo.path);
         const floorScore = history[0]?.caseRate?.exact ?? null;
-        let health = 'no-brain';
+        const [NO_BRAIN, WARN, OK, CRITICAL] = HEALTH_STATES;
+        let health = NO_BRAIN;
         try {
           health = await withStore(repo.path, async (store) => {
             const identity = await store.indexedEmbeddingIdentity();
-            if (!identity?.indexed && !identity?.provider) return 'no-brain';
-            if (floorScore === null) return 'warn';
-            return floorScore >= MCP_UNLOCK_THRESHOLD ? 'ok' : 'warn';
+            if (!identity?.indexed && !identity?.provider) return NO_BRAIN;
+            // Never measured and measured-below-threshold are both WARN on the wire, and a
+            // client tells them apart by floorScore being null or a number. Two values
+            // where the discriminator is already on the row would be redundant.
+            if (floorScore === null) return WARN;
+            return floorScore >= MCP_UNLOCK_THRESHOLD ? OK : WARN;
           });
         } catch {
           // An unopenable brain is a real state the home screen must show, not a crash.
-          health = 'critical';
+          health = CRITICAL;
         }
         rows.push({ path: repo.path, health, floorScore, mcpActive: Boolean(repo.mcpActive) });
       }

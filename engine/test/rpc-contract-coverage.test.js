@@ -469,7 +469,7 @@ test('every enum a client can receive is named in its contract row', async () =>
   // reading only the returns cell reported them missing when a reader would find them at
   // once. A vocabulary check asks whether the contract names the value where someone
   // reading the method would see it.
-  const { contractLine } = await import('./helpers/contract-shape.js');
+  const { contractLine, documentedEnum } = await import('./helpers/contract-shape.js');
   const { RUN_MODES } = await import('../src/gym/run-mode.js');
   const { RUN_STATUSES } = await import('../src/gym/ledger.js');
   const { VERDICTS } = await import('../src/gym/grading.js');
@@ -484,12 +484,16 @@ test('every enum a client can receive is named in its contract row', async () =>
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'src');
   const discovery = await read(path.join(root, 'init', 'gate-discovery.js'), 'utf8');
   const classifications = [...discovery.matchAll(/classification:\s*'([a-z-]+)'/g)].map((match) => match[1]);
-  const methods = await read(path.join(root, 'rpc', 'methods.js'), 'utf8');
-  const healths = [...methods.matchAll(/health = '([a-z-]+)'|return '([a-z-]+)';/g)]
-    .map((match) => match[1] ?? match[2]).filter((value) => ['no-brain', 'warn', 'ok', 'critical'].includes(value));
+  // HEALTH_STATES is imported rather than harvested, because the harvest could not see it.
+  // Two of the four live in a ternary and the regex read `return 'x'` forms, so it found
+  // three, and the floor requiring at least two values passed because three is not zero. A
+  // harvest that silently under-reads is the shape this gate exists to catch, one level up.
+  const { HEALTH_STATES } = await import('../src/rpc/methods.js');
 
   const ENUMS = [
     { method: 'examDetail', field: 'mode', values: RUN_MODES, source: 'RUN_MODES' },
+    { method: 'gatesGet', field: 'baseline.status', values: ['pass', 'fail', 'timeout', 'unavailable'],
+      source: 'the runner literals, harvested in its own test' },
     { method: 'examDetail', field: 'status', values: RUN_STATUSES, source: 'RUN_STATUSES' },
     { method: 'examDetail', field: 'verdict', values: VERDICTS, source: 'VERDICTS' },
     { method: 'examDetail', field: 'ungradedCode', source: 'ungradedExplanation over every run status',
@@ -498,7 +502,7 @@ test('every enum a client can receive is named in its contract row', async () =>
     { method: 'examList', field: 'benchmarkStatus', values: BENCHMARK_STATUSES, source: 'BENCHMARK_STATUSES' },
     { method: 'initBrain', field: 'mode', values: MODES, source: 'MODES' },
     { method: 'gatesGet', field: 'classification', values: classifications, source: 'harvested from classifyBaselineRun' },
-    { method: 'serveStatus', field: 'health', values: healths, source: 'harvested from serveStatus' },
+    { method: 'serveStatus', field: 'health', values: HEALTH_STATES, source: 'HEALTH_STATES' },
   ];
 
   const unnamed = [];
@@ -512,7 +516,22 @@ test('every enum a client can receive is named in its contract row', async () =>
     for (const value of values) {
       if (!row.includes(value)) unnamed.push(`${method}.${field} does not name ${value} (from ${source})`);
     }
+
+    // THE OTHER DIRECTION, which the first version of this gate could not do. Asserting
+    // only that the code's values are named catches a value a client cannot look up, and
+    // cannot catch a value the ROW names that the engine can never produce. Subset is half
+    // a vocabulary check wearing the name of a whole one: tui-builder found that shape in
+    // their gate, and mine had it in the mirror direction, after I had named "documented
+    // and reachable are different claims" the day before.
+    //
+    // A value only the contract knows is worse than a missing one in a specific way: it
+    // reads as a state that exists, so a client writes a branch for it, and the branch is
+    // dead code that will never fire and can never be proven wrong by use.
+    const documented = documentedEnum(row, field);
+    assert.ok(documented, `${method}.${field}: the row's vocabulary could not be read, so this check would pass vacuously`);
+    const phantom = documented.filter((value) => !values.includes(value));
+    if (phantom.length) unnamed.push(`${method}.${field} documents ${phantom.join(', ')}, which ${source} cannot produce`);
   }
   assert.deepEqual(unnamed, [],
-    'a client receiving one of these would have to guess it, which is how baseline.status was guessed wrong twice');
+    'a client receiving an unnamed value would have to guess it, and a client reading a phantom one would write a branch that never fires');
 });

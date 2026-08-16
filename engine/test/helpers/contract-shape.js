@@ -42,6 +42,41 @@ export async function contractRow(method, { file = METHODS_MD } = {}) {
 }
 
 /**
+ * The values a row DOCUMENTS for one enum field, read from the row itself.
+ *
+ * The other direction of a vocabulary check, and the one my first gate could not do. That
+ * gate asserted every value the CODE produces is named in the row, which catches a value a
+ * client cannot look up and cannot catch a value the row names that the engine can never
+ * produce. Subset is half a vocabulary check wearing the name of a whole one, which
+ * tui-builder found in their gate and which mine had in the mirror direction: I named
+ * "documented and reachable are different claims" and then shipped an instrument that
+ * checked only one of them.
+ *
+ * It reads all three notations the contract uses for one idea, rather than requiring the
+ * document to be rewritten around the parser: backtick-pipe, quote-pipe and comma lists.
+ * The scan starts at the field name and stops at the first token that is not part of a
+ * list, so the prose that follows an enum is not swept in.
+ */
+export function documentedEnum(row, field) {
+  if (!row) return null;
+  const token = '(?:`[a-z0-9+.-]+`|"[a-z0-9+.-]+")';
+  const separator = '(?:\\s*\\\\?\\|\\s*|,\\s+|\\s+or\\s+)';
+  // EVERY occurrence of the field name, not the first. A row explains its fields in prose
+  // as well as declaring them, so the first mention is often a sentence about the field
+  // rather than its vocabulary: `classification` appears in gatesGet's amendment history
+  // long before the list. Anchoring on the first match read the wrong part of the row and
+  // returned null, which would have reported a documented enum as undocumented.
+  for (const anchor of row.matchAll(new RegExp(`\`${field}\`|\\b${field}:`, 'g'))) {
+    const tail = row.slice(anchor.index + anchor[0].length);
+    const run = new RegExp(`^.{0,40}?(${token}(?:${separator}${token})+)`).exec(tail);
+    if (!run) continue;
+    return [...run[1].matchAll(/`([a-z0-9+.-]+)`|"([a-z0-9+.-]+)"/g)]
+      .map((match) => match[1] ?? match[2]).sort();
+  }
+  return null;
+}
+
+/**
  * The WHOLE row for a method, params and returns together.
  *
  * `contractRow` returns the returns cell, which is the right scope for a shape. It is the

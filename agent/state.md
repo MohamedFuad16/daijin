@@ -1,5 +1,39 @@
 # Daijin build state (authoritative)
 
+## 2026-08-17 06:20 - Gates table restored; the two empties no longer look alike
+
+tui-builder restored the table (739766a, 330 green, probed the daemon
+before writing rather than building from the description - its old
+columns were invented against a shape that never existed). THREE
+STATES render distinctly: gates present (table + the ENGINE'S summary,
+never recounted locally, so screen and ledger cannot drift); zero
+gates where zero is TRUE (table with zero rows, notice saying the file
+describes none); unparseable (table HIDDEN, parser's reason + file
+text, notice: "this is not zero gates, it is a file that needs
+fixing"). Case 3 rendering as case 2 was the shipped defect. Liveness
+evidence QUOTES the measurement rather than paraphrasing. The mock
+produces all three states, on the rule that a mock emitting only
+well-formed output lets the broken-file branch rot. Six mutations
+killed, including one first misread as a pass because the mutation
+script had a quoting error and never applied - the control was read as
+the candidate, caught and re-run.
+
+Self-caught: extending the conformance check per-gate introduced a
+VACUOUS GATE (a path over an empty list passes checking nothing -
+nineteen fields would have reported coverage over zero gates); a
+non-vacuity assertion added and itself mutated to confirm it fires.
+Plus one dead test deleted that promised to drive the real path and
+reimplemented the branch inline, asserting strings it had just
+written.
+
+FOUR WIRE QUESTIONS routed to the extractor for byte answers:
+baseline.status's full vocabulary; whether parseError can coexist with
+non-null discovered (partial parse); gatesSet against a broken file -
+the MOCK refuses, and if the engine writes, the mock teaches a safety
+the engine does not provide, but a refusal that blocks full-content
+REPAIR of a broken file would be the worse design, so the answer needs
+thought as well as bytes; and carryingSignal's definition for the
+notice's meaning.
 ## 2026-08-17 06:00 - The claim audit closes the engine; a prose row can go stale silently
 
 The audit landed (1abfbdc): one false claim in five rows, the

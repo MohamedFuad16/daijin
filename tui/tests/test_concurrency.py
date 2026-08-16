@@ -9,7 +9,6 @@ ceiling that keeps a shared daemon from being swarmed.
 from __future__ import annotations
 
 import asyncio
-import time
 
 import pytest
 from conftest import DEFAULT_REPO, run_async, running_app, settle
@@ -142,55 +141,63 @@ async def test_in_flight_returns_to_zero_even_when_a_call_fails():
 # The win ------------------------------------------------------------------
 
 
+# These assert STRUCTURE, not wall clock. A margin against elapsed time is the
+# flaky-gate class: on a loaded CI runner it fails for reasons unrelated to what
+# it claims to test, which is the dead-gate rule inverted. Observed concurrency
+# is clock-independent: the peak is identical at 0ms and 30ms of injected
+# latency, because it is set by how the calls are ISSUED, not by how fast the
+# machine answers them. Timing lives in the scratchpad harness, never in CI.
+
+
 @run_async
-async def test_the_boot_screen_costs_max_latency_not_sum():
-    """The measured regression guard: ten calls must not cost ten round trips."""
-    latency = 0.03
-    client = LaggyClient(MockEngine(speed=0.0), latency=latency)
+async def test_the_boot_screen_issues_its_calls_concurrently():
+    """The regression guard for the measured win, asserted structurally.
+
+    Sequential awaits peak at 1 in flight. The fan-out peaks at 7: three
+    analyze, three scoreHistory, and one retrievalScore, the other two queued
+    behind the embedding permit.
+    """
+    client = LaggyClient(MockEngine(speed=0.0), latency=0.0)
     from daijin_tui.app import DaijinApp
 
     app = DaijinApp(client, is_mock=True, repo=DEFAULT_REPO)
     async with app.run_test(size=(170, 55)) as pilot:
         await pilot.pause()
-        screen = app.screen
-        before = client._next_id
-        start = time.perf_counter()
-        await screen.load()
-        elapsed = time.perf_counter() - start
-        calls = client._next_id - before
+        await app.screen.wait_for_load()
+        calls = client._next_id
 
     assert calls >= 10, f"the boot screen should still gather every fact, saw {calls}"
-    serial = calls * latency
-    # serveStatus must finish before the per-repo round starts, so the floor is
-    # two round trips; the ceiling is generous enough not to be flaky.
-    assert elapsed < serial * 0.55, (
-        f"{calls} calls took {elapsed*1000:.0f} ms; serial would be {serial*1000:.0f} ms. "
-        "The per-repo fan-out is running sequentially again."
+    assert client.peak_in_flight >= 3, (
+        f"peaked at {client.peak_in_flight} calls in flight across {calls} calls; "
+        "the per-repo fan-out is running sequentially again"
     )
     assert client.peak_in_flight <= MAX_IN_FLIGHT
+    assert client.peak_embedding_in_flight <= MAX_EMBEDDING_IN_FLIGHT
 
 
 @run_async
 async def test_settings_reads_its_four_instruction_files_concurrently():
-    latency = 0.03
-    client = LaggyClient(MockEngine(speed=0.0), latency=latency)
+    client = LaggyClient(MockEngine(speed=0.0), latency=0.0)
     from daijin_tui.app import DaijinApp
 
     app = DaijinApp(client, is_mock=True, repo=DEFAULT_REPO)
     async with app.run_test(size=(170, 55)) as pilot:
         await pilot.pause()
+        await app.screen.wait_for_load()
         await pilot.press("8")
         await settle(pilot)
+        await app.screen.wait_for_load()
         screen = app.screen
+        client.peak_in_flight = 0
         before = client._next_id
-        start = time.perf_counter()
         await screen.load()
-        elapsed = time.perf_counter() - start
         calls = client._next_id - before
 
     assert calls == 5, f"settingsGet plus four agentFileGet, saw {calls}"
-    # settingsGet, then four concurrent reads: two round trips, not five.
-    assert elapsed < 5 * latency * 0.7, f"{elapsed*1000:.0f} ms for {calls} calls"
+    assert client.peak_in_flight >= 2, (
+        f"peaked at {client.peak_in_flight}; the four instruction files are "
+        "being read one after another again"
+    )
 
 
 # The helper ---------------------------------------------------------------

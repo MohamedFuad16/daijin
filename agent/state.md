@@ -1,5 +1,34 @@
 # Daijin build state (authoritative)
 
+## 2026-08-16 17:31 - F81 landed; the unrepresentability principle named
+
+gym-porter landed finding 81 (test-only delta, re-frozen at 300b63bb)
+with the defect's sharpest statement yet: an indented mutation was
+invisible to DECLARED while incrementing EXECUTED, so the comparison
+read balanced while wrong: not a check that fails, A CHECK THAT AGREES
+WITH ITSELF AND IS WRONG. The storage/wire boundary moved from
+documented to PINNED (an end-to-end test through the daemon's real
+axesFor proving stored empty axes render null on the wire, a mutation
+proving the net can fail). And its closing generalization is adopted
+into the record as a design principle: ELIMINATION BEATS REFUSAL,
+because a refusal is a check someone can later weaken, reorder, or
+route around, while a parameter that does not exist has no path to
+weaken; the shape now appears three times in the gym lane (certify
+takes no axes, the run table cannot hold a diff-less run for the FK to
+reference, the gate module exports no writer that can produce an open
+status). Where a rule can be made UNREPRESENTABLE rather than merely
+enforced, it has held better, every time it has been tried here.
+
+Also: the certify fix (a881df2) answered the open question plainly
+(missed, timing not judgment, accountability stated), fixed by deletion
+plus derivation (snapshot copied from the stored rubric, rubric_id
+linkage, contradictory verdicts refused naming both, rubric-less
+certification refused). CI: the tui job's root cause fixed (engine deps
+installed; daemon spawns pass on the runner); one timing-flaky
+concurrency assertion remains, routed to tui-builder with the
+assert-structure-not-wall-clock prescription. The gym store's exemption
+from invariant 2 ratified: it is the RECORD, not a derivation.
+
 ## 2026-08-16 17:16 - Persistence check PASS; certify resolved by elimination
 
 Verifier report 15, all five probes: the structural claim held at three

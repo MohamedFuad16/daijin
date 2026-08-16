@@ -52,6 +52,48 @@ function surface(repoPath) {
   ];
 }
 
+/**
+ * A THROWAWAY repo for one sweep, and the cleanup that stops its jobs outliving it.
+ *
+ * The sweep calls every method, and two of them (gatesDiscover, initBrain) START JOBS and
+ * return a jobId immediately. Run against the file's shared fixture, those jobs kept
+ * working while twenty-two later tests used the same repo, and the discovery job's write
+ * landed wherever contention put it. That is the CI gates-are-data failure (run
+ * 31937439737), traced by verifier report 20: a fast local machine finishes the sweep
+ * before the job lands and a loaded CI container does not.
+ *
+ * The sharing is REMOVED rather than sequenced around. Awaiting the jobs inline would turn
+ * a fast contract check into a slow integration test, which is a different thing wearing
+ * the same name.
+ *
+ * And the jobs are CANCELLED rather than left running. Un-awaited work that outlives its
+ * test file is a background writer with no owner: it cannot corrupt this file's fixture any
+ * more, but it can still hold a temp directory open while the file tries to remove it, and
+ * "nobody is looking at it" is not a lifecycle.
+ */
+async function sweepRepo(daemon, label) {
+  const root = await mkdtemp(path.join(tmpdir(), `daijin-sweep-${label}-`));
+  await mkdir(path.join(root, '.daijin'), { recursive: true });
+  await writeFile(path.join(root, 'package.json'), JSON.stringify({ name: 'fixture', scripts: { test: 'exit 0' } }), 'utf8');
+  await daemon.request('repoAttach', { repoPath: root });
+  const started = [];
+  return {
+    root,
+    /// Remember any job the sweep kicks off, so it can be stopped afterwards.
+    note(envelope) {
+      const jobId = envelope?.result?.jobId;
+      if (typeof jobId === 'string') started.push(jobId);
+      return envelope;
+    },
+    startedJobs: () => [...started],
+    async cleanup() {
+      for (const jobId of started) await daemon.request('jobCancel', { jobId });
+      await daemon.request('repoDetach', { repoPath: root });
+      await rm(root, { recursive: true, force: true });
+    },
+  };
+}
+
 let daemon;
 let repoPath;
 
@@ -69,13 +111,30 @@ after(async () => {
 });
 
 test('every v4 method answers, and none is a missing method', async () => {
-  const missing = [];
-  for (const [method, params] of surface(repoPath)) {
-    const envelope = await daemon.request(method, params);
-    assert.ok(envelope.result !== undefined || envelope.error, `${method} produced no envelope`);
-    if (envelope.error?.code === ERR_METHOD_NOT_FOUND) missing.push(method);
+  const sweep = await sweepRepo(daemon, 'answers');
+  try {
+    const missing = [];
+    for (const [method, params] of surface(sweep.root)) {
+      const envelope = sweep.note(await daemon.request(method, params));
+      assert.ok(envelope.result !== undefined || envelope.error, `${method} produced no envelope`);
+      if (envelope.error?.code === ERR_METHOD_NOT_FOUND) missing.push(method);
+    }
+    assert.deepEqual(missing, [], 'a frozen method answering method-not-found is a lie about the contract');
+    // The sweep really does start background work; if it ever stops, this assertion is the
+    // thing that notices, and the cleanup below stops being necessary rather than silently
+    // stopping being effective.
+    assert.ok(sweep.startedJobs().length > 0, 'the sweep starts jobs, which is why it needs its own repo');
+
+    // THE ISOLATION, asserted positively rather than hoped. This is the first test in the
+    // file, so nothing else has written to the shared fixture yet: if the sweep's jobs can
+    // still reach it, a gates.yaml appears here and the twenty-two tests that follow are
+    // sharing a repo with a background writer again.
+    const { access } = await import('node:fs/promises');
+    await assert.rejects(access(path.join(repoPath, '.daijin', 'gates.yaml')),
+      'the sweep must not write into the fixture the rest of the file uses');
+  } finally {
+    await sweep.cleanup();
   }
-  assert.deepEqual(missing, [], 'a frozen method answering method-not-found is a lie about the contract');
 });
 
 test('every not-implemented answer names the phase that will implement it', async () => {
@@ -219,13 +278,18 @@ test('the spend-touching methods are exactly the four the contract enumerates', 
   // Drives every method with NO confirmation and collects which ones refuse with -32050.
   // A fifth spend refusal appearing here means someone added a spend path, which the
   // contract says is a contract change and not an implementation detail.
-  const refusing = [];
-  for (const [method, params] of surface(repoPath)) {
-    const envelope = await daemon.request(method, params);
-    if (envelope.error?.code === ERR_SPEND_REFUSED) refusing.push(method);
+  const sweep = await sweepRepo(daemon, 'spend');
+  try {
+    const refusing = [];
+    for (const [method, params] of surface(sweep.root)) {
+      const envelope = sweep.note(await daemon.request(method, params));
+      if (envelope.error?.code === ERR_SPEND_REFUSED) refusing.push(method);
+    }
+    assert.deepEqual(refusing.sort(), ['diagnoseNarrate', 'gymStart', 'rolePing'].sort(),
+      'initBrain only spends on layer1+layer2, which this sweep calls with layer1');
+  } finally {
+    await sweep.cleanup();
   }
-  assert.deepEqual(refusing.sort(), ['diagnoseNarrate', 'gymStart', 'rolePing'].sort(),
-    'initBrain only spends on layer1+layer2, which this sweep calls with layer1');
 });
 
 // ---- agent instruction files, wired against the shipped defaults -------------------------

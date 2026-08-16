@@ -162,22 +162,56 @@ test('diagnoseNarrate refuses without confirmation, and names the free alternati
 });
 
 test('initBrain spends ONLY on layer1+layer2', async () => {
-  // layer1 is DETERMINISTIC and free, so it starts a job rather than being gated. ingest is
-  // refused by name, and for a reason that is not spend.
-  const layer1 = await daemon.request('initBrain', { repoPath, mode: 'layer1' });
-  assert.ok(layer1.result?.jobId, 'layer1 is wired and starts a job');
-  const ingest = errorOf(await daemon.request('initBrain', { repoPath, mode: 'ingest' }));
-  assert.equal(ingest.code, -32001, 'ingest is deferred, not gated');
-  assert.notEqual(ingest.code, ERR_SPEND_REFUSED);
+  // ITS OWN REPO, because the two calls below START JOBS and return immediately, and an
+  // init job writes the manifest, the brain files, gates.yaml and the score history. Run
+  // against this file's shared fixture, that work lands wherever contention puts it, in a
+  // repo four later tests read from. Same shape as the CI gates-are-data failure that
+  // verifier report 20 traced in rpc-surface (run 31937439737): a fast machine finishes
+  // the test before the job lands and a loaded one does not.
+  //
+  // The sharing is removed rather than sequenced around; awaiting the jobs would turn a
+  // spend-boundary check into an init integration test.
+  const own = await mkdtemp(path.join(tmpdir(), 'daijin-spend-init-'));
+  await mkdir(path.join(own, '.daijin'), { recursive: true });
+  await writeFile(path.join(own, 'package.json'), JSON.stringify({ name: 'fixture', scripts: { test: 'exit 0' } }), 'utf8');
+  await daemon.request('repoAttach', { repoPath: own });
+  const started = [];
+  try {
+    // layer1 is DETERMINISTIC and free, so it starts a job rather than being gated. ingest
+    // is refused by name, and for a reason that is not spend.
+    const layer1 = await daemon.request('initBrain', { repoPath: own, mode: 'layer1' });
+    assert.ok(layer1.result?.jobId, 'layer1 is wired and starts a job');
+    started.push(layer1.result.jobId);
+    const ingest = errorOf(await daemon.request('initBrain', { repoPath: own, mode: 'ingest' }));
+    assert.equal(ingest.code, -32001, 'ingest is deferred, not gated');
+    assert.notEqual(ingest.code, ERR_SPEND_REFUSED);
 
-  const refused = errorOf(await daemon.request('initBrain', { repoPath, mode: 'layer1+layer2' }));
-  assert.equal(refused.code, ERR_SPEND_REFUSED);
-  assert.match(refused.data.hint, /budget/i, 'the estimated budget is shown and confirmed before the job starts');
+    const refused = errorOf(await daemon.request('initBrain', { repoPath: own, mode: 'layer1+layer2' }));
+    assert.equal(refused.code, ERR_SPEND_REFUSED);
+    assert.match(refused.data.hint, /budget/i, 'the estimated budget is shown and confirmed before the job starts');
 
-  // Confirmed, the spend boundary is behind it and the job starts. Layer 2 itself is still
-  // unreachable in this build, which the job reports on the step stream rather than here.
-  const confirmed = await daemon.request('initBrain', { repoPath, mode: 'layer1+layer2', confirm: true, budget: { estimatedTokens: 1 } });
-  assert.ok(confirmed.result?.jobId, 'a confirmed call is no longer refused for spend');
+    // Confirmed, the spend boundary is behind it and the job starts. Layer 2 itself is
+    // still unreachable in this build, which the job reports on the step stream rather
+    // than here.
+    const confirmed = await daemon.request('initBrain', { repoPath: own, mode: 'layer1+layer2', confirm: true, budget: { estimatedTokens: 1 } });
+    assert.ok(confirmed.result?.jobId, 'a confirmed call is no longer refused for spend');
+    started.push(confirmed.result.jobId);
+  } finally {
+    // Cancelled, not abandoned. Un-awaited work that outlives its test is a writer with no
+    // owner, and this file's remaining tests share a daemon with it.
+    for (const jobId of started) await daemon.request('jobCancel', { jobId });
+    await daemon.request('repoDetach', { repoPath: own });
+    await rm(own, { recursive: true, force: true });
+  }
+});
+
+test('the init test left no writer behind in the shared fixture', async () => {
+  // The isolation, asserted positively. If the jobs above can still reach this file's
+  // shared repo, an init job materialises .daijin/manifest.json in it, and the four tests
+  // after this one are sharing a repo with a background writer again.
+  const { access } = await import('node:fs/promises');
+  await assert.rejects(access(path.join(repoPath, '.daijin', 'manifest.json')),
+    'an init job wrote into the shared fixture; give it its own repo');
 });
 
 test('an unknown initBrain mode is a parameter error, not a spend refusal', async () => {

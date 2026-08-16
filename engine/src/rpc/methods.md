@@ -106,6 +106,15 @@ ping is historical (recorded at `at`), never a live reading.
 Each instruction file is `{ name, path, hash, defaultHash, modified }`.
 Secrets are masked; keyRef is a pointer, never a value.
 
+[Addition 2026-08-16, v5, keyRef disambiguation: keyRef's two meanings (env
+var name or file path) are resolved BY SHAPE, never guessed: an absolute
+path is a file, a SHOUTING_NAME is an environment variable, and a lowercase
+relative string is REFUSED rather than guessed, since that is also the
+shape of a pasted key. Three unambiguous prefixed forms exist (env:, file:,
+and literal refusal for raw values). Role rows additionally carry
+keyResolvable (true / false / null for never-configured) and keyReason, so
+a client can render key health without any value crossing the wire.]
+
 `board` returns `{ rows, total }`, rows as defined in its method row above.
 
 `serveStatus().repos[].health` takes values `ok | warn | critical | no-brain`;

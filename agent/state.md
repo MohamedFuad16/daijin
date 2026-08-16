@@ -1,5 +1,34 @@
 # Daijin build state (authoritative)
 
+## 2026-08-16 17:58 - Relocation complete; roles wired; a flake blocks P8
+
+The extractor completed all four items. The relocation's design call is
+the regeneration test applied independently: the state root splits into
+index/ (disposable: brain.sqlite regenerates) and records/
+(machine-scoped but NOT regenerable: score-history was measured by this
+machine's embedder on a date and nothing recomputes the past). Not
+moved, correctly: gym.sqlite and results (the record), goldset.yaml
+(the gauge), GATE (machine-local authorization cannot be a committed
+record). Identity is repoId in manifest.json with origin.json
+disclosing clone-versus-move divergence; one id per project ratified.
+The delete-index-read-everything-back invariant is EXECUTED as a test.
+Roles: engineer wired to glm-5.3 via the ZAI key file, all by pointer,
+no value anywhere; ONE OVERRULE per the owner's instruction: the
+watcher moves to the SAME ZAI key (owner said same key for both), model
+left null because naming a model is a cost decision. keyRef ambiguity
+resolved by shape and adopted into the contract (lowercase-relative
+refused as the shape of a pasted key; keyResolvable/keyReason on role
+rows). The graded branch proven end to end through both lanes' real
+code (scrambled key order in, canonical list out).
+
+BLOCKING P8: a 1-in-5 suite flake, a different test each time, across
+lanes, reproducing at concurrency 1. The extractor's framing is the
+assignment: a suite failing one random test in five runs quietly
+converts the npm-test gate under every claim into a coin flip, and at
+P8 a flake reads as an integration failure. The verifier is
+characterizing under a controlled protocol (quiet tree versus active
+tree); owning lanes fix on its attribution.
+
 ## 2026-08-16 17:48 - P3.5 PASSED; finding 82; the per-corpus sharpening
 
 Verifier report 17: PASS, with the same-construction requirement

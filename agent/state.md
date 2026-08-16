@@ -1,5 +1,48 @@
 # Daijin build state (authoritative)
 
+## 2026-08-16 22:58 - The governance check catches its own author; a latent hole found
+
+THE MECHANICAL CHECK LANDED (gym-porter, 1051f43;
+docs/verification/p4-mutations/check-scanner-commit.mjs) and is WIRED
+as the commit-msg hook (leader re-ran the self-test before wiring;
+unrelated-commit control verified through the hook path). Self-test:
+both refusals fire (false declaration, unannounced widening,
+too-thin-reason widening) and three honest controls pass. The stronger
+evidence, run against REAL history: it ACCEPTS the extractor's honest
+src/roles declaration and REFUSES a881df2 - gym-porter's OWN layout.js
+widening, the one it self-owned in prose - which is the whole argument
+for counters in one line: the rule was agreed, the author knew it was
+broken, and it still took a machine to catch it in the record rather
+than in memory.
+
+THE LATENT HOLE, found because the verifier asked a clarifying
+question: the scanned set was TWO lists - the declaration in the
+coverage test and a separate array of walked roots - agreeing only by
+maintenance. A directory declared but not walked would read COVERED AND
+NEVER SCANNED, and the coverage test would pass, because it compared
+the declaration against disk, never against what the walk read. Fixed:
+one exported constant, walk derived. The question was about how to
+write a checker; the answer was a bug.
+
+TWO RULINGS: placement stays docs/verification/p4-mutations/ (the
+check's self-test and real-history runs ARE its evidence; a tools/
+directory happens when three infrastructure scripts exist to move
+together, not for one). Widening-must-stand-alone is DECLINED as
+gym-porter left it: widenings already go through the leader in a
+freeze window, and a window forces effective isolation without the
+check inventing scope beyond what was ruled. Reason bar of 60 chars
+stands as visible-and-arguable. Manifest supersedes to 5dff20b3
+(delta: the unified constant in gym-spend-gate.test.js + two evidence
+files).
+
+THE EXTRACTOR CLOSED ITS jobCancel ASSUMPTION (bce6252) and the
+reading was worth more than the confirmation: cancel is cooperative,
+NEVER THROWS ({cancelled:false} on unknown/finished), but is NOT a
+hard stop - a job past its last checkpoint still completes its write.
+Consequence written into the test file: the isolation rests on the OWN
+REPO, not the cancel; the cancel only stops work sooner. Verified
+empirically the real way: zero temp dirs before and after, meaningful
+because an outliving job would RECREATE its directory on write.
 ## 2026-08-16 22:50 - Roster: store-adapter retired at owner direction
 
 store-adapter shut down, its lane complete: P2 conformance, the A/B,

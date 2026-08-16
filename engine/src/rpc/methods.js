@@ -1092,9 +1092,13 @@ export function createMethods({
       return withLedger(repoPath, async (ledger) => {
         const exam = ledger.getExam(params.examId);
         if (!exam) throw invalidParams('unknown examId', `No exam named ${params.examId} is in the bank.`);
-        const attempts = attemptsNewestFirst(
-          ledger.database.prepare('SELECT * FROM run WHERE exam_id = ?').all(params.examId),
-        );
+        // Through the ledger's own accessor, never past it into the tables. The raw SELECT
+        // that used to be here coupled this surface to a schema the daemon does not own, and
+        // when the rubric tables landed it would have returned rows with no rubric field:
+        // every attempt reading ungraded, forever, with nothing failing. The explicit sort
+        // stays because the top-level axes depend on it and the accessor's order is the
+        // ledger's business, not a promise to this caller.
+        const attempts = attemptsNewestFirst(ledger.attemptsForExam(params.examId));
         // NOTE, dated 2026-08-16 (finding 79): this used to return `axes: {}` behind a
         // comment saying "empty until the grading round lands". The grading round HAS
         // landed, and `{}` is now a forbidden value: an empty object renders on a radar

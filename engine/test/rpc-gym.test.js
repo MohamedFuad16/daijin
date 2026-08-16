@@ -418,3 +418,97 @@ test('attempts are sorted newest first EXPLICITLY, not trusted from the query', 
   attemptsNewestFirst(input);
   assert.deepEqual(input.map((row) => row.id), [1, 2]);
 });
+
+// ---- the graded branch, over gym-porter's REAL ledger ------------------------------------
+//
+// Not a mock. The rubric goes in through importRubricBatch and comes back out through
+// examDetail, so the handover between their storage and my boundary is PROVEN rather than
+// described. Until the rubric tables landed this branch was unreachable in production and
+// only reachable in a unit test of axesFor.
+
+test('a graded attempt reaches the wire as an ORDERED list, straight from the ledger', async () => {
+  const kit = await harness({ exams: [exam()] });
+  try {
+    await kit.attach();
+    const ledger = GymLedger.open(gymDatabasePath(kit.repoPath));
+    const cycleId = ledger.startCycle({ mode: 'evaluation' });
+    const runId = ledger.recordRun({
+      cycleId, examId: 'exam-0001', mode: 'evaluation', status: 'completed',
+      verdict: 'partial', resultFile: 'runs/exam-0001-1.json', applied: true,
+    });
+    ledger.importRubricBatch({
+      mode: 'evaluation',
+      source: 'test',
+      rubrics: [{
+        runId,
+        verdict: 'partial',
+        // Deliberately scrambled key order, because object key order is an accident of how
+        // the grader wrote the rubric and must not decide the order on a chart.
+        axes: {
+          blast_radius_awareness: { score: 2, citations: ['e'] },
+          correctness_vs_gold: { score: 5, citations: ['a'] },
+          reasoning_quality: { score: 3, citations: ['d'] },
+          convention_adherence: { score: 4, citations: ['b'] },
+          decision_awareness: { score: 1, citations: ['c'] },
+        },
+        taskDigest: 'sha256:task',
+        submissionDigest: 'sha256:submission',
+      }],
+    });
+    ledger.close?.();
+
+    const detail = await kit.server.methods.examDetail({ repoPath: kit.repoPath, examId: 'exam-0001' });
+    assert.deepEqual(detail.axes, [
+      { name: 'correctness_vs_gold', score: 5, max: 5 },
+      { name: 'convention_adherence', score: 4, max: 5 },
+      { name: 'decision_awareness', score: 1, max: 5 },
+      { name: 'reasoning_quality', score: 3, max: 5 },
+      { name: 'blast_radius_awareness', score: 2, max: 5 },
+    ], 'canonical order out of the store, not the order the grader happened to write');
+    assert.deepEqual(detail.attempts[0].axes, detail.axes);
+    assert.equal(detail.attempts[0].ungradedCode, null, 'a graded attempt has nothing to explain');
+    assert.equal(detail.attempts[0].ungradedReason, null);
+  } finally {
+    await kit.cleanup();
+  }
+});
+
+test('an ungraded attempt beside a graded one keeps its own answer', async () => {
+  // The top-level axes are the most recent GRADED attempt's. An ungraded attempt sitting
+  // above it must not inherit them, and must not read as a student who scored zero.
+  const kit = await harness({ exams: [exam()] });
+  try {
+    await kit.attach();
+    const ledger = GymLedger.open(gymDatabasePath(kit.repoPath));
+    const cycleId = ledger.startCycle({ mode: 'evaluation' });
+    const graded = ledger.recordRun({
+      cycleId, examId: 'exam-0001', mode: 'evaluation', status: 'completed', verdict: 'pass',
+      resultFile: 'runs/one.json', applied: true, at: '2026-08-14T00:00:00.000Z',
+    });
+    ledger.recordRun({
+      cycleId, examId: 'exam-0001', mode: 'evaluation', status: 'completed', verdict: null,
+      resultFile: 'runs/two.json', applied: true, at: '2026-08-16T00:00:00.000Z',
+    });
+    ledger.importRubricBatch({
+      mode: 'evaluation',
+      rubrics: [{
+        runId: graded,
+        verdict: 'pass',
+        axes: Object.fromEntries(['correctness_vs_gold', 'convention_adherence', 'decision_awareness',
+          'reasoning_quality', 'blast_radius_awareness'].map((name) => [name, { score: 4, citations: ['x'] }])),
+        taskDigest: 'sha256:task',
+        submissionDigest: 'sha256:submission',
+      }],
+    });
+    ledger.close?.();
+
+    const detail = await kit.server.methods.examDetail({ repoPath: kit.repoPath, examId: 'exam-0001' });
+    assert.equal(detail.attempts[0].axes, null, 'the newer attempt is ungraded');
+    assert.equal(detail.attempts[0].ungradedCode, 'pending');
+    assert.ok(detail.attempts[1].axes, 'the older one is graded');
+    assert.equal(detail.axes.length, 5, 'and the top level shows the most recent GRADED one');
+    assert.ok(detail.axes.every((row) => row.score === 4));
+  } finally {
+    await kit.cleanup();
+  }
+});

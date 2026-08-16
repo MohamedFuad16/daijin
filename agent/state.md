@@ -1,5 +1,38 @@
 # Daijin build state (authoritative)
 
+## 2026-08-17 03:35 - The gate mutated itself and found it was a mute button
+
+The extractor mutated its own gate (adc356f) and TWO MUTATIONS
+SURVIVED: exempting a row had disabled the row's WHOLE check - a known
+gap buying silence for the gap beside it, "a mute button rather than a
+ratchet, and the ratchet was the entire justification for allowing
+exemptions at all." Each exemption now pins its EXACT key delta, the
+delta is subtracted, anything beyond it fails, and a pin that stops
+describing reality is itself reported. The closing rule (a covered
+method with a declared shape must have a non-vacuous check) then found
+examList had been covered IN NAME ONLY since it was written (its
+reader asked for a field that does not exist and quietly did nothing),
+and fixing that found the reader stripping optionality markers -
+turning quarantineReason? into a false divergence. Optional is now
+expressed: may be absent, may not be unknown. scoreHistory moved to
+the live tier for the principled reason the gate itself surfaced: its
+read path returns the file verbatim, so checking it against a
+hand-written fixture asserts the fixture.
+
+The instrument's honest summary, kept: wrong four times (bracket
+truncation, escaped pipes, whole-check exemption, stripped
+optionality), every failure pointing toward UNDER-REPORTING, each
+found by the real document or by mutation, never by reading. The
+coverage number is not trusted without the printed set beside it,
+which is why the set prints.
+
+RULED: quarantineReason stays optional-absent - the contract marks it
+optional, it is REQUIRED exactly when benchmarkStatus is quarantined,
+and an always-null key would add uniformity the semantics do not ask
+for; no change to the retired gym lane. The convention's first return
+noted: one restructured row surfaced one real divergence (exam on the
+wire, not in the row) in the next run. Suite 611/611. Remaining:
+the amendment batch, the acceptance script, the radar stipple.
 ## 2026-08-17 03:20 - The surface gate lands and harvests five divergences at birth
 
 The contract-shape gate is surface-wide (a05b80c, e08dd05): 30

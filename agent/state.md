@@ -1,5 +1,37 @@
 # Daijin build state (authoritative)
 
+## 2026-08-16 12:20 - P6 verdict: (a)-(f) PASS; the phase STAYS OPEN on (g) and (h)
+
+Verifier report 9, pinned to commit 5c3ac8f with per-file sha256: the dry
+run reproduced independently at 49/0, all four named claims re-derived
+(the subshell-exit fix with its mutation, the self-testing dash sweep
+attacked beyond its own self-test with a planted dash in a scratch copy of
+the SHIPPED README firing correctly, program-versus-state separation, the
+deleted-stub property). The coverage question earned its place: clause (g)
+is UNMET (no Ollama or embedder mention anywhere in install/, and the
+green completion line prints without probing an embedder, the exact
+first-ingest failure the extraction report calls the ugliest onboarding
+mode), and clause (h) is implemented well but NO check can fail on it (six
+check_fails mutations exist elsewhere; none covers a runtime refusal).
+Finding 76: clause (e) half-verified (repository brain planted and proven
+surviving uninstall; user-level state never planted).
+
+RULINGS: P6 stays OPEN until (g) and (h) are met, the verifier's lean
+adopted with its reasoning (a phase accepted with a known-unmet clause
+gets remembered as accepted). The (g) fix is PROBE PLUS NAMED MESSAGE,
+not documentation-only: install.sh probes Ollama at completion,
+non-fatally; present-with-model prints ready; absent prints the named
+message with the exact next steps (install Ollama, pull the model) and
+the completion line says retrieval is not yet functional; the install
+never fails on it (a runtime dependency, not an install dependency) and
+never prints a green line implying retrieval works unprobed; README gains
+the requirement where a first-run user reads; the dry run gains BOTH
+branches with the probe pointed at a mock endpoint, never a live service.
+Finding 71's sk-ant fixture was already fixed by tui-builder in its
+report-6 round (mk-mock prefix); the install sweep's four-file scoping
+stands as deliberate. Adapter unfrozen with findings 74, 75, 76 as its
+work order; re-freeze and a delta attack on the new checks after.
+
 ## 2026-08-16 11:58 - Committed and pushed; limit pause; cross-encoder ordered
 
 Owner granted full commit/push/autonomous authority. Initial commit b1844a0

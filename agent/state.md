@@ -1,5 +1,27 @@
 # Daijin build state (authoritative)
 
+## 2026-08-16 12:52 - P7 verdict: PASS with two required follow-ups, both instruments
+
+Verifier report 11, pinned to gym subtree sha 8ee45504 (0 dirty in scope
+throughout while repo HEAD moved twice under it): mechanisms hold. The
+withheld-document refusal confirmed as a real composition (grading reads
+the exclusion record from the artifact and refuses an axis citing a
+withheld id, naming both); clause 19's checked exemption fired on all
+three planted holes; zero spend re-derived; counts reproduced exactly.
+Two findings, both the phase's own subject one level up (a control
+passing for the wrong reason): 77, agentIdentity does not casefold or
+normalize, so GLM-5.2 vs glm-5.2 or a trailing endpoint slash evades the
+independence refusal on ordinary accidents (fix: normalize, with both
+evasions as cases; served-model-id keying recorded as the live-half
+strengthening); 78, two PROVIDER_CALL alternatives had no dedicated
+control (the router shape also matched API_KEY, lowercase api_key had no
+shape). RULING: accepted-with-required-follow-ups, the P4 shape; both
+land as one delta commit, verifier delta-checks the two, P7 record
+closes then. The verifier's drop-each-alternative-count-broken-controls
+method is the new standard for multi-branch pattern controls. Standing
+pattern named for the record: instruments deserve the same adversarial
+treatment as mechanisms, recursively.
+
 ## 2026-08-16 12:46 - P7 built and frozen; gym RPC live; rerank measurement running
 
 Three lanes converged: (1) gym-porter built all 21 registered P7 clauses

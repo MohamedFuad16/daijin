@@ -408,3 +408,23 @@ the backend adapter (its seam), init-miner extends retrieval-score with a
 rerank on/off A/B, verifier attacks the measurement. If the measured win is
 absent, the knob still ships, documented as measured-neutral-or-negative on
 these corpora, and the honest number is the deliverable.
+
+## D-0026 (2026-08-16) Staging discipline: five lanes, one tree, one index
+
+Incident: commit 9d9f7a4 ("Ignore .bak files...") contains 545 insertions
+of which 5 match its message; the other 540 are the extractor's entire
+socket transport. Cause, jointly owned: the extractor's git add -A swept
+another lane's files, its reset --soft left the index staged, and the
+LEADER's own single-file commit then took everything in the shared index
+under its message. History was NOT rewritten: other lanes had built on
+the push, and a wrong label plus a findable dated correcting commit
+(2a49644) is the better trade; that mechanism is affirmed as the standard
+for mislabeled pushed commits. Standing rules, all lanes and the leader:
+(1) stage explicit paths only, never add -A in the shared tree; (2)
+staging and committing are ONE atomic action, never leave a staged index
+or a reset --soft window open; (3) git diff --cached --stat runs before
+every commit and must list only your own lane's files, a foreign path
+aborts the commit; (4) never stage another lane's in-flight files, and
+uncommitted mid-edit work in the shared tree is a named hazard until its
+owner commits. The irony that the sweeping commit's own message was about
+wildcard-add hazards is retained in the record deliberately.

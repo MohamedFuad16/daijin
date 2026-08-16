@@ -976,6 +976,13 @@ export function createMethods({
     /// Zero spend: every command here is the repo's own tooling, run locally.
     async gatesDiscover(params) {
       const repoPath = await requireAttached(params);
+      // What gates.yaml held when the job STARTED. Discovery classifies by running commands,
+      // which takes minutes on a real repo, and the file it will write is a file the user is
+      // invited to edit: its own header says "this file is DATA: edit it, and the engine
+      // obeys it". A job that writes unconditionally at the end obeys nothing; it silently
+      // destroys whatever the user wrote while it was working. Read here rather than inside
+      // the job so the window starts at the moment the user asked, not later.
+      const before = await readFile(gatesFilePath(repoPath), 'utf8').catch(() => null);
       const jobId = jobs.start('gates', async ({ emit, cancelled }) => {
         emit('probe', 'scan', 'probing package.json, CI configs and Makefiles');
         const analysis = await analyze(repoPath);
@@ -992,6 +999,18 @@ export function createMethods({
           },
         });
         if (cancelled()) return;
+
+        // REFUSE TO CLOBBER. If the file changed while discovery was running, the user
+        // edited it, and their edit is the authority here: the engine treats gates as data
+        // it does not author. Discovery reports what it found and leaves the file alone,
+        // rather than overwriting an edit with generated content the user never asked for.
+        const current = await readFile(gatesFilePath(repoPath), 'utf8').catch(() => null);
+        if (current !== before) {
+          emit('done', 'kept-yours',
+            `gates.yaml changed while discovery was running, so your version was kept. ${discovered.summary.carryingSignal} of ${discovered.summary.total} discovered gate(s) carry signal; run discovery again to take them.`,
+            { counts: discovered.summary });
+          return;
+        }
 
         await mkdir(path.dirname(gatesFilePath(repoPath)), { recursive: true });
         await writeFile(gatesFilePath(repoPath), renderGatesYaml({

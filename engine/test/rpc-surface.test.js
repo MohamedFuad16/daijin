@@ -296,3 +296,76 @@ test('agent files are per role and per repo', async () => {
   const bad = errorOf(await daemon.request('agentFileGet', { repoPath, role: 'engineer' }));
   assert.equal(bad.code, -32602, 'engineer is a MODEL role, not an instruction-file role');
 });
+
+// ---- gates.yaml is the user's file, even while discovery is running ----------------------
+//
+// Found from CI run 31937439737, where "gates are data" failed on a fresh checkout in a
+// single container: gatesSet stored the user's content and gatesGet, milliseconds later,
+// read back the generated discovered-gates header. No concurrent lane and no mutation
+// battery can exist in that environment, so the race is inside the suite process.
+//
+// The mechanism, reproduced by construction below: gatesDiscover starts a JOB and returns
+// immediately, the job classifies by RUNNING commands, which takes as long as it takes, and
+// at the end it wrote gates.yaml unconditionally. Anything the user wrote in between was
+// destroyed. The surface sweep starts that job and never drains it, which is why the
+// failure landed in a later test rather than in the sweep.
+//
+// This is a PRODUCT defect and not only a test-isolation one. The file's own header says
+// "this file is DATA: edit it, and the engine obeys it", and a job that overwrites at the
+// end obeys nothing.
+
+test('discovery does not clobber an edit made while it was running', async () => {
+  const { createRpcServer } = await import('../src/rpc/server.js');
+  const stateRoot = await mkdtemp(path.join(tmpdir(), 'daijin-gates-race-state-'));
+  const own = await mkdtemp(path.join(tmpdir(), 'daijin-gates-race-repo-'));
+  await mkdir(path.join(own, '.daijin'), { recursive: true });
+  await writeFile(path.join(own, 'package.json'),
+    JSON.stringify({ name: 'fixture', scripts: { test: 'exit 0', lint: 'exit 0' } }), 'utf8');
+
+  const server = createRpcServer({ stateRoot, write: () => {} });
+  try {
+    await server.methods.repoAttach({ repoPath: own });
+
+    // Start discovery and DO NOT drain, which is exactly the state the sweep leaves behind.
+    await server.methods.gatesDiscover({ repoPath: own });
+
+    const mine = 'gates:\n  - name: mine\n    command: exit 0\n';
+    await server.methods.gatesSet({ repoPath: own, patch: { content: mine } });
+    await server.jobs.drain();
+
+    const read = await server.methods.gatesGet({ repoPath: own });
+    assert.equal(read.content, mine,
+      'the user edited gates.yaml while discovery ran; discovery must keep their version, not overwrite it');
+    assert.ok(!read.content.includes('Daijin discovered gates'),
+      'and specifically must not replace it with the generated header');
+  } finally {
+    await server.close();
+    await rm(stateRoot, { recursive: true, force: true });
+    await rm(own, { recursive: true, force: true });
+  }
+});
+
+test('with nothing edited, discovery still writes its result', async () => {
+  // The refusal must be narrow. A discovery that never writes because it is afraid of
+  // clobbering would be a feature that silently stopped working, which is worse than the
+  // defect it replaced.
+  const { createRpcServer } = await import('../src/rpc/server.js');
+  const stateRoot = await mkdtemp(path.join(tmpdir(), 'daijin-gates-write-state-'));
+  const own = await mkdtemp(path.join(tmpdir(), 'daijin-gates-write-repo-'));
+  await mkdir(path.join(own, '.daijin'), { recursive: true });
+  await writeFile(path.join(own, 'package.json'),
+    JSON.stringify({ name: 'fixture', scripts: { test: 'exit 0', lint: 'exit 0' } }), 'utf8');
+
+  const server = createRpcServer({ stateRoot, write: () => {} });
+  try {
+    await server.methods.repoAttach({ repoPath: own });
+    await server.methods.gatesDiscover({ repoPath: own });
+    await server.jobs.drain();
+    const read = await server.methods.gatesGet({ repoPath: own });
+    assert.match(read.content, /Daijin discovered gates/, 'an undisturbed discovery writes its file');
+  } finally {
+    await server.close();
+    await rm(stateRoot, { recursive: true, force: true });
+    await rm(own, { recursive: true, force: true });
+  }
+});

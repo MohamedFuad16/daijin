@@ -20,6 +20,7 @@ import YAML from 'yaml';
 import { createMethods, measureDiscriminatingRange } from '../src/rpc/methods.js';
 import { JobRunner } from '../src/rpc/jobs.js';
 import { EngineState } from '../src/rpc/state.js';
+import { repoLayout } from '../src/state/layout.js';
 import { createSqliteStore } from '../src/store/sqlite.js';
 
 const CASES = [
@@ -28,11 +29,16 @@ const CASES = [
   { id: 'g003', query: 'what replaced it', must_return: ['doc.c'] },
 ];
 
-/// A repo with an indexed brain and a gold set on disk.
+/// A repo with a gold set in it and an index in the state root, which is where the index
+/// lives after D-0031.
 async function fixture({ cases = CASES } = {}) {
   const repoPath = await mkdtemp(path.join(tmpdir(), 'dj-diag-'));
+  const stateRoot = await mkdtemp(path.join(tmpdir(), 'dj-diag-state-'));
   await mkdir(path.join(repoPath, '.daijin', 'brain'), { recursive: true });
+  const layout = await repoLayout(repoPath, { stateRoot, ensure: true });
+  await mkdir(layout.indexRoot, { recursive: true });
   const store = await createSqliteStore({
+    path: layout.databasePath,
     repoPath,
     project: 'default',
     embedder: { provider: 'ollama', model: 'bge-m3', digest: 'sha256:test', dimension: 4 },
@@ -49,8 +55,8 @@ async function fixture({ cases = CASES } = {}) {
     }
   });
   await store.close();
-  await writeFile(path.join(repoPath, '.daijin', 'goldset.yaml'), YAML.stringify(cases), 'utf8');
-  return repoPath;
+  await writeFile(layout.goldsetPath, YAML.stringify(cases), 'utf8');
+  return { repoPath, stateRoot, layout };
 }
 
 /// A scoreGoldset stub that reports every case complete for the real gold set and, for a
@@ -83,20 +89,20 @@ function stubScore({ permutedHits = 1, seen = [] } = {}) {
   };
 }
 
-async function methodsOver(repoPath, score) {
-  const stateRoot = await mkdtemp(path.join(tmpdir(), 'dj-diag-state-'));
+async function methodsOver({ repoPath, stateRoot }, score) {
   const state = new EngineState({ stateRoot });
   await state.attachRepo(repoPath);
   const methods = createMethods({ state, jobs: new JobRunner({ notify: () => {} }), deps: { scoreGoldset: score } });
-  return { methods, cleanup: () => rm(stateRoot, { recursive: true, force: true }) };
+  return { methods, cleanup: async () => {} };
 }
 
 test('the control arm is OFF unless asked for, and its absence is not a measured zero', async () => {
   // A caller that renders a range has to be able to tell "not measured" from "measured and
   // found to be nothing", so the unmeasured case carries no numbers at all.
-  const repoPath = await fixture();
+  const repo = await fixture();
+  const { repoPath } = repo;
   const seen = [];
-  const { methods, cleanup } = await methodsOver(repoPath, stubScore({ seen }));
+  const { methods, cleanup } = await methodsOver(repo, stubScore({ seen }));
   try {
     const result = await methods.diagnose({ repoPath });
     assert.equal(result.discriminatingRange, null);
@@ -104,16 +110,18 @@ test('the control arm is OFF unless asked for, and its absence is not a measured
     assert.equal(seen.length, 1, 'exactly one arm ran: the control doubles an interactive call and was not asked for');
   } finally {
     await cleanup();
-    await rm(repoPath, { recursive: true, force: true });
+    await rm(repo.repoPath, { recursive: true, force: true });
+    await rm(repo.stateRoot, { recursive: true, force: true });
   }
 });
 
 test('control: true measures the range against a permuted arm on the same settings', async () => {
-  const repoPath = await fixture();
+  const repo = await fixture();
+  const { repoPath } = repo;
   const seen = [];
   // 2 of 3 permuted against 3 of 3 real: a gauge with one case of headroom, which is the
   // shape that says the number above it is nearly meaningless.
-  const { methods, cleanup } = await methodsOver(repoPath, stubScore({ permutedHits: 2, seen }));
+  const { methods, cleanup } = await methodsOver(repo, stubScore({ permutedHits: 2, seen }));
   try {
     const result = await methods.diagnose({ repoPath, control: true });
     assert.equal(seen.length, 2, 'two arms');
@@ -134,7 +142,8 @@ test('control: true measures the range against a permuted arm on the same settin
       'and every answer is deliberately wrong');
   } finally {
     await cleanup();
-    await rm(repoPath, { recursive: true, force: true });
+    await rm(repo.repoPath, { recursive: true, force: true });
+    await rm(repo.stateRoot, { recursive: true, force: true });
   }
 });
 
@@ -142,20 +151,22 @@ test('the permuted gold set is never written beside the real one', async () => {
   // A file of deliberately wrong answers sitting in the user's repo is one mistaken read
   // away from becoming the thing that measures them. It lives in a temp directory and the
   // directory is removed afterwards.
-  const repoPath = await fixture();
+  const repo = await fixture();
+  const { repoPath } = repo;
   const seen = [];
-  const { methods, cleanup } = await methodsOver(repoPath, stubScore({ seen }));
+  const { methods, cleanup } = await methodsOver(repo, stubScore({ seen }));
   try {
     await methods.diagnose({ repoPath, control: true });
     const permutedPath = seen[1].goldsetPath;
     assert.ok(!permutedPath.startsWith(repoPath), `the permuted file must not live in the repo: ${permutedPath}`);
     await assert.rejects(readFile(permutedPath, 'utf8'), 'and it is cleaned up');
 
-    const onDisk = YAML.parse(await readFile(path.join(repoPath, '.daijin', 'goldset.yaml'), 'utf8'));
+    const onDisk = YAML.parse(await readFile(repo.layout.goldsetPath, 'utf8'));
     assert.deepEqual(onDisk, CASES, 'the real gold set is untouched');
   } finally {
     await cleanup();
-    await rm(repoPath, { recursive: true, force: true });
+    await rm(repo.repoPath, { recursive: true, force: true });
+    await rm(repo.stateRoot, { recursive: true, force: true });
   }
 });
 
@@ -163,8 +174,9 @@ test('a corpus too small to permute is REPORTED, not thrown, so the clusters sur
   // Fewer than two distinct answers cannot be permuted. That is a fact about the corpus,
   // and killing the whole diagnosis over an optional arm would punish the caller for asking
   // the harder question.
-  const repoPath = await fixture({ cases: [{ id: 'g001', query: 'only one', must_return: ['doc.a'] }] });
-  const { methods, cleanup } = await methodsOver(repoPath, stubScore({}));
+  const repo = await fixture({ cases: [{ id: 'g001', query: 'only one', must_return: ['doc.a'] }] });
+  const { repoPath } = repo;
+  const { methods, cleanup } = await methodsOver(repo, stubScore({}));
   try {
     const result = await methods.diagnose({ repoPath, control: true });
     assert.equal(result.discriminatingRange, null);
@@ -172,16 +184,18 @@ test('a corpus too small to permute is REPORTED, not thrown, so the clusters sur
     assert.ok(result.caseRate, 'the diagnosis itself still answers');
   } finally {
     await cleanup();
-    await rm(repoPath, { recursive: true, force: true });
+    await rm(repo.repoPath, { recursive: true, force: true });
+    await rm(repo.stateRoot, { recursive: true, force: true });
   }
 });
 
 test('control is opt in by the literal true, not by anything truthy', async () => {
   // A string, a 1 or an object arriving from a client that guessed the shape must not
   // silently double the cost of an interactive call.
-  const repoPath = await fixture();
+  const repo = await fixture();
+  const { repoPath } = repo;
   const seen = [];
-  const { methods, cleanup } = await methodsOver(repoPath, stubScore({ seen }));
+  const { methods, cleanup } = await methodsOver(repo, stubScore({ seen }));
   try {
     for (const value of ['true', 1, {}, 'yes']) {
       await methods.diagnose({ repoPath, control: value });
@@ -189,13 +203,15 @@ test('control is opt in by the literal true, not by anything truthy', async () =
     assert.equal(seen.length, 4, 'one arm per call, never two');
   } finally {
     await cleanup();
-    await rm(repoPath, { recursive: true, force: true });
+    await rm(repo.repoPath, { recursive: true, force: true });
+    await rm(repo.stateRoot, { recursive: true, force: true });
   }
 });
 
 test('measureDiscriminatingRange cleans its temp directory even when the arm throws', async () => {
-  const repoPath = await fixture();
-  const goldsetPath = path.join(repoPath, '.daijin', 'goldset.yaml');
+  const repo = await fixture();
+  const { repoPath } = repo;
+  const goldsetPath = repo.layout.goldsetPath;
   let usedPath = null;
   try {
     await assert.rejects(measureDiscriminatingRange({
@@ -210,7 +226,8 @@ test('measureDiscriminatingRange cleans its temp directory even when the arm thr
     assert.ok(usedPath, 'the arm was attempted');
     await assert.rejects(readFile(usedPath, 'utf8'), 'and the temp file is gone regardless');
   } finally {
-    await rm(repoPath, { recursive: true, force: true });
+    await rm(repo.repoPath, { recursive: true, force: true });
+    await rm(repo.stateRoot, { recursive: true, force: true });
   }
 });
 
@@ -222,9 +239,10 @@ test('measureDiscriminatingRange cleans its temp directory even when the arm thr
 // changed since.
 
 test('a measured range is recalled on a later diagnosis that did not measure', async () => {
-  const repoPath = await fixture();
+  const repo = await fixture();
+  const { repoPath } = repo;
   const seen = [];
-  const { methods, cleanup } = await methodsOver(repoPath, stubScore({ permutedHits: 2, seen }));
+  const { methods, cleanup } = await methodsOver(repo, stubScore({ permutedHits: 2, seen }));
   try {
     const measured = await methods.diagnose({ repoPath, control: true });
     assert.equal(measured.discriminatingRange.fresh, true);
@@ -240,20 +258,22 @@ test('a measured range is recalled on a later diagnosis that did not measure', a
     assert.match(recalled.discriminatingRange.measuredAt, /^\d{4}-\d{2}-\d{2}T/);
   } finally {
     await cleanup();
-    await rm(repoPath, { recursive: true, force: true });
+    await rm(repo.repoPath, { recursive: true, force: true });
+    await rm(repo.stateRoot, { recursive: true, force: true });
   }
 });
 
 test('a recalled range says WHAT CHANGED since it was measured', async () => {
   // A range is a property of a corpus, a gold set and the settings it was taken at. A stale
   // range shown as current is worse than no range at all.
-  const repoPath = await fixture();
-  const { methods, cleanup } = await methodsOver(repoPath, stubScore({ permutedHits: 2 }));
+  const repo = await fixture();
+  const { repoPath } = repo;
+  const { methods, cleanup } = await methodsOver(repo, stubScore({ permutedHits: 2 }));
   try {
     await methods.diagnose({ repoPath, control: true });
 
     // The gold set changes underneath it.
-    await writeFile(path.join(repoPath, '.daijin', 'goldset.yaml'),
+    await writeFile(repo.layout.goldsetPath,
       YAML.stringify([...CASES, { id: 'g004', query: 'a new question', must_return: ['doc.a'] }]), 'utf8');
     const afterGoldset = await methods.diagnose({ repoPath });
     assert.equal(afterGoldset.discriminatingRange.stale, true);
@@ -261,7 +281,8 @@ test('a recalled range says WHAT CHANGED since it was measured', async () => {
     assert.ok(afterGoldset.discriminatingRange.caseRate, 'and it is still shown, disclosed rather than hidden');
   } finally {
     await cleanup();
-    await rm(repoPath, { recursive: true, force: true });
+    await rm(repo.repoPath, { recursive: true, force: true });
+    await rm(repo.stateRoot, { recursive: true, force: true });
   }
 });
 
@@ -283,28 +304,31 @@ test('settings moving under a stored range is disclosed by name', async () => {
 
 test('a corrupt range file reads as NEVER MEASURED, it does not kill the diagnosis', async () => {
   // A cache that can fail a diagnosis is a liability, and null already has an honest meaning.
-  const repoPath = await fixture();
-  const { methods, cleanup } = await methodsOver(repoPath, stubScore({}));
-  const { rangeFilePath } = await import('../src/rpc/methods.js');
+  const repo = await fixture();
+  const { repoPath } = repo;
+  const { methods, cleanup } = await methodsOver(repo, stubScore({}));
   try {
-    await writeFile(rangeFilePath(repoPath), '{ not json at all', 'utf8');
+    await mkdir(repo.layout.indexRoot, { recursive: true });
+    await writeFile(repo.layout.rangeFilePath, '{ not json at all', 'utf8');
     const result = await methods.diagnose({ repoPath });
     assert.equal(result.discriminatingRange, null);
     assert.ok(result.caseRate, 'the diagnosis still answers');
   } finally {
     await cleanup();
-    await rm(repoPath, { recursive: true, force: true });
+    await rm(repo.repoPath, { recursive: true, force: true });
+    await rm(repo.stateRoot, { recursive: true, force: true });
   }
 });
 
 test('a skipped control does not overwrite a range that was measured earlier', async () => {
   // The gold set shrinking below two answers must not erase a real measurement: losing a
   // number because a later call could not take it is the cache making things worse.
-  const repoPath = await fixture();
-  const { methods, cleanup } = await methodsOver(repoPath, stubScore({ permutedHits: 2 }));
+  const repo = await fixture();
+  const { repoPath } = repo;
+  const { methods, cleanup } = await methodsOver(repo, stubScore({ permutedHits: 2 }));
   try {
     await methods.diagnose({ repoPath, control: true });
-    await writeFile(path.join(repoPath, '.daijin', 'goldset.yaml'),
+    await writeFile(repo.layout.goldsetPath,
       YAML.stringify([{ id: 'g001', query: 'only one', must_return: ['doc.a'] }]), 'utf8');
 
     const result = await methods.diagnose({ repoPath, control: true });
@@ -314,6 +338,7 @@ test('a skipped control does not overwrite a range that was measured earlier', a
     assert.equal(result.discriminatingRange.stale, true, 'and it is stale, because the gold set is not the one it was taken on');
   } finally {
     await cleanup();
-    await rm(repoPath, { recursive: true, force: true });
+    await rm(repo.repoPath, { recursive: true, force: true });
+    await rm(repo.stateRoot, { recursive: true, force: true });
   }
 });

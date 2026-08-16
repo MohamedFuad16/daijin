@@ -267,7 +267,13 @@ test('with a student driver, a cycle runs and the exclusion seam is threaded', a
     assert.equal(call.mode, 'harness-debug', 'the default mode is the quarantined one, never evaluation');
     assert.ok(call.rules, 'the student rules come from the instruction file');
     assert.ok(call.retrieveContext, 'the exclusion seam is supplied');
-    assert.ok(call.sandboxesRoot.includes('.daijin'), 'sandboxes live under the repo state');
+    // Sandboxes are scratch, so they moved into the disposable index tree with the
+    // relocation. The RESULT files did not: the drawn-cohort denominator is counted from
+    // those files rather than from ledger rows, so losing them breaks a rule this build
+    // enforces.
+    assert.ok(!call.sandboxesRoot.startsWith(context.repoPath), 'sandboxes are machine scratch, not repo state');
+    assert.ok(call.sandboxesRoot.includes('index'), 'and they live in the disposable tree');
+    assert.ok(call.resultDir.startsWith(context.repoPath), 'the result files stay in the repo');
     assert.equal(typeof call.abortSignal.aborted, 'boolean', 'jobCancel has something to flip');
 
     const steps = context.steps().filter((row) => row.jobId === jobId);

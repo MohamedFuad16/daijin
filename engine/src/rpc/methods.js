@@ -37,6 +37,7 @@ import { GymLedger, gymDatabasePath } from '../gym/ledger.js';
 import { loadResultFiles } from '../gym/result-files.js';
 import { assertSpendGate, readSpendGate, gymSpendGatePath } from '../gym/spend-gate.js';
 import { createSqliteStore } from '../store/sqlite.js';
+import { noteOrigin, repoLayout } from '../state/layout.js';
 import { invalidParams, notImplemented, spendRefused } from './errors.js';
 
 /// The contract version hello reports.
@@ -229,9 +230,6 @@ export function attemptsNewestFirst(attempts) {
   });
 }
 
-/// Where the last measured range is kept, beside score-history.json for the same reason:
-/// it is a measurement OF this repo, and it belongs with the repo it describes.
-export const rangeFilePath = (repoPath) => path.join(repoPath, '.daijin', 'discriminating-range.json');
 
 /**
  * What a stored range was measured UNDER, so a later read can tell whether it still applies.
@@ -343,6 +341,11 @@ export function createMethods({
   if (!jobs) throw new Error('createMethods requires a JobRunner.');
 
   const analyze = deps.analyze || analyzeRepo;
+  // The index no longer lives in the repo (D-0031 invariant 2), so the path is threaded
+  // EXPLICITLY rather than derived from repoPath inside the store. The store's own
+  // repoPath default still exists and is now the legacy layout; a caller here that forgot
+  // to pass a path would silently open an empty database at the old location and report an
+  // unindexed brain, which reads exactly like a repo nobody has run init on.
   const openStore = deps.openStore || ((repoPath, options = {}) => createSqliteStore({ repoPath, ...options }));
   const retrieve = deps.retrieve || retrieveImpl;
   const score = deps.scoreGoldset || scoreGoldset;
@@ -371,7 +374,7 @@ export function createMethods({
   /// Open a repo's brain, run `body`, and always close. A leaked sqlite handle in a
   /// long-lived daemon is a file descriptor that never comes back.
   async function withStore(repoPath, body, options = {}) {
-    const store = await openStore(repoPath, options);
+    const store = await openBrain(repoPath, options);
     try {
       return await body(store);
     } finally {
@@ -429,13 +432,24 @@ export function createMethods({
     throw invalidParams(fallback, error.message);
   }
 
-  const historyFile = (repoPath) => path.join(repoPath, '.daijin', 'score-history.json');
+  /// This repo's paths, repo side and machine side. Read-only: a daemon method that
+  /// materialised a contract file merely by being called would put a write on a read path.
+  const layoutFor = (repoPath) => repoLayout(repoPath, { stateRoot: state.stateRoot });
+
+  /// Open a repo's brain at its RELOCATED path.
+  const openBrain = async (repoPath, options = {}) => {
+    const layout = await layoutFor(repoPath);
+    return openStore(repoPath, { path: layout.databasePath, ...options });
+  };
+
+  const historyFile = async (repoPath) => (await layoutFor(repoPath)).scoreHistoryPath;
 
   /// Best effort on purpose: failing a diagnosis because its optional cache could not be
   /// written would trade a good answer for a bookkeeping problem.
   const writeRange = async (repoPath, record) => {
-    await mkdir(path.dirname(rangeFilePath(repoPath)), { recursive: true })
-      .then(() => writeFile(rangeFilePath(repoPath), `${JSON.stringify(record, null, 2)}\n`, 'utf8'))
+    const file = (await layoutFor(repoPath)).rangeFilePath;
+    await mkdir(path.dirname(file), { recursive: true })
+      .then(() => writeFile(file, `${JSON.stringify(record, null, 2)}\n`, 'utf8'))
       .catch(() => {});
   };
 
@@ -446,7 +460,7 @@ export function createMethods({
   const recallRange = async (repoPath, fingerprint) => {
     let stored;
     try {
-      stored = JSON.parse(await readFile(rangeFilePath(repoPath), 'utf8'));
+      stored = JSON.parse(await readFile((await layoutFor(repoPath)).rangeFilePath, 'utf8'));
     } catch {
       return null;
     }
@@ -465,13 +479,14 @@ export function createMethods({
       chosenBudget: floor.chosenBudget ?? null,
       embedding: floor.embedding ?? null,
     });
-    await mkdir(path.dirname(historyFile(repoPath)), { recursive: true });
-    await writeFile(historyFile(repoPath), `${JSON.stringify(history, null, 2)}\n`, 'utf8');
+    const file = await historyFile(repoPath);
+    await mkdir(path.dirname(file), { recursive: true });
+    await writeFile(file, `${JSON.stringify(history, null, 2)}\n`, 'utf8');
   }
 
   async function readHistory(repoPath) {
     try {
-      const rows = JSON.parse(await readFile(historyFile(repoPath), 'utf8'));
+      const rows = JSON.parse(await readFile(await historyFile(repoPath), 'utf8'));
       return Array.isArray(rows) ? rows : [];
     } catch {
       return [];
@@ -652,7 +667,7 @@ export function createMethods({
 
     async retrievalScore(params) {
       const repoPath = await requireAttached(params);
-      const goldsetPath = path.join(repoPath, '.daijin', 'goldset.yaml');
+      const goldsetPath = (await layoutFor(repoPath)).goldsetPath;
       const settings = await state.settings();
       const corpus = {
         id: path.basename(repoPath),
@@ -732,7 +747,10 @@ export function createMethods({
           chosenBudget: record.chosenBudget,
           embedding: chosen.record?.embedding ?? null,
         });
-        await writeFile(historyFile(repoPath), `${JSON.stringify(history, null, 2)}\n`, 'utf8').catch(() => {});
+        // Through appendScoreHistory's path so the two writers cannot land in two places.
+        await mkdir(path.dirname(await historyFile(repoPath)), { recursive: true })
+          .then(async () => writeFile(await historyFile(repoPath), `${JSON.stringify(history, null, 2)}\n`, 'utf8'))
+          .catch(() => {});
 
         return record;
       });
@@ -794,11 +812,20 @@ export function createMethods({
       // P1-era entry that takes a corpus descriptor and opens Postgres; pointed at a user's
       // repo it exits immediately with "brain-mcp requires --corpus-file", so the snippet
       // used to be a paste-ready config that pasted a failure.
+      // The state root rides in the snippet because the index left the repo (D-0031): a
+      // pasted config that omitted it would resolve the daemon's DEFAULT state root, and an
+      // agent launched under a different HOME would open an empty index and answer every
+      // search with nothing found. The one number a paste-ready config cannot afford to
+      // infer is where the data is.
       const snippet = JSON.stringify({
         mcpServers: {
           daijin: {
             command: process.execPath,
-            args: [path.resolve(path.dirname(new URL(import.meta.url).pathname), '..', 'mcp', 'serve-repo.js'), repoPath],
+            args: [
+              path.resolve(path.dirname(new URL(import.meta.url).pathname), '..', 'mcp', 'serve-repo.js'),
+              repoPath,
+              `--state-root=${state.stateRoot}`,
+            ],
           },
         },
       }, null, 2);
@@ -823,7 +850,7 @@ export function createMethods({
      */
     async diagnose(params) {
       const repoPath = await requireAttached(params);
-      const goldsetPath = path.join(repoPath, '.daijin', 'goldset.yaml');
+      const goldsetPath = (await layoutFor(repoPath)).goldsetPath;
       const settings = await state.settings();
       return withStore(repoPath, async (store) => {
         const environment = await embedderEnvironment(store, { ollamaBaseUrl: settings.retrieval?.ollamaBaseUrl });
@@ -1051,8 +1078,11 @@ export function createMethods({
             repoPath,
             sourceRepo: config.sourceRepo ?? repoPath,
             engineRoot: path.resolve(path.dirname(new URL(import.meta.url).pathname), '..', '..'),
-            sandboxesRoot: path.join(repoPath, '.daijin', 'gym', 'sandboxes'),
-            resultDir: path.join(repoPath, '.daijin', 'gym', 'results'),
+            // Sandboxes are scratch: they belong in the disposable tree. Results do NOT
+            // move, because the drawn-cohort denominator is counted from those files rather
+            // than from ledger rows, so losing them breaks a rule this build enforces.
+            sandboxesRoot: (await layoutFor(repoPath)).sandboxesRoot,
+            resultDir: (await layoutFor(repoPath)).gymResultsRoot,
             logger: { step: async (event) => emit(event.phase ?? 'gym', event.step, event.detail, { counts: event.counts, level: event.level }) },
             emitFinding: async (finding) => jobs.notifyFinding?.(finding),
             abortSignal: { get aborted() { return cancelled(); } },
@@ -1067,7 +1097,7 @@ export function createMethods({
     async gymStatus(params) {
       const repoPath = await requireAttached(params);
       return withLedger(repoPath, async (ledger) => {
-        const files = await loadResultFiles(path.join(repoPath, '.daijin', 'gym', 'results')).catch(() => null);
+        const files = await loadResultFiles((await layoutFor(repoPath)).gymResultsRoot).catch(() => null);
         return {
           cycles: ledger.database.prepare('SELECT * FROM cycle ORDER BY id DESC').all(),
           activeRun: jobs.activeGymRun?.(params?.jobId) ?? undefined,

@@ -143,7 +143,14 @@ test('a measured floor lands in the SAME history retrievalScore writes', async (
     await context.server.methods.initBrain({ repoPath, mode: 'layer1' });
     await context.server.jobs.drain();
 
-    const history = JSON.parse(await readFile(path.join(repoPath, '.daijin', 'score-history.json'), 'utf8'));
+    // In the STATE ROOT, not the repo: the history is machine-scoped (measured by this
+    // machine's embedder) and not regenerable, so it left the repo with the index but into
+    // records/ rather than into the disposable index/ (D-0031, LAYOUT.md).
+    const { repoLayout } = await import('../src/state/layout.js');
+    const layout = await repoLayout(repoPath, { stateRoot: context.stateRoot });
+    assert.ok(!layout.scoreHistoryPath.startsWith(repoPath), 'the history is not in the repo');
+    assert.ok(!layout.scoreHistoryPath.startsWith(layout.indexRoot), 'and a cleared index does not take it');
+    const history = JSON.parse(await readFile(layout.scoreHistoryPath, 'utf8'));
     assert.equal(history.length, 1);
     assert.deepEqual(history[0].caseRate, { exact: 0.8, cases: '4 of 5' });
     assert.equal(history[0].chosenBudget, 6000);

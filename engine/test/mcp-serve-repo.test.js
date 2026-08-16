@@ -15,6 +15,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
+import { repoLayout } from '../src/state/layout.js';
 import { createSqliteStore } from '../src/store/sqlite.js';
 
 const ENTRY = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'src', 'mcp', 'serve-repo.js');
@@ -71,8 +72,13 @@ function mcpClient(args) {
 
 async function brainRepo({ indexed = true } = {}) {
   const repoPath = await mkdtemp(path.join(tmpdir(), 'dj-mcp-'));
+  const stateRoot = await mkdtemp(path.join(tmpdir(), 'dj-mcp-state-'));
   await mkdir(path.join(repoPath, '.daijin', 'brain'), { recursive: true });
+  // The index lives in the state root after D-0031, and serve-repo is told where that is.
+  const layout = await repoLayout(repoPath, { stateRoot, ensure: true });
+  await mkdir(layout.indexRoot, { recursive: true });
   const store = await createSqliteStore({
+    path: layout.databasePath,
     repoPath,
     project: 'default',
     ...(indexed ? { embedder: { provider: 'ollama', model: 'bge-m3', digest: 'sha256:test', dimension: 4 } } : {}),
@@ -96,7 +102,7 @@ async function brainRepo({ indexed = true } = {}) {
     });
   }
   await store.close();
-  return repoPath;
+  return { repoPath, stateRoot, layout };
 }
 
 test('a repo with no brain is refused BY NAME, before the server starts', async () => {
@@ -117,8 +123,8 @@ test('a repo with no brain is refused BY NAME, before the server starts', async 
 });
 
 test('a brain with no recorded embedder identity is refused, because it was never indexed', async () => {
-  const repoPath = await brainRepo({ indexed: false });
-  const client = mcpClient([repoPath]);
+  const { repoPath, stateRoot } = await brainRepo({ indexed: false });
+  const client = mcpClient([repoPath, `--state-root=${stateRoot}`]);
   try {
     const code = await client.exited;
     assert.notEqual(code, 0);
@@ -130,8 +136,8 @@ test('a brain with no recorded embedder identity is refused, because it was neve
 });
 
 test('an indexed repo serves MCP over stdio and advertises the brain tools', async () => {
-  const repoPath = await brainRepo();
-  const client = mcpClient([repoPath]);
+  const { repoPath, stateRoot } = await brainRepo();
+  const client = mcpClient([repoPath, `--state-root=${stateRoot}`]);
   try {
     const initialized = await client.request('initialize', {
       protocolVersion: '2024-11-05',
@@ -161,10 +167,10 @@ test('an indexed repo serves MCP over stdio and advertises the brain tools', asy
 });
 
 test('the brain files are exposed as read-only resources', async () => {
-  const repoPath = await brainRepo();
+  const { repoPath, stateRoot } = await brainRepo();
   const { writeFile } = await import('node:fs/promises');
   await writeFile(path.join(repoPath, '.daijin', 'brain', 'adr-0001.md'), '# ADR 1\n', 'utf8');
-  const client = mcpClient([repoPath]);
+  const client = mcpClient([repoPath, `--state-root=${stateRoot}`]);
   try {
     await client.request('initialize', { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 't', version: '1' } });
     client.notify('notifications/initialized');
@@ -182,8 +188,8 @@ test('stdout carries MCP framing only', async () => {
   // The entry redirects console.log to stderr before loading the server, because one stray
   // log line into stdout desynchronises an MCP session for the rest of its life. The client
   // above rejects on any non-JSON stdout line, so reaching the end of a session proves it.
-  const repoPath = await brainRepo();
-  const client = mcpClient([repoPath]);
+  const { repoPath, stateRoot } = await brainRepo();
+  const client = mcpClient([repoPath, `--state-root=${stateRoot}`]);
   try {
     await client.request('initialize', { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 't', version: '1' } });
     client.notify('notifications/initialized');
@@ -213,13 +219,16 @@ test('the snippet the daemon hands out names THIS entry, and the file exists', a
   const { JobRunner } = await import('../src/rpc/jobs.js');
   const { EngineState } = await import('../src/rpc/state.js');
 
-  const stateRoot = await mkdtemp(path.join(tmpdir(), 'dj-snip-'));
-  const repoPath = await brainRepo();
+  const { repoPath, stateRoot } = await brainRepo();
   try {
     const state = new EngineState({ stateRoot });
     await state.attachRepo(repoPath);
+    // The measurement history moved to the state root with the relocation: it is
+    // machine-scoped and NOT regenerable, so it lives beside the index rather than in it.
     const { writeFile } = await import('node:fs/promises');
-    await writeFile(path.join(repoPath, '.daijin', 'score-history.json'), JSON.stringify([
+    const layout = await repoLayout(repoPath, { stateRoot });
+    await mkdir(layout.recordsRoot, { recursive: true });
+    await writeFile(layout.scoreHistoryPath, JSON.stringify([
       { at: new Date().toISOString(), caseRate: { exact: 0.92, cases: '23 of 25' }, chosenBudget: 4000 },
     ]), 'utf8');
 
@@ -228,9 +237,13 @@ test('the snippet the daemon hands out names THIS entry, and the file exists', a
     assert.equal(result.unlocked, true, 'above the threshold, the snippet is offered');
 
     const config = JSON.parse(result.snippet);
-    const [entry, target] = config.mcpServers.daijin.args;
+    const [entry, target, stateRootArgument] = config.mcpServers.daijin.args;
     assert.match(entry, /serve-repo\.js$/, 'the snippet names the per-repo entry');
     assert.equal(target, repoPath, 'and the repo it serves');
+    // The one number a paste-ready config cannot afford to infer is where the data is: an
+    // agent launched under a different HOME would resolve a different default state root,
+    // open an empty index, and answer every search with nothing found.
+    assert.equal(stateRootArgument, `--state-root=${stateRoot}`);
     await access(entry);
   } finally {
     await rm(stateRoot, { recursive: true, force: true });

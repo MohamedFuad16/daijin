@@ -20,11 +20,13 @@ for (const method of ['log', 'info', 'debug']) {
   console[method] = (...argumentsList) => console.error(...argumentsList);
 }
 
+const os = (await import('node:os')).default;
 const path = (await import('node:path')).default;
 const { access } = await import('node:fs/promises');
 const { servedIndexIdentity } = await import('../init/ingest.js');
 const { retrieve } = await import('../rag/retrieve.js');
-const { createSqliteStore, brainDatabasePath } = await import('../store/sqlite.js');
+const { createSqliteStore } = await import('../store/sqlite.js');
+const { repoLayout } = await import('../state/layout.js');
 const { startBrainServer } = await import('./server.js');
 
 function argument(flag, fallback = null) {
@@ -64,19 +66,24 @@ async function embedderEnvironmentFor(store) {
 
 async function main() {
   const repoPath = path.resolve(process.argv[2] && !process.argv[2].startsWith('--') ? process.argv[2] : argument('--repo', process.cwd()));
-  const brainRoot = argument('--brain-root', path.join(repoPath, '.daijin', 'brain'));
+  // The index left the repo (D-0031), so this entry needs the state root that holds it. It
+  // is written into the pasted snippet for that reason; the default matches the daemon's so
+  // a hand-run command still finds the same index.
+  const stateRoot = argument('--state-root', path.join(os.homedir(), '.daijin'));
+  const layout = await repoLayout(repoPath, { stateRoot });
+  const brainRoot = argument('--brain-root', layout.brainRoot);
 
   // Fail EARLY and by name. An MCP server that starts against a repo with no brain answers
   // every search with an obscure error from three layers down, and the agent using it has
   // no way to learn that the brain was never built.
-  const database = brainDatabasePath(repoPath);
+  const database = layout.databasePath;
   try {
     await access(database);
   } catch {
     throw new Error(`No brain at ${database}. Run init on ${repoPath} first; there is nothing to serve.`);
   }
 
-  const store = await createSqliteStore({ repoPath, project: 'default' });
+  const store = await createSqliteStore({ path: database, repoPath, project: 'default' });
   const environment = await embedderEnvironmentFor(store);
   if (!environment) {
     await store.close?.();
@@ -93,7 +100,7 @@ async function main() {
   await startBrainServer({
     name: 'daijin-brain',
     brainRoot,
-    stateRoot: path.join(repoPath, '.daijin'),
+    stateRoot: layout.repoStateRoot,
     engineRulesPath: argument('--engineer-rules'),
     // Bound to this repo's store. The MCP tools take a project from the caller, so the
     // default is supplied here and a caller that names one still wins.

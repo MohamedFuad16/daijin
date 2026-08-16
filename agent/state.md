@@ -1,5 +1,27 @@
 # Daijin build state (authoritative)
 
+## 2026-08-16 13:08 - The narrow-scanner question, settled by reconstruction
+
+The record had marked the narrow-versus-widened comparison unanswerable;
+gym-porter settled it while holding, with zero repo writes, and first
+CORRECTED the record's premise: the narrow scanner was never committed at
+all (the repo's first commit already carries the widened one), so the
+original bytes never existed anywhere. It reconstructed the narrow design
+from its own report and ran the VERIFIER'S instrument against it: 1 of 4
+plants caught, control clean, and not merely the same count as the
+verifier's original run but the SAME one caught and the SAME three
+missed, plant by plant. Two independent artifacts built from one design,
+agreeing exactly. Its own summary is the record's: the arbiter's decision
+to widen was correct ON THE EVIDENCE, not on authority; my argument has
+now lost twice, once on a reconstruction I built myself while trying to
+give it its fairest hearing. The surviving fragment of that argument is
+correctly relocated: a rule everyone learns to silence is worse than one
+that fires honestly is why the widened design carries a CHECKED allowlist
+and an innocent-writer bound, the argument earning its place inside the
+winning design rather than against it. Honest bound stated: a
+reconstruction measures the design as described, not the artifact as it
+ran, and the script is offered for attack rather than belief.
+
 ## 2026-08-16 13:05 - P6 ACCEPTED: delta PASS, no findings, both breaks defeated
 
 Verifier report 13, pinned to the install subtree (0 dirty at both ends):

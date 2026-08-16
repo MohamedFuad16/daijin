@@ -1,5 +1,30 @@
 # Daijin build state (authoritative)
 
+## 2026-08-16 13:01 - P3 ACCEPTED; finding 80 ruled; D-0025 closed both arms
+
+Verifier report 12: P3 PASSES with the control surviving all five
+pre-registered checks. Check 1 found the construction stronger than
+demanded (a guaranteed derangement via answer-id exclusion); check 4
+confirmed the mechanism PREDICTS the observation (7.6 of 11 delivered
+predicts 0.69, control observed 0.72). Clause (f) held under maximum
+pressure in the unregistered direction, and the verifier's sentence is
+the build's epitaph for it: a perfect score volunteered as uninformative
+is the strongest evidence of method honesty in this build. Finding 80
+(the 0.75 MCP unlock sits 0.03 above a deliberately-wrong gold set)
+ruled report-not-refloor: the unlock stands, its report carries the
+control range with an explicit saturation sentence, control-distance
+gating recorded as the auditor-era question; the 7.6 figure re-measures
+over all 25; P3.5's metric pre-registered as DISCRIMINATING RANGE before
+the run. D-0025 closed with both arms measured (platform neutral-on-
+enforced with the D-0017-distrusted MRR-only rise; portfolio neutral per
+the amendment; cold cost 6.7-15s/query vs 0.24s; the cache-flattered
+number withheld). The hook's two gaps fixed per the adapter's
+prescriptions (unmapped refuses and names itself; false-refusal mappings
+added). Reranker server stopped.
+
+SCOREBOARD: P0 P1 P2 P3 P4 P5 ACCEPTED. P6 delta and P7 delta pending
+verdicts. P3.5, polish, MCP entry in flight. Live gym cycle owner-gated.
+
 ## 2026-08-16 12:52 - P7 verdict: PASS with two required follow-ups, both instruments
 
 Verifier report 11, pinned to gym subtree sha 8ee45504 (0 dirty in scope

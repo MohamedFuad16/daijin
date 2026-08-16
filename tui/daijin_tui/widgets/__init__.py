@@ -21,6 +21,7 @@ from .common import (
     format_duration,
     format_ratio,
     health_glyph,
+    health_state,
 )
 from .radar import RadarChart, bar_lines, radar_lines
 from .repo_card import RepoCard
@@ -50,6 +51,7 @@ __all__ = [
     "format_duration",
     "format_ratio",
     "health_glyph",
+    "health_state",
     "plot_bar",
     "plot_line",
     "radar_lines",

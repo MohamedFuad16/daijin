@@ -712,6 +712,7 @@ class MockEngine:
         self.exams = copy.deepcopy(mock_data.EXAMS)
         self.exam_details = copy.deepcopy(mock_data.EXAM_DETAIL)
         self.gates = copy.deepcopy(mock_data.GATES)
+        self.unopenable_brains: set[str] = set()
         self.agent_files = copy.deepcopy(mock_data.AGENT_FILES)
         self.repos = copy.deepcopy(mock_data.REPOS)
         self.board_rows = copy.deepcopy(mock_data.BOARD_ROWS)
@@ -883,9 +884,33 @@ class MockEngine:
 
     # Core -----------------------------------------------------------------
 
+    def break_brain(self, path: str) -> None:
+        """Make a repo's brain unopenable, as deleting a state directory does."""
+        self.unopenable_brains.add(path)
+
+    def repair_brain(self, path: str) -> None:
+        self.unopenable_brains.discard(path)
+
+    def _repo_row(self, repo: dict[str, Any]) -> dict[str, Any]:
+        """Health is COMPUTED per call, not stored at attach time.
+
+        A brain deleted on disk stops reporting the health it had when it was
+        attached, and the ok to critical transition happens with no reattach.
+        A mock that cached a health per repo would never produce that, which is
+        the transition a user actually meets when they remove a state
+        directory.
+        """
+        row = copy.deepcopy(repo)
+        if row.get("path") in self.unopenable_brains:
+            row["health"] = "critical"
+            # A floor measured before the brain broke describes a brain nobody
+            # can open now, so it stops being reported rather than going stale.
+            row["floorScore"] = None
+        return row
+
     async def _rpc_serveStatus(self, params: dict[str, Any]) -> dict[str, Any]:
         status = copy.deepcopy(mock_data.SERVE_STATUS)
-        status["repos"] = copy.deepcopy(self.repos)
+        status["repos"] = [self._repo_row(repo) for repo in self.repos]
         status["spendGate"] = {"open": self.gate_open, "path": mock_data.SPEND_GATE["path"]}
         return status
 

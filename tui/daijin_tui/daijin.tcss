@@ -148,6 +148,11 @@
     color: $text-disabled;
 }
 
+/* Indexed and never measured. Not a verdict, so not the warning colour. */
+.health-unmeasured {
+    color: $secondary;
+}
+
 /* Init and gym activity */
 
 .phase-checklist {

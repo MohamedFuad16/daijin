@@ -70,7 +70,7 @@ class RepoCard(Vertical):
         return self.repo.get("floorScore") is None
 
     def compose(self) -> ComposeResult:
-        glyph, klass = health_glyph(self.repo.get("health"))
+        glyph, klass = health_glyph(self.repo.get("health"), self.repo.get("floorScore"))
         name = self.repo_path.rstrip("/").split("/")[-1] or self.repo_path
         yield Static(f"[b]{glyph}[/b] [b]{name}[/b]", markup=True, classes=f"card-title {klass}")
         yield Static(self.repo_path, classes="card-path")
@@ -104,7 +104,12 @@ class RepoCard(Vertical):
             )
         floor = self.repo.get("floorScore")
         if floor is None:
-            return "[dim]floor not measured, no brain yet[/dim]"
+            # "no brain yet" is only true for no-brain. A warn repo with a null
+            # floor HAS a brain that nobody has scored, which is a different
+            # thing to tell the user and a different thing for them to do.
+            if self.repo.get("health") == "no-brain":
+                return "[dim]floor not measured, no brain yet[/dim]"
+            return "[dim]indexed, floor never measured. Run the retrieval score.[/dim]"
         tone = "green" if floor >= MCP_THRESHOLD else "yellow"
         return (
             f"floor ratio [{tone}]{format_ratio(floor)}[/{tone}]  "

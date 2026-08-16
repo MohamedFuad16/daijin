@@ -176,6 +176,77 @@ async def test_attaching_and_detaching_a_repo_changes_the_cards():
 
 
 
+
+@run_async
+async def test_a_brain_deleted_on_disk_changes_the_badge_without_a_reattach():
+    """Health is computed per call, so it can change under a repo that is already attached.
+
+    A mock that cached a health at attach time would never produce the
+    transition a user actually meets when they delete a state directory, and
+    the screen's handling of it would go untested.
+    """
+    async with running_app() as (app, pilot):
+        card = next(c for c in app.screen.query(RepoCard) if c.repo_path.endswith("orchard-web"))
+        assert card.repo.get("health") == "ok"
+
+        app.client.engine.break_brain("/Users/owner/code/orchard-web")
+        app.screen.start_load()
+        await app.screen.wait_for_load()
+        await settle(pilot)
+
+        card = next(c for c in app.screen.query(RepoCard) if c.repo_path.endswith("orchard-web"))
+        assert card.repo.get("health") == "critical", "the badge kept a health the engine stopped reporting"
+        assert card.needs_brain is False
+        rendered = " ".join(text_of(s) for s in card.query(Static))
+        assert "could not be opened" in rendered
+
+        # Asserting the absence of a floor in the RENDER proves nothing: the
+        # critical branch returns before any floor is drawn, so that check
+        # passes whether or not the score was cleared. The claim is about the
+        # row, so it is made against the row.
+        row = next(
+            r for r in (await app.client.call("serveStatus", {}))["repos"]
+            if r["path"].endswith("orchard-web")
+        )
+        assert row["health"] == "critical"
+        assert row["floorScore"] is None, (
+            "a floor measured before the brain broke describes a brain nobody can open now"
+        )
+
+
+@run_async
+async def test_warn_says_which_of_its_two_situations_this_is():
+    """warn covers indexed-never-measured AND measured-below-the-floor.
+
+    The engine computes both from one branch, so the field alone cannot tell
+    them apart; floorScore on the same row can. Rendering them identically
+    would say the same thing about a repo nobody has scored and a repo that
+    scored badly, and only the second is a verdict.
+    """
+    from daijin_tui.widgets import health_glyph, health_state
+
+    assert health_state("warn", None) == "warn-unmeasured"
+    assert health_state("warn", 0.62) == "warn"
+    assert health_glyph("warn", None) != health_glyph("warn", 0.62), (
+        "never measured and measured badly share a badge"
+    )
+    # The distinction is a rendering one. The wire vocabulary stays four values.
+    from daijin_tui.widgets.common import DOCUMENTED_HEALTH
+
+    assert "warn-unmeasured" not in DOCUMENTED_HEALTH
+
+    unmeasured = RepoCard({"path": "/x/never-scored", "health": "warn", "floorScore": None})
+    measured = RepoCard({"path": "/x/scored-low", "health": "warn", "floorScore": 0.62})
+    async with running_app() as (app, pilot):
+        await app.screen.mount(unmeasured)
+        await app.screen.mount(measured)
+        await settle(pilot)
+        first = " ".join(text_of(s) for s in unmeasured.query(Static))
+        second = " ".join(text_of(s) for s in measured.query(Static))
+        assert "never measured" in first, f"the unscored repo does not say so: {first!r}"
+        assert "no brain yet" not in first, "a repo that IS indexed was told it has no brain"
+        assert "0.62" in second and "never measured" not in second
+
 @run_async
 async def test_a_critical_repo_is_not_offered_a_fresh_brain_over_the_one_it_has():
     """critical is a brain that could not be OPENED, not a brain that is missing.

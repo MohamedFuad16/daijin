@@ -14,15 +14,44 @@ MCP_THRESHOLD = 0.75
 HEALTH_GLYPH: dict[str, tuple[str, str]] = {
     "ok": ("●", "health-ok"),
     "warn": ("●", "health-warn"),
+    # Derived, not a wire value. See health_state.
+    "warn-unmeasured": ("◍", "health-unmeasured"),
     "critical": ("●", "health-critical"),
     "no-brain": ("○", "health-none"),
     "unknown": ("◌", "health-unknown"),
 }
 
+# The wire's vocabulary, locked in contract v5.
+DOCUMENTED_HEALTH = frozenset({"no-brain", "warn", "ok", "critical"})
 
-def health_glyph(health: str | None) -> tuple[str, str]:
+_UNSET = object()
+
+
+def health_state(health: str | None, floor_score: Any = _UNSET) -> str:
+    """Resolve the badge state, splitting warn on the discriminator beside it.
+
+    warn covers two situations the engine computes from the same branch: a
+    brain that is indexed and has NEVER BEEN MEASURED, and one that was
+    measured and scored below the unlock threshold. floorScore tells them
+    apart, null for the first and a number for the second, and it sits on the
+    same row. Rendering them identically would say the same thing about a repo
+    nobody has scored and a repo that scored badly, and only the second is a
+    verdict.
+
+    Nothing is invented here: the wire vocabulary stays four values, and this
+    is a rendering distinction drawn from two fields the client already has.
+    """
+    value = str(health or "unknown")
+    if value not in DOCUMENTED_HEALTH:
+        return "unknown"
+    if value == "warn" and floor_score is not _UNSET and floor_score is None:
+        return "warn-unmeasured"
+    return value
+
+
+def health_glyph(health: str | None, floor_score: Any = _UNSET) -> tuple[str, str]:
     """Return the dot character and the CSS class for a health value."""
-    return HEALTH_GLYPH.get(str(health or "unknown"), HEALTH_GLYPH["unknown"])
+    return HEALTH_GLYPH[health_state(health, floor_score)]
 
 
 def case_rate_value(case_rate: Any) -> float | None:

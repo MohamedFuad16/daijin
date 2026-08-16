@@ -1,5 +1,29 @@
 # Daijin build state (authoritative)
 
+## 2026-08-16 11:58 - Committed and pushed; limit pause; cross-encoder ordered
+
+Owner granted full commit/push/autonomous authority. Initial commit b1844a0
+pushed to the new private remote MohamedFuad16/daijin: the evidence
+substrate exists, verdicts pin commits from here (supersedes the
+hash-manifest half of D-0024; manifests remain for uncommitted mid-work
+claims). The entire team hit the session limit again (reset 12:10 JST);
+the leader's local one-shot resume job fires 12:11 and re-dispatches every
+lane from this file. NEW WORK ORDERED at resume, D-0025: a cross-encoder
+rerank stage, verified absent today, to be built LOCAL-ONLY, off by
+default, absent from the parity path, and measured per D-0017 before it
+can become a default; extractor implements, init-miner extends the A/B,
+verifier attacks the number. Backend choice (Ollama rerank support vs
+local llama-server vs in-process ONNX) requires docs verification first,
+never a guess.
+
+Resume queue snapshot: tui-builder owes the FREEZE declaration (manifest
+plus the 221-to-160-to-232 suite explanation), then polish; verifier owes
+the P6 attack (in flight when the limit hit) then P5 on the freeze; the
+extractor owes P3-methods wiring, then the socket, then D-0025;
+init-miner owes workaround cleanup then the LIVE portfolio-mine run;
+gym-porter owes the gold-provenance exclusion, pre-seal check,
+RPC-SHAPES.md; adapter holds for the P6 attack.
+
 ## 2026-08-16 08:48 - P5 attack deferred to a freeze window; P6 attack begins
 
 The verifier correctly refused to issue a P5 verdict against a tree that

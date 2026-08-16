@@ -384,3 +384,27 @@ committing, is the OWNER'S call per the ground rules and is surfaced to
 them. The verifier-plants acceptance is additionally pinned inside npm
 test itself (the four plants verbatim in gym-spend-gate.test.js), so the
 bar survives refactors; if script and test copy disagree, the script wins.
+
+## D-0025 (2026-08-16) Cross-encoder reranking: build it measured, ship it off
+
+Owner request: check for a cross-encoder in the RAG reranking and implement
+if absent. Verified absent: no rerank stage exists in daijin or the
+platform; ranking is bi-encoder (bge-m3) arms, RRF fusion, raw-cosine
+champion and pins. Design constraints, non-negotiable: LOCAL ONLY (ADR-0139
+lineage, no paid APIs in the retrieval path; the local Ollama currently
+serves only bge-m3, so the backend choice needs a docs-verified answer:
+Ollama rerank support, a local llama-server --rerank with a
+bge-reranker-v2-m3 GGUF, or an in-process ONNX cross-encoder; VERIFY
+against documentation, never guess); OFF BY DEFAULT and absent from the
+parity path (P1's byte-for-byte claim must survive untouched; parityMode
+never reranks); inserted as an optional re-scoring of the FUSED candidate
+list before the budget stage, behind a config knob whose cost (latency per
+query) is displayed next to it; and it becomes a default ONLY on a measured
+gold-set win, judged per D-0017 (case rate and violations enforced, MRR
+reported as movement), A/B on the platform corpus AND the portfolio-mine
+corpus once its gold set exists, in the budget-sweep style: the number
+decides, per repo. Assignment at resume: extractor implements the stage and
+the backend adapter (its seam), init-miner extends retrieval-score with a
+rerank on/off A/B, verifier attacks the measurement. If the measured win is
+absent, the knob still ships, documented as measured-neutral-or-negative on
+these corpora, and the honest number is the deliverable.

@@ -1,5 +1,21 @@
 # Daijin build state (authoritative)
 
+## 2026-08-16 22:35 - Ruling placed at its point of use; P7 manifest superseded
+
+gym-porter put the declaration-versus-widening ruling INSIDE the
+failing test (123d17b, comment-only: 14 insertions, zero non-comment
+lines, re-derived by the leader), on the correct argument that the
+person who needs it is staring at a red suite in another lane and will
+read the failing test, never state.md. Its closing line is placed where
+it can change behavior: if a red suite is pressuring you toward an
+exemption, that pressure is the argument for declaring rather than
+excusing. RETAINED under the inert-change ruling. NOTE FOR ATTACK
+PINS: the frozen-tree manifest is superseded, eb26cab9.. ->
+f6f3c8c79d37adc566d46c6de8de3a1f3189c3425ac67230f0b0df3b23deb78a,
+delta exactly one comment block in engine/test/gym-spend-gate.test.js.
+Norm set for small landings: inert edits verified inert are welcome
+without asking; any edit that moves a frozen manifest states the
+supersession and the delta in the same report, as this one did.
 ## 2026-08-16 22:25 - Scanner governance completed: declarations land, widenings wait
 
 gym-porter surfaced the case the settlement did not cover, with the two

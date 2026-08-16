@@ -428,3 +428,13 @@ aborts the commit; (4) never stage another lane's in-flight files, and
 uncommitted mid-edit work in the shared tree is a named hazard until its
 owner commits. The irony that the sweeping commit's own message was about
 wildcard-add hazards is retained in the record deliberately.
+
+[Addition to D-0026, 2026-08-16 12:26: the bare-commit variant claimed its
+second victim within the hour: gym-porter staged its own paths correctly
+but ran a bare git commit, which took init-miner's concurrently staged
+files under its message (df1f99b, seven foreign files, tree green, history
+not rewritten, same mechanism and same remedy as 9d9f7a4). Rule (2) is
+therefore sharpened: the commit itself is PATH-SCOPED, git commit -- <own
+paths>, which cannot take another lane's staged work regardless of index
+state. A bare git commit at the repo root is no longer a legal operation
+for any lane, the leader included.]

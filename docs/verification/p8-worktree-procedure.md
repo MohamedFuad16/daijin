@@ -21,6 +21,23 @@ ln -s <repo>/engine/node_modules <somewhere>/p8-verify/engine/node_modules
 cd <somewhere>/p8-verify/engine && npm test
 ```
 
+REMOVE IT WHEN THE RUN IS DONE:
+
+```
+rm -f <somewhere>/p8-verify/engine/node_modules   # the symlink first, or remove --force
+git worktree remove --force <somewhere>/p8-verify
+```
+
+Added 2026-08-17 after three stale worktrees were found pinned at a commit nobody was
+working on any more. This document told people to create these and never mentioned removing
+them, which is an omission that compounds: `git worktree list` is the inventory of who is
+holding what, and it stops being readable once it is mostly abandonment. Remove the symlink
+first, or the removal tries to delete through it.
+
+Remove ONLY YOUR OWN. `git worktree remove --force` on someone else's checkout destroys
+whatever is in it, and a stale worktree costs a line in a listing while a deleted one can
+cost an hour of somebody's work.
+
 The symlink is deliberate and worth naming: `node_modules` is not part of the commit, so
 sharing the installed tree keeps the run measuring the pinned SOURCE rather than an
 install that happened to differ. If a dependency version is ever part of a claim, that

@@ -1170,9 +1170,12 @@ async def test_the_gates_screen_never_reports_zero_gates_it_cannot_see():
         # Drive the real path rather than reimplementing it here.
         screen.query_one("#gates-raw", Static).display = True
         text = (
-            "No structured gate list on the wire. gatesGet returns the file and its path"
+            "No classified gate list came back for this repo. That is either "
+            "because discovery has not run here, or because the response carried "
+            "the file without its classification."
         )
         screen.query_one("#gates-raw", Static).update(text + "\n\n" + record["content"])
         rendered = text_of(screen.query_one("#gates-raw", Static))
-        assert "No structured gate list" in rendered
+        assert "No classified gate list came back" in rendered
+        assert "discovery has not run" in rendered, "the copy asserts a cause it cannot know"
         assert "eslint" in rendered, "the file itself is not shown"

@@ -79,26 +79,31 @@ class GatesScreen(DaijinScreen):
             return
         self.gates = record.get("gates") or []
         self.raw_content = str(record.get("content") or "")
-        # The engine returns gates.yaml as TEXT plus its path; the structured
-        # per-gate classification the contract describes is not on the wire.
-        # Rendering an empty table against that says "this repo has no gates",
-        # which is a claim, and a false one: the file has three. So when there
-        # is no structured list, the file itself is shown and the gap is named.
+        # Two different situations produce no structured list, and this client
+        # cannot tell them apart: a repo whose gates were never discovered, and
+        # a response that does not carry the classification. So the copy states
+        # only what is observable, which stays true in both cases and stays
+        # true after the wire gains the structured rows.
+        #
+        # What it must never do is render an empty TABLE, because that says
+        # "this repo has no gates", which is a claim and a false one when the
+        # file has three in it.
         structured = bool(self.gates)
         self.query_one("#gates-table", DataTable).display = structured
         raw = self.query_one("#gates-raw", Static)
         raw.display = not structured
         if not structured:
             raw.update(
-                "[b]No structured gate list on the wire.[/b] gatesGet returns the "
-                "file and its path, so classification and liveness evidence cannot "
-                "be tabled here. The file itself, verbatim:\n\n"
-                + (self.raw_content or "[dim]empty[/dim]")
+                "[b]No classified gate list came back for this repo.[/b] That is "
+                "either because discovery has not run here, or because the "
+                "response carried the file without its classification. Either "
+                "way the file is worth reading, so here it is verbatim:\n\n"
+                + (self.raw_content or "[dim]the file is empty[/dim]")
             )
             notice.set_notice(
-                f"{record.get('path', 'gates.yaml')}: showing the file verbatim. "
-                f"The per-gate classification the contract describes is not on the "
-                f"wire yet, so nothing is tabled rather than tabling nothing.",
+                f"{record.get('path', 'gates.yaml')}: showing the file itself, "
+                f"because nothing is a safer thing to table than a zero this "
+                f"screen cannot stand behind. Run discovery if it has not run.",
                 "warn",
             )
             self._show_gate({})

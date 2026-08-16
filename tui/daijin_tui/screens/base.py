@@ -57,6 +57,14 @@ class DaijinScreen(Screen):
     mode_name: str = ""
     heading: str = ""
     subheading: str = ""
+    # How many times load() has completed. Lets a test wait for data without
+    # sleeping, and lets a screen tell "never loaded" from "loaded, empty".
+    load_count: int = 0
+    # Banner a screen uses for its own state, if it has one. A confirmation of
+    # a user action is queued here so the reload that follows cannot overwrite
+    # it: load() recomputes state, and "you just detached that repo" is not
+    # state, it is an event the user needs to see survive the refresh.
+    notice_id: str | None = None
 
     BINDINGS = [
         ("1", "goto('home')", "Repos"),
@@ -96,13 +104,50 @@ class DaijinScreen(Screen):
         return None
 
     async def on_mount(self) -> None:
-        await self.load()
+        self.start_load()
+
+    def set_pending_notice(self, text: str, tone: str = "info") -> None:
+        self._pending_notice = (text, tone)
+
+    def start_load(self) -> None:
+        """Load off the UI thread, with the wait visible rather than frozen.
+
+        Awaiting load() in on_mount blocked the mount for the whole round trip.
+        Against the mock that was free; against a daemon it is a frozen frame on
+        every view switch. The work runs in a worker and the body carries a
+        loading state, so the user sees "fetching" instead of a dead screen.
+        """
+        self._loading_worker = self.run_worker(
+            self._load_with_indicator(), exclusive=True, group="screen-load"
+        )
+
+    async def _load_with_indicator(self) -> None:
+        body = self.query("#screen-body")
+        for widget in body:
+            widget.loading = True
+        try:
+            await self.load()
+        finally:
+            for widget in body:
+                widget.loading = False
+            self.load_count += 1
+            pending = getattr(self, "_pending_notice", None)
+            if pending and self.notice_id:
+                self._pending_notice = None
+                for banner in self.query(self.notice_id):
+                    banner.set_notice(*pending)
+
+    async def wait_for_load(self) -> None:
+        """Await the in-flight load. For tests and for code that needs the data."""
+        worker = getattr(self, "_loading_worker", None)
+        if worker is not None:
+            await worker.wait()
 
     def action_goto(self, mode: str) -> None:
         self.app.switch_mode(mode)
 
-    async def action_reload(self) -> None:
-        await self.load()
+    def action_reload(self) -> None:
+        self.start_load()
 
     # Helpers -------------------------------------------------------------
 

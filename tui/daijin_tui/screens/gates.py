@@ -29,6 +29,7 @@ CLASSIFICATION_NOTE = {
 
 class GatesScreen(DaijinScreen):
     mode_name = "gates"
+    notice_id = "#gates-notice"
     heading = "Repo work gates"
     subheading = "discovered data, classified against the baseline, editable"
 
@@ -151,10 +152,10 @@ class GatesScreen(DaijinScreen):
         except RpcError as error:
             self.report_rpc_error(error)
             return
-        await self.load()
-        self.query_one("#gates-notice", Banner).set_notice(
-            f"{gate['name']} updated: {', '.join(f'{k} {v}' for k, v in patch.items())}.", "info"
+        self.set_pending_notice(
+            f"{gate['name']} updated: {', '.join(f'{k} {v}' for k, v in patch.items())}."
         )
+        self.start_load()
 
     # Stream ---------------------------------------------------------------
 

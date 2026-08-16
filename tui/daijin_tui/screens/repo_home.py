@@ -15,6 +15,7 @@ from .base import DaijinScreen
 
 class RepoHomeScreen(DaijinScreen):
     mode_name = "home"
+    notice_id = "#home-notice"
     heading = "Repo home"
     subheading = "connected repos, health, measured floor"
 
@@ -132,10 +133,8 @@ class RepoHomeScreen(DaijinScreen):
             notice.set_notice(error.hint, "error")
             return
         field.value = ""
-        await self.load()
-        self.query_one("#home-notice", Banner).set_notice(
-            f"Attached {result.get('repo', {}).get('path', path)}.", "info"
-        )
+        self.set_pending_notice(f"Attached {result.get('repo', {}).get('path', path)}.")
+        self.start_load()
 
     async def on_repo_card_selected(self, message: RepoCard.Selected) -> None:
         message.stop()
@@ -157,7 +156,5 @@ class RepoHomeScreen(DaijinScreen):
             return
         if self.app.selected_repo == path:
             self.app.selected_repo = None
-        await self.load()
-        self.query_one("#home-notice", Banner).set_notice(
-            f"Detached {path}. The brain store on disk is untouched.", "info"
-        )
+        self.set_pending_notice(f"Detached {path}. The brain store on disk is untouched.")
+        self.start_load()

@@ -26,6 +26,7 @@ from .dialogs import budget_estimate_lines
 
 class GymScreen(DaijinScreen):
     mode_name = "gym"
+    notice_id = "#gym-notice"
     heading = "Gym"
     subheading = "rounds, edits, checks, extensions, boundary events, criteria audit"
 
@@ -216,7 +217,7 @@ class GymScreen(DaijinScreen):
             await self.cancel_cycle()
         elif event.button.id == "gym-refresh":
             event.stop()
-            await self.load()
+            self.start_load()
 
     async def cancel_cycle(self) -> None:
         notice = self.query_one("#gym-notice", Banner)

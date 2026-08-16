@@ -63,8 +63,16 @@ async def settle(pilot, times: int = 8) -> None:
 
 
 async def goto(pilot, key: str) -> None:
-    """Switch view with the keyboard, the way a user would."""
+    """Switch view with the keyboard, the way a user would.
+
+    Screens now load in a worker, so a test that wants the loaded state has to
+    wait for it. Real users get a loading indicator meanwhile.
+    """
     await pilot.press(key)
+    await settle(pilot)
+    waiter = getattr(pilot.app.screen, "wait_for_load", None)
+    if waiter is not None:
+        await waiter()
     await settle(pilot)
 
 

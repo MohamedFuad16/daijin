@@ -118,10 +118,14 @@ async def test_attaching_and_detaching_a_repo_changes_the_cards():
         before = len(list(app.screen.query(RepoCard)))
         app.screen.query_one("#attach-input", Input).value = "/Users/owner/code/newthing"
         await pilot.click("#attach-go")
+        # The refetch after a mutation is a worker now, so the confirmation is
+        # immediate and the reload is not. Tests wait for it; users see it load.
+        await app.screen.wait_for_load()
         await settle(pilot)
         assert len(list(app.screen.query(RepoCard))) == before + 1
         card = next(c for c in app.screen.query(RepoCard) if c.repo_path.endswith("newthing"))
         await pilot.click(card.query_one(".card-detach", Button))
+        await app.screen.wait_for_load()
         await settle(pilot)
         assert len(list(app.screen.query(RepoCard))) == before
         assert "Detached" in text_of(app.screen.query_one("#home-notice", Banner))
@@ -427,6 +431,7 @@ async def test_gates_can_be_reclassified_and_the_change_persists():
     async with running_app() as (app, pilot):
         await goto(pilot, "4")
         await pilot.click("#gates-prebroken")
+        await app.screen.wait_for_load()
         await settle(pilot)
         gate = next(g for g in app.screen.gates if g["name"] == "eslint")
         assert gate["classification"] == "pre-broken"

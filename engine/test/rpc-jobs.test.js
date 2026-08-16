@@ -177,3 +177,56 @@ test('the ending says HOW it ended, not only that it did', async () => {
   const levels = new Set([quiet, announcing, failing, cancelling].map(levelOf));
   assert.deepEqual([...levels].sort(), ['error', 'info', 'warn']);
 });
+
+test('a job cannot FORGE one of the runner\'s endings', async () => {
+  // tui-builder raised this as an assumption it was making and could not check from its
+  // side: that a done event with level `info` means success even when its step says
+  // `failed`. It was assuming correctly and the engine could not honour it, because nothing
+  // stopped a job emitting exactly that pair. A client told to trust `level` would have
+  // believed a forged success.
+  const { RESERVED_DONE_STEPS } = await import('../src/rpc/jobs.js');
+  assert.deepEqual([...RESERVED_DONE_STEPS], ['finished', 'failed', 'cancelled']);
+
+  for (const step of RESERVED_DONE_STEPS) {
+    const kit = runner();
+    const jobId = kit.jobs.start('forger', async ({ emit }) => {
+      emit('done', step, 'pretending', { level: 'info' });
+    });
+    await kit.jobs.drain();
+
+    const done = kit.done(jobId);
+    assert.equal(done.length, 1, `${step}: still exactly one ending`);
+    // The attempt FAILS the job rather than being dropped: a job doing this has a bug, and a
+    // silent drop would leave it believing it had reported something.
+    assert.equal(done[0].step, 'failed');
+    assert.equal(done[0].level, 'error', 'and the ending a client sees is the truthful one');
+    assert.match(done[0].detail, new RegExp(`may not emit the reserved done step '${step}'`));
+  }
+
+  // A job announcing its OWN ending is still normal, which is what gatesDiscover does.
+  const kit = runner();
+  const honest = kit.jobs.start('gates', async ({ emit }) => { emit('done', 'written', '3 of 4 carry signal'); });
+  await kit.jobs.drain();
+  assert.equal(kit.done(honest)[0].step, 'written');
+  assert.equal(kit.done(honest)[0].level, 'info');
+});
+
+test('a failure ALWAYS carries a reason, whatever was thrown', async () => {
+  // tui-builder's other assumption: `detail` carries the failure message. It does, and the
+  // fallbacks matter, because a banner that states a consequence with no cause is the shape
+  // it was fixing. An Error with an empty message and a bare string throw both still
+  // produce a detail rather than an empty one.
+  for (const [label, thrown] of [
+    ['a real message', new Error('the embedder is down')],
+    ['an empty message', new Error('')],
+    ['a bare string', 'not an Error at all'],
+    ['undefined', undefined],
+  ]) {
+    const kit = runner();
+    const jobId = kit.jobs.start('broken', async () => { throw thrown; });
+    await kit.jobs.drain();
+    const done = kit.done(jobId)[0];
+    assert.equal(done.level, 'error', `${label}: level says it broke`);
+    assert.ok(done.detail && done.detail.length > 0, `${label}: detail is never empty`);
+  }
+});

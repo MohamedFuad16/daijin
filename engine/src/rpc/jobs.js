@@ -10,6 +10,20 @@
 import { randomUUID } from 'node:crypto';
 
 export const STEP_NOTIFICATION = 'step';
+
+/**
+ * Step names the RUNNER owns on a done-phase event. A job may not emit these.
+ *
+ * A client is told to trust `level` to learn HOW a job ended, which is only sound if the
+ * runner is the sole author of the endings whose level carries meaning. Nothing stopped a
+ * job emitting `done`/`failed` with `level: "info"` until this, and that pair is exactly
+ * what a client following the guidance would believe: a failure rendered as a success,
+ * forged by the job rather than reported by the runner.
+ *
+ * Raised by tui-builder as an assumption it was making and could not check from its side.
+ * It was making it correctly, and the engine could not honour it, so the engine changed.
+ */
+export const RESERVED_DONE_STEPS = Object.freeze(['finished', 'failed', 'cancelled']);
 export const BOARD_FINDING_NOTIFICATION = 'boardFinding';
 
 /// One step event. The shape is the contract's, and `counts` is omitted rather than sent
@@ -63,7 +77,17 @@ export class JobRunner {
       // here rather than trusted of every job author, which is what turns the invariant
       // below from a convention into a property.
       if (record.announced) return;
-      if (phase === 'done') record.announced = true;
+      if (phase === 'done') {
+        // A job announcing its own ending is normal (gatesDiscover does it). Announcing one
+        // of the RUNNER'S endings is not: those three names are what a client reads to
+        // learn how a job ended, and their level is only trustworthy while the runner is
+        // the only author. Thrown rather than dropped, because a job doing this has a bug
+        // and a silent drop would leave it believing it had reported something.
+        if (RESERVED_DONE_STEPS.includes(step)) {
+          throw new Error(`A job may not emit the reserved done step '${step}'; those are the runner's endings and a client reads their level to learn how the job ended.`);
+        }
+        record.announced = true;
+      }
       this.#notify(STEP_NOTIFICATION, stepEvent({ jobId, phase, step, detail, now: this.#now, ...extra }));
     };
     const cancelled = () => record.cancelled;

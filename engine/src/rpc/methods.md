@@ -100,6 +100,18 @@ single exception: a job that announces done and then throws produces two done
 events, `failed` second, because suppressing a failure to preserve the count
 would hide the thing the user most needs.
 
+[Added 2026-08-17, from a client assumption the engine could not honour:
+`finished`, `failed` and `cancelled` are RESERVED to the runner. A job that
+emits one of those as its own ending FAILS instead, with that as the reason.
+So a done event carrying one of those three steps was written by the runner,
+and its `level` can be trusted: nothing else can produce `failed` with
+`level: "info"`, which is the pair a client following this guidance would have
+believed. A job's own ending (`written`, `kept-yours`) is unaffected and
+carries `level: "info"`. And a failure ALWAYS carries a reason in `detail`,
+including when what was thrown had an empty message or was not an Error at
+all, because a banner stating a consequence with no cause is the defect this
+whole block exists to prevent.]
+
 Gym adds: round events, per-file edit events, check verdicts, extension grants
 and refusals, boundary check results, rollback events with discarded-edit
 counts, the criteria audit at submit.

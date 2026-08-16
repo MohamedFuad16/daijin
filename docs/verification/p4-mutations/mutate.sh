@@ -46,9 +46,16 @@ else
   # is large and is never mutated. Node resolves it by walking up from the copy.
   cp -R "$ENGINE_SOURCE/src" "$ENGINE_SOURCE/test" "$ENGINE_SOURCE/package.json" "$ENGINE/"
   ln -s "$ENGINE_SOURCE/node_modules" "$ENGINE/node_modules"
+  # adapters/ lives BESIDE the engine, not inside it, and engine sources import it by
+  # relative path (src/rpc/methods.js reaches ../../../adapters/ollama/client.js). A copy of
+  # src and test alone cannot resolve that, which is precisely the break init-miner found and
+  # which the baseline control below caught here too. Linked as a SIBLING so the relative
+  # path resolves exactly as it does in the real tree.
+  ln -s "$(cd "$ENGINE_SOURCE/.." && pwd)/adapters" "$WORKROOT/adapters"
   trap 'rm -rf "$WORKROOT"' EXIT
   echo "Mutating a private copy at $ENGINE (the shared tree is never touched)."
 fi
+
 # THE CONTAINMENT CLAIM, TAKEN BY THE SCRIPT (was previously a command the operator typed
 # around the invocation, which meant a run whose operator forgot it claimed nothing about
 # containment while looking identical to one that proved it). An evidence check that lives in
@@ -60,6 +67,37 @@ tree_digest() {
 SHARED_BEFORE=$(tree_digest "$ENGINE_SOURCE")
 
 cd "$ENGINE" || exit 1
+
+# THE BASELINE CONTROL. It runs AFTER the cd, and that placement is the whole guard: the
+# first version of this block sat before it, so it tested the SHARED tree and reported green
+# for any broken copy. A baseline control measuring the wrong tree is a guard that cannot
+# fail, which is the defect it exists to prevent, one level up. Caught by probing it.
+#
+# THE BASELINE CONTROL, and it is the property that would otherwise let this whole file lie
+# flawlessly. Every mutation scores KILLED when the tests fail, so a BROKEN COPY scores a
+# perfect sweep having executed nothing: unresolvable imports, a missing directory, a bad
+# link, all report as total success. Init-miner hit exactly that, 38 of 38 killed with no
+# test ever running, and returned the guard.
+#
+# It is the project's own dead-gate rule applied to batteries: a gate that fails on baseline
+# and candidate alike carries no signal. A battery whose baseline is red carries none either,
+# and unlike a dead gate it announces the opposite.
+#
+# So: the UNMUTATED copy must be green before any mutation is scored, and the battery refuses
+# rather than reporting kills it cannot justify. Note the copy list this guards, which is
+# where init-miner's break lived: engine sources import adapters/ from OUTSIDE the engine
+# root, so a copy of src and test alone is broken for anything reaching the sqlite store.
+echo "Baseline control: the unmutated copy must be green before anything is scored."
+if ! node --test "test/gym-*.test.js" > .baseline.log 2>&1; then
+  echo "BATTERY REFUSED: the unmutated copy is NOT GREEN, so every mutation would score KILLED"
+  echo "  without a single test having run. Nothing below this line would have been evidence."
+  echo "  Last lines of the baseline run:"
+  tail -12 .baseline.log | sed 's/^/    /'
+  echo "  Most likely cause: the copy list is incomplete. Engine sources import adapters/ from"
+  echo "  outside the engine root, so a tree of src and test alone cannot resolve them."
+  exit 1
+fi
+echo "Baseline green; mutations below are measured against a working tree."
 
 # Anything that is not a KILL: a survivor (the code is not pinned) or a skip (the expression
 # matched nothing, so nothing was tested). Both are counted, and the script exits non-zero.

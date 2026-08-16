@@ -14,7 +14,7 @@ instrument, and the captured output of both. Session scratch dies; the evidence 
 | `gate-plants.mjs` | gym-porter's extended plant set (12 plants, 4 controls), per the verifier's standing note that four plants is ten minutes of thought and not a bound. |
 | `gate-plants-output.txt` | its captured output. |
 
-## Measured 2026-08-16 22:45 JST (2026-08-16 13:45Z)
+## Measured 2026-08-17 00:10 JST (2026-08-16 15:10Z)
 
 - `node docs/verification/p4-mutations/gate-scanner-plants.mjs`: caught 4/4 plants, control
   clean, ACCEPTANCE MET, exit 0. The verifier's four plants are also pinned inside
@@ -63,6 +63,7 @@ watched.
 | battery: unexecuted | six mutations appended past `exit`, caught by declared-vs-executed |
 | battery: restore | probe with a sabotaged restore, reports NOT RESTORED |
 | battery: containment | probe on a throwaway copy, reports SHARED TREE CHANGED |
+| battery: baseline control | a copy missing the adapters link REFUSES before scoring; found the real break in this lane |
 | ledger clause 5 (FK) | a rubric for a run with no row is refused, named before the FK fires |
 | ledger clause 9 (txn) | a batch failing partway leaves no rubric and no batch row |
 | certification refusals | mode, verdict, quarantine, harness, exclusion record, each tested |
@@ -215,13 +216,13 @@ eb34e69d70556bbd4266ac05e5345d6c7805416158e573d2826af7f2874c6982  engine/test/gy
 e6affd28f7130eb34bedca68e785744fee946bdc70bc2492019975ee62f377c9  docs/verification/p7-grading-harvest-acceptance-draft.md
 8a1289e65707a5ba3b39ef9b599f899cd468e2af3b72233c5b9f40638ce7fe15  docs/verification/p7-grading-harvest-acceptance.md
 a48adce90b5eb91a5e2e311eaf8901e84d2d13d626811f92ec700a668bac9e5e  docs/verification/p4-mutations/check-scanner-commit.mjs
-c82563cf33fde2b815996749b0e96f8228b0f0e52a5d05c0e6616abc22598f1e  docs/verification/p4-mutations/d0032-pattern.mjs
+f89bc621c97d3641467c374f0b78d54f1ca327257c7e6efd92773da113806ef8  docs/verification/p4-mutations/d0032-pattern.mjs
 f2ff54b05ae07116ac5f763fa7cc4f15457d826e7d6936dd780807feaab4ec34  docs/verification/p4-mutations/gate-plants-output.txt
 e66ab1295c82a9c0a3ec6aa5fd9eb6dc87baf83dd6fbc0b4259b4578def35b8c  docs/verification/p4-mutations/gate-plants.mjs
 5f9c2255ce54fb3ba743458a198098eb98ddf4eca8b50d73706509ad075f6b55  docs/verification/p4-mutations/gate-scanner-plants-output.txt
 327a2cb8b3399975a5501ac48398ae1b4acbc3a5c8b57aa2c7ac4df630b78e43  docs/verification/p4-mutations/gate-scanner-plants.mjs
-523ba3ced13556e699938de06802251328d53ad295ff256a6861996a98068eb2  docs/verification/p4-mutations/mutate-output.txt
-d4a709bf5909677fd2d1ac85cdc1aab3277424c1f50249d19eddd3d7e224d16c  docs/verification/p4-mutations/mutate.sh
+e0c1fab65922663eb981956b3a12a92d7026bb22b9437837b0e3aceff873495f  docs/verification/p4-mutations/mutate-output.txt
+a67214623dfa4301cbd44a6969849359e5ccca388c3389d25f0f5179836fa773  docs/verification/p4-mutations/mutate.sh
 ```
 
 `gates.js` and `sandbox.js` are the extractor's ports, consumed unchanged and hashed here

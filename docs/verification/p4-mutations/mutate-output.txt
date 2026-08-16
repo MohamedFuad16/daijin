@@ -1,8 +1,10 @@
-# Captured 2026-08-16T13:27:59Z (UTC)
+# Captured 2026-08-16T13:40:16Z (UTC)
 # Command: bash docs/verification/p4-mutations/mutate.sh
-# The shared-tree containment claim is now taken BY THE SCRIPT, not by the operator.
+# Baseline control: the unmutated private copy must be green before anything is scored.
 
-Mutating a private copy at /var/folders/nq/jvmxfqtn475bqlkn9vvnz4y80000gn/T//daijin-mutate-YurdQC/engine (the shared tree is never touched).
+Mutating a private copy at /var/folders/nq/jvmxfqtn475bqlkn9vvnz4y80000gn/T//daijin-mutate-gLUnSl/engine (the shared tree is never touched).
+Baseline control: the unmutated copy must be green before anything is scored.
+Baseline green; mutations below are measured against a working tree.
 KILLED   (4 failing): boundary check never fires (condition inverted)
 KILLED   (1 failing): extension no longer requires edits since the boundary
 KILLED   (4 failing): extension no longer requires a passing check
@@ -13,11 +15,11 @@ KILLED   (3 failing): a missing gate reads as open
 KILLED   (3 failing): the automatic closure writes open instead of blocked
 KILLED   (1 failing): quarantine no longer requires a substantive reason
 KILLED   (2 failing): a quarantined exam may be drawn in harness-debug
-KILLED   (3 failing): the ledger accepts a row for a run with no applied diff
-KILLED   (2 failing): certification no longer checks the run mode
-KILLED   (3 failing): cycleRuns defaults to every mode instead of the scored view
-KILLED   (3 failing): the drawn cohort is denominated on rows
-KILLED   (4 failing): result files count every mode, harness-debug included
+KILLED   (2 failing): the ledger accepts a row for a run with no applied diff
+KILLED   (1 failing): certification no longer checks the run mode
+KILLED   (2 failing): cycleRuns defaults to every mode instead of the scored view
+KILLED   (2 failing): the drawn cohort is denominated on rows
+KILLED   (3 failing): result files count every mode, harness-debug included
 KILLED   (2 failing): the deterministic filter keeps lockfile-only commits
 KILLED   (1 failing): an auditor override can resurrect a reverted gold
 KILLED   (1 failing): the auditor may select a commit the funnel dropped
@@ -31,8 +33,8 @@ KILLED   (2 failing): the integration-seam-first section is dropped from the shi
 KILLED   (1 failing): the gauge and the seam rule swap order in the shipped student file
 KILLED   (1 failing): the exclusion is computed but never reaches retrieval
 KILLED   (1 failing): the artifact carries no exclusion record
-KILLED   (3 failing): certification stops requiring an exclusion record
-KILLED   (3 failing): an absent exclusion record reads as present
+KILLED   (2 failing): certification stops requiring an exclusion record
+KILLED   (2 failing): an absent exclusion record reads as present
 KILLED   (2 failing): rule 2 excludes on file change rather than section change
 KILLED   (2 failing): rule 3 dropped: a document the gold commit ADDED is retrievable
 KILLED   (1 failing): an oversized exclusion is truncated instead of refused
@@ -69,19 +71,19 @@ KILLED   (1 failing): F77: identity stops stripping the trailing slash, so a sla
 KILLED   (1 failing): F77: normalization flattens the URL path too, conflating real deployments
 KILLED   (1 failing): F78: the router branch is deleted from the provider scan
 KILLED   (1 failing): F78: the lower-case key branch is deleted from the provider scan
-KILLED   (4 failing): rubric import is not a transaction, so a bad batch writes half a cohort
-KILLED   (3 failing): the rubric store stops checking the run exists
-KILLED   (2 failing): a harness-debug cohort may be graded into the record
-KILLED   (2 failing): a rubric may cross modes into another batch
-KILLED   (2 failing): the one-rubric-per-run index is dropped
-KILLED   (2 failing): attemptsForExam stops attaching rubrics, so graded reads as ungraded
-KILLED   (2 failing): certify takes axes from its caller again, so {} can reach the strictest record
-KILLED   (2 failing): certify stops requiring a rubric, so a pass claim has nothing behind it
-KILLED   (2 failing): certify stops checking the caller assertion against the stored verdict
-KILLED   (2 failing): the certification stops naming the rubric it snapshotted
+KILLED   (3 failing): rubric import is not a transaction, so a bad batch writes half a cohort
+KILLED   (2 failing): the rubric store stops checking the run exists
+KILLED   (1 failing): a harness-debug cohort may be graded into the record
+KILLED   (1 failing): a rubric may cross modes into another batch
+KILLED   (1 failing): the one-rubric-per-run index is dropped
+KILLED   (1 failing): attemptsForExam stops attaching rubrics, so graded reads as ungraded
+KILLED   (1 failing): certify takes axes from its caller again, so {} can reach the strictest record
+KILLED   (1 failing): certify stops requiring a rubric, so a pass claim has nothing behind it
+KILLED   (1 failing): certify stops checking the caller assertion against the stored verdict
+KILLED   (1 failing): the certification stops naming the rubric it snapshotted
 KILLED   (1 failing): F81: the wire safety net stops rendering an empty rubric as ungraded
 
-shared tree unchanged: 631005d323e57d2f2fc97e33a95552fabcfa4afdf092a11e2416e4c9347a670b
+shared tree unchanged: c67f72eb56d6e1a124664708e83808b0978c6fd54b10e8df6973f2a1f2c475d6
 
 declared: 77   executed: 77
 All mutations killed.

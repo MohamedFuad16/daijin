@@ -6,7 +6,7 @@
 // against bytes I guessed at. A drop-in you paste and adapt is honest; a diff against
 // imagined source is not.
 //
-// Three properties, which is all D-0032 asks for. Take the shapes, not the style.
+// FOUR properties. Take the shapes, not the style.
 //
 //  1. PRIVATE COPY. A mutation is a window in which the source on disk is deliberately
 //     broken. Against a shared tree, any other process's `npm test` can read that broken
@@ -18,6 +18,18 @@
 //  3. THREE-HASH ASSERTION per mutation. An expression that matches nothing is a silent
 //     no-op and looks EXACTLY like a successful run. Hash before, after mutating, after
 //     restoring: the middle must differ, the last must match the first.
+//  4. BASELINE CONTROL, contributed BY init-miner after its first private-copy battery lied
+//     flawlessly: the copy list missed that engine sources import adapters/ from outside the
+//     engine root, so nothing resolved, every test failed, and all 38 mutations scored KILLED
+//     with no test having executed. A broken tree produces a PERFECT-LOOKING battery, failing
+//     in the direction that reads as total success. The unmutated copy must be GREEN before
+//     any mutation is scored, or the battery refuses.
+//
+//     This is the project's dead-gate rule applied to batteries: a gate that fails on
+//     baseline and candidate alike carries no signal. It should have been property 1, and it
+//     is here because a second lane paid for it. Running it against my own battery found the
+//     same break: one test reaching src/rpc/methods.js could not resolve adapters/, so every
+//     mutation whose test set included that file had been scoring an unearned kill.
 //
 // D-0032 ALSO REQUIRES THE REFUSAL DEMONSTRATED FIRING ONCE before it is trusted. A check
 // nobody has seen fail is not yet a check; I demonstrated both of mine against a probe copy
@@ -42,6 +54,12 @@ export async function resolveMutationRoot({
   allowShared = process.env.MUTATE_IN_PLACE === '1',
   copy = ['src', 'test', 'package.json'],
   link = ['node_modules'],
+  // Paths linked BESIDE the copied root rather than inside it, for sources that import out
+  // of the root by relative path. This is the parameter init-miner's break lived in: engine
+  // sources reach ../../../adapters, so a copy of src and test alone cannot resolve them.
+  // The baseline control is what tells you this list is wrong; without it the battery scores
+  // a flawless sweep instead.
+  linkSiblings = [],
 } = {}) {
   if (!sourceRoot) throw new Error('resolveMutationRoot needs the sourceRoot it may copy from.');
   if (allowShared) {
@@ -58,10 +76,36 @@ export async function resolveMutationRoot({
   // Linked rather than copied: a native module is large and is never mutated. Node resolves
   // it by walking up from the copy.
   for (const entry of link) await symlink(path.join(sourceRoot, entry), path.join(root, entry)).catch(() => {});
+  for (const entry of linkSiblings) {
+    await symlink(path.resolve(sourceRoot, '..', entry), path.join(workRoot, entry)).catch(() => {});
+  }
   return { root, shared: false, cleanup: async () => rm(workRoot, { recursive: true, force: true }) };
 }
 
 const digest = async (file) => createHash('sha256').update(await readFile(file)).digest('hex');
+
+/**
+ * Property 4: refuse to score anything until the UNMUTATED copy is green.
+ *
+ * `run` executes the suite in the copy and resolves true when it PASSED. Throwing rather
+ * than returning is deliberate: a battery that continues past a red baseline reports kills
+ * it cannot justify, and every one of them looks identical to a real one.
+ *
+ * Run it INSIDE the copy. The first version of my own moved this check above the chdir, so
+ * it measured the shared tree and reported green for any broken copy: a baseline control
+ * pointed at the wrong tree is the defect it exists to prevent, one level up.
+ */
+export async function assertBaselineGreen({ run, describe = 'the unmutated copy' }) {
+  const green = await run();
+  if (!green) {
+    throw new Error(
+      `BATTERY REFUSED: ${describe} is NOT GREEN, so every mutation would score KILLED without a `
+      + 'single test having run. Nothing after this point would be evidence. The usual cause is an '
+      + 'incomplete copy list: sources that import from outside the copied root cannot resolve.',
+    );
+  }
+  return true;
+}
 
 /**
  * Property 3: run one mutation with its anchor and restore both asserted.
@@ -152,6 +196,15 @@ export async function selfTest() {
     },
   }));
 
+  // Property 4 both ways: a green baseline proceeds, a red one refuses before scoring.
+  let baselineRefused = null;
+  await assertBaselineGreen({ run: async () => true });
+  try {
+    await assertBaselineGreen({ run: async () => false, describe: 'a deliberately broken copy' });
+  } catch (error) {
+    baselineRefused = error.message;
+  }
+
   const outcomes = results.map((result) => result.outcome);
   const expected = ['killed', 'survived', 'dead-anchor', 'killed'];
   await rm(root, { recursive: true, force: true });
@@ -160,8 +213,10 @@ export async function selfTest() {
   // this helper captured, so a test that rewrites the file mid-run is corrected rather than
   // detected. What `not-restored` catches is a restore that fails, not a test that meddles.
   // Naming the bound beats implying a guarantee the code does not give.
-  const pass = JSON.stringify(outcomes) === JSON.stringify(expected);
+  const pass = JSON.stringify(outcomes) === JSON.stringify(expected)
+    && /BATTERY REFUSED: a deliberately broken copy is NOT GREEN/.test(baselineRefused ?? '');
   console.log(`self-test outcomes: ${outcomes.join(', ')}`);
+  console.log(`baseline refusal fired: ${baselineRefused ? 'yes' : 'NO'}`);
   console.log(pass ? 'self-test PASSED' : `self-test FAILED, expected ${expected.join(', ')}`);
   return pass;
 }

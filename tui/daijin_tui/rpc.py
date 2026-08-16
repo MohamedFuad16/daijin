@@ -978,6 +978,7 @@ class MockEngine:
         return {"jobId": job_id}
 
     async def _rpc_diagnose(self, params: dict[str, Any]) -> dict[str, Any]:
+        self._require_brain("diagnose", params.get("repoPath"))
         repo = params.get("repoPath")
         record = mock_data.DIAGNOSE.get(repo)
         if record is None:
@@ -1002,6 +1003,7 @@ class MockEngine:
         return {"recommendation": narration}
 
     async def _rpc_retrievalScore(self, params: dict[str, Any]) -> dict[str, Any]:
+        self._require_brain("retrievalScore", params.get("repoPath"))
         repo = params.get("repoPath")
         record = mock_data.RETRIEVAL_SCORE.get(repo)
         if record is None:
@@ -1022,28 +1024,65 @@ class MockEngine:
                     result["rationale"] = "budget pinned by the user for this run"
         return result
 
-    def _require_brain(self, repo: Any) -> None:
-        """Refuse the way the engine does for a repo with nothing indexed.
+    # The engine's own sentences, read off the daemon on 2026-08-17 rather than
+    # copied from a description. They are PER METHOD: an earlier version of
+    # this mock used one invented sentence for all of them, so a user in mock
+    # mode read copy the engine never sends. That is the vetoReason defect
+    # again, in the hint rather than in a field location.
+    BRAIN_REFUSAL = {
+        "search": "{path} has no indexed brain yet, so there is nothing to search. Initialize the brain first.",
+        "retrievalScore": "{path} has no indexed brain yet, so there is no floor to measure.",
+        "diagnose": "{path} has no indexed brain yet, so there is nothing to diagnose.",
+    }
 
-        Verified against the daemon on 2026-08-17: search, diagnose and
-        retrievalScore refuse with -32602 and this wording for a repo with no
-        indexed brain, and examList and gymStatus refuse too. This mock
-        answered all of them, which made every client branch that handles the
-        refusal unreachable. The branches were right; nothing was keeping them
-        right, which is the whole of the happy-path-only doubles argument.
-        """
+    # Five methods share one callsite engine side (withLedger, 4baeab6), so
+    # they share one sentence. Confirmed identical across all five.
+    LEDGER_REFUSAL = (
+        "{path} has no gym ledger yet, so there are no exams or cycles to read. "
+        "Run init on {path} first; it creates the ledger."
+    )
+
+    def _uninitialized(self, repo: Any) -> str | None:
+        """The repo path when it has nothing initialised, else None."""
         path = str(repo or "")
         row = next((r for r in self.repos if r["path"] == path), None)
         if row is None or row.get("health") != "no-brain":
+            return None
+        return path
+
+    def _require_brain(self, method: str, repo: Any) -> None:
+        """Refuse the way the engine does for a repo with nothing indexed."""
+        path = self._uninitialized(repo)
+        if path is None:
             return
         raise RpcError(
             ERR_INVALID_PARAMS,
             "no indexed brain",
-            {"hint": f"{path} has no indexed brain yet, so there is nothing to read. Initialize it first."},
+            {"hint": self.BRAIN_REFUSAL[method].format(path=path)},
+        )
+
+    def _require_ledger(self, repo: Any) -> None:
+        """Refuse the way the ledger seam does for a repo that was never init'd.
+
+        ONLY the not-yet-initialised case is translated. A ledger that EXISTS
+        and cannot be opened still refuses as an internal error engine side,
+        deliberately, because dressing a corrupt database as "run init" sends a
+        user to rebuild a repo whose real problem is a damaged file. So that
+        case is NOT mocked here: mocking it with this friendly sentence would
+        be the permissive-double trap inverted, teaching the screen that all
+        ledger trouble is a missing brain.
+        """
+        path = self._uninitialized(repo)
+        if path is None:
+            return
+        raise RpcError(
+            ERR_INVALID_PARAMS,
+            "no gym ledger",
+            {"hint": self.LEDGER_REFUSAL.format(path=path)},
         )
 
     async def _rpc_search(self, params: dict[str, Any]) -> dict[str, Any]:
-        self._require_brain(params.get("repoPath"))
+        self._require_brain("search", params.get("repoPath"))
         query = str(params.get("query") or "").strip()
         options = params.get("options") or {}
         limit = int(options.get("k") or 10)
@@ -1248,11 +1287,11 @@ class MockEngine:
         return {"jobId": job_id}
 
     async def _rpc_gymStatus(self, params: dict[str, Any]) -> dict[str, Any]:
-        self._require_brain(params.get("repoPath"))
+        self._require_ledger(params.get("repoPath"))
         return copy.deepcopy(mock_data.GYM_STATUS)
 
     async def _rpc_examList(self, params: dict[str, Any]) -> Any:
-        self._require_brain(params.get("repoPath"))
+        self._require_ledger(params.get("repoPath"))
         filters = params.get("filters") or {}
         rows = copy.deepcopy(self.exams)
         for field in ("status", "benchmarkStatus", "tier"):
@@ -1264,6 +1303,7 @@ class MockEngine:
         return rows
 
     async def _rpc_examDetail(self, params: dict[str, Any]) -> dict[str, Any]:
+        self._require_ledger(params.get("repoPath"))
         exam_id = params.get("examId")
         record = self.exam_details.get(exam_id)
         if record is None:
@@ -1277,6 +1317,7 @@ class MockEngine:
         raise RpcError(ERR_INVALID_PARAMS, "unknown examId", {"hint": f"No exam named {exam_id} is in the bank."})
 
     async def _rpc_examVeto(self, params: dict[str, Any]) -> dict[str, Any]:
+        self._require_ledger(params.get("repoPath"))
         exam = self._find_exam(params.get("examId"))
         reason = str(params.get("reason") or "").strip()
         # 20 characters, the same bound the engine enforces. The mock accepted
@@ -1304,6 +1345,7 @@ class MockEngine:
         return copy.deepcopy(exam)
 
     async def _rpc_examUpdate(self, params: dict[str, Any]) -> dict[str, Any]:
+        self._require_ledger(params.get("repoPath"))
         exam = self._find_exam(params.get("examId"))
         patch = params.get("patch") or {}
         merged = {**exam, **patch}

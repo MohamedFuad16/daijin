@@ -1079,3 +1079,101 @@ async def test_a_confirmed_call_records_the_echo_it_was_given():
     assert repo == DEFAULT_REPO
     assert echoed["estimatedTokens"] == estimate["estimatedTokens"]
     await client.aclose()
+
+
+# The engine's own sentences, read off the daemon on 2026-08-17 with
+# /tmp/probe_five.py, not copied from a description of them. Five methods share
+# one callsite engine side (withLedger, 4baeab6) and therefore one sentence;
+# the brain family has one sentence EACH.
+LEDGER_METHODS = ("examList", "examDetail", "examVeto", "examUpdate", "gymStatus")
+LEDGER_HINT = (
+    "{path} has no gym ledger yet, so there are no exams or cycles to read. "
+    "Run init on {path} first; it creates the ledger."
+)
+BRAIN_HINTS = {
+    "search": "{path} has no indexed brain yet, so there is nothing to search. Initialize the brain first.",
+    "retrievalScore": "{path} has no indexed brain yet, so there is no floor to measure.",
+    "diagnose": "{path} has no indexed brain yet, so there is nothing to diagnose.",
+}
+BRAINLESS = "/Users/owner/code/kiln-api"
+LEDGER_PARAMS = {
+    "examList": {},
+    "examDetail": {"examId": "exam-0058"},
+    "examVeto": {"examId": "exam-0058", "reason": "a reason long enough to clear the floor"},
+    "examUpdate": {"examId": "exam-0058", "patch": {"tier": 2}},
+    "gymStatus": {},
+}
+
+
+@run_async
+async def test_an_uninitialized_repo_refuses_in_the_engines_own_words():
+    """The code matters as much as the text: hints render verbatim, codes route.
+
+    A mock with the right sentence and the wrong code looks correct on screen
+    and routes wrongly, so both are pinned.
+    """
+    client = MockRpcClient(MockEngine(speed=0.0))
+    for method in LEDGER_METHODS:
+        with pytest.raises(RpcError) as caught:
+            await client.call(method, {"repoPath": BRAINLESS, **LEDGER_PARAMS[method]})
+        assert caught.value.code == ERR_INVALID_PARAMS, f"{method} refused with the wrong code"
+        assert caught.value.hint == LEDGER_HINT.format(path=BRAINLESS), (
+            f"{method} does not speak the engine's sentence: {caught.value.hint!r}"
+        )
+    for method, sentence in BRAIN_HINTS.items():
+        params = {"repoPath": BRAINLESS}
+        if method == "search":
+            params["query"] = "retry"
+        with pytest.raises(RpcError) as caught:
+            await client.call(method, params)
+        assert caught.value.code == ERR_INVALID_PARAMS
+        assert caught.value.hint == sentence.format(path=BRAINLESS), (
+            f"{method} invented its own wording: {caught.value.hint!r}"
+        )
+    await client.aclose()
+
+
+@run_async
+async def test_the_friendly_ledger_refusal_is_narrow_on_purpose():
+    """Only the not-yet-initialised case is translated.
+
+    A ledger that EXISTS and cannot be opened stays an internal error engine
+    side, because dressing a corrupt database as "run init" sends a user to
+    rebuild a repo whose real problem is a damaged file. Mocking that case with
+    this sentence would be the permissive double inverted: it would teach the
+    screen that all ledger trouble is a missing brain, and the one case needing
+    different advice is the one it would get wrong.
+
+    So the corrupt-ledger state is deliberately UNMOCKED, and this test guards
+    the boundary the mock CAN express: an initialised repo never hears it.
+    """
+    client = MockRpcClient(MockEngine(speed=0.0))
+    initialised = [r["path"] for r in mock_data.REPOS if r["health"] != "no-brain"]
+    assert initialised, "no initialised repo, so this check would be vacuous"
+    for repo in initialised:
+        for method in LEDGER_METHODS:
+            try:
+                await client.call(method, {"repoPath": repo, **LEDGER_PARAMS[method]})
+            except RpcError as error:
+                assert "no gym ledger yet" not in error.hint, (
+                    f"{method} told an initialised repo ({repo}) to run init: {error.hint!r}"
+                )
+    await client.aclose()
+
+
+@run_async
+async def test_gym_start_refuses_for_spend_before_it_ever_reaches_the_ledger():
+    """A coincidence rather than a design, and worth pinning as one.
+
+    gymStart's gate file lives inside the same .daijin/ whose absence causes
+    the ledger error, so it refuses for spend first and never gets there. A
+    mock that scripted the ledger refusal here would be wrong about the order.
+    """
+    client = MockRpcClient(MockEngine(speed=0.0))
+    with pytest.raises(RpcError) as caught:
+        await client.call("gymStart", {"repoPath": BRAINLESS, "examId": "exam-0058", "confirm": True})
+    assert caught.value.code == ERR_SPEND_GATE, (
+        f"the spend refusal did not come first: {caught.value.code}"
+    )
+    assert "no gym ledger yet" not in caught.value.hint
+    await client.aclose()

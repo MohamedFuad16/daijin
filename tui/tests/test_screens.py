@@ -850,16 +850,22 @@ async def test_a_repo_with_no_brain_says_so_rather_than_showing_an_empty_view():
     stated reason is the gates defect in another screen.
     """
     async with running_app(repo="/Users/owner/code/kiln-api") as (app, pilot):
+        # The exams and gym screens read the LEDGER, not the index, and the
+        # engine says so in its own words (4baeab6). The two families have
+        # different sentences and the screens must not blur them.
         for key, notice_id, table_id in (
             ("6", "#exam-notice", "#exam-table"),
             ("5", "#gym-notice", None),
         ):
             await goto(pilot, key)
             notice = text_of(app.screen.query_one(notice_id, Banner))
-            assert "no indexed brain" in notice, (
+            assert "no gym ledger yet" in notice, (
                 f"{notice_id} did not say why it is empty: {notice!r}"
             )
-            assert "Initialize it first" in notice, "the way out of the state is not stated"
+            assert "Run init on" in notice, "the way out of the state is not stated"
+            assert "Cannot open database" not in notice, (
+                "a driver string reached the user; the engine translates this case now"
+            )
             if table_id is not None:
                 assert app.screen.query_one(table_id, DataTable).row_count == 0
 
@@ -871,6 +877,9 @@ async def test_a_repo_with_no_brain_says_so_rather_than_showing_an_empty_view():
         await settle(pilot, 12)
         summary = text_of(app.screen.query_one("#search-summary", Static))
         assert "no indexed brain" in summary, f"the tester showed nothing useful: {summary!r}"
+        assert "nothing to search" in summary, (
+            "the search family has its own sentence and this is not it"
+        )
 
 @run_async
 async def test_gate_discovery_reads_its_own_ending_and_reloads_what_it_wrote():

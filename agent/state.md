@@ -1,5 +1,34 @@
 # Daijin build state (authoritative)
 
+## 2026-08-17 11:40 - Close corrected to ce889ab; the mock that could not fail
+
+CORRECTION to the 11:15 close: the board closed at 8b4e8d1 but the tip
+is ce889ab, landed after it, CI green ON ce889ab specifically (run
+31967089708, all four jobs, 342+1 skip). The close holds and points
+here.
+
+ce889ab is the guidance correction actioned in the tui, and applying
+it found THREE defects nobody had assigned: the gym banner said "Cycle
+complete" for every ending INCLUDING A RUN THAT BROKE AFTER A PAID
+PROVIDER CALL; the init banner said complete for a failed run; and a
+phase still running when a job broke was ticked done, so a failed run
+left a checklist of green ticks. Root cause under all three: THE MOCK
+COULD NOT PRODUCE A FAILING JOB, so none of those branches were
+reachable - the gates-mock lesson (a mock that cannot fail certifies
+success) not generalized from documents to jobs, self-owned: "I had it
+in my hands two rounds earlier and did not generalize it." Six
+mutations, six killed, all through mutate-once - the tool's first
+production adoption.
+
+Noted for whoever holds the conformance bound, tui-builder's tripwire
+refinement, NOT built: the CI skip line names ten unchecked methods
+every run, and a line appearing in every green build is the kind
+people stop seeing; the check could FAIL rather than skip where the
+environment claims to be prepared. Recorded for the ultrareview's
+consideration.
+
+All lanes standing by. tui-builder's stated preference for review
+findings: hand it the FINDING, not the fix, so it reproduces first.
 ## 2026-08-17 11:15 - CI GREEN, WATCHED. The board is closed.
 
 Two consecutive green runs, all four jobs, watched not assumed

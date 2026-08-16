@@ -16,8 +16,9 @@ import path from 'node:path';
 
 import { analyze as analyzeRepo } from '../init/analyze.js';
 import { discoverGates, gatesFilePath, renderGatesYaml } from '../init/gate-discovery.js';
-import { embedderFromOllama } from '../init/ingest.js';
+import { embedderFromOllama, servedIndexIdentity } from '../init/ingest.js';
 import { initBrain as runInitPipeline } from '../init/pipeline.js';
+import { MCP_UNLOCK_THRESHOLD, mcpUnlock } from '../init/floor.js';
 import { scoreGoldset } from '../init/retrieval-score.js';
 import { createOllamaClient } from '../../../adapters/ollama/client.js';
 import { checkOllama } from '../rag/embed.js';
@@ -47,9 +48,11 @@ export const CONTRACT_VERSION = '5';
 /// version is two places to forget; the manifest is the one npm already believes, so it
 /// wins, and a test asserts they still agree.
 export const ENGINE_VERSION = createRequire(import.meta.url)('../../package.json').version;
-/// The floor a repo must reach before its MCP config is offered. Plan: "at 75 percent or
-/// above, MCP unlocks with a paste-ready snippet".
-export const MCP_THRESHOLD = 0.75;
+/// The floor a repo must reach before its MCP config is offered, IMPORTED from where the
+/// measurement lives rather than restated. Two constants for one threshold is the drift
+/// this codebase keeps finding; floor.js owns it because floor.js is what measures against
+/// it. Re-exported under the daemon's name so existing callers are unaffected.
+export { MCP_UNLOCK_THRESHOLD as MCP_THRESHOLD };
 
 const ROLES = ['engineer', 'teacher', 'auditor', 'watcher'];
 const AGENT_ROLES = ['student', 'teacher', 'auditor', 'watcher'];
@@ -141,6 +144,16 @@ export function clusterCases(results, documentsById = new Map(), armsByCase = ne
     misses: misses.map((row) => row.caseId),
     clusters: { byType: tally('type'), byArea: tally('area'), byArm: tally('arm') },
     identifierMisses: misses.filter((row) => row.identifier).length,
+    // THE DENOMINATOR, carried so an empty cluster can be read correctly.
+    //
+    // init-miner's live P3 run is the argument: at 25 cases over 11 documents the gauge
+    // scored 25 of 25, and a permuted control with every answer deliberately wrong still
+    // scored 18 of 25, because k=8 returns most of an 11-document corpus whatever the
+    // ranking. On a corpus that small most cases pass for reasons unrelated to ranking, so
+    // an empty miss-cluster is NOT evidence that retrieval is healthy, and a reader needs
+    // the case count to know how much the emptiness is worth.
+    cases: perCase.length,
+    hits: perCase.length - misses.length,
   };
 }
 
@@ -191,6 +204,13 @@ export function createMethods({
   const now = deps.now || Date.now;
   const makeEmbedderClient = deps.createEmbedderClient || createOllamaClient;
   const embedderFromClient = deps.embedderFromClient || embedderFromOllama;
+  // The identity the STORE is built with. Deliberately NOT client.servedIdentity(): the
+  // adapter reports the model as the tag it found (bge-m3:latest) while the retrieval path
+  // reports the configured name with the served digest (bge-m3), and assertRetrievalIdentity
+  // compares the model string exactly. A store built from the adapter's notion is refused by
+  // every query it was built to answer, with an error telling the user to re-ingest, which
+  // would not have helped. init-miner lost a live run to exactly this.
+  const indexIdentity = deps.servedIndexIdentity || servedIndexIdentity;
   const runInit = deps.initBrain || runInitPipeline;
   const openLedger = deps.openLedger || ((repoPath) => GymLedger.open(gymDatabasePath(repoPath)));
   const runCycle = deps.runGymCycle || runGymCycle;
@@ -335,7 +355,7 @@ export function createMethods({
             const identity = await store.indexedEmbeddingIdentity();
             if (!identity?.indexed && !identity?.provider) return 'no-brain';
             if (floorScore === null) return 'warn';
-            return floorScore >= MCP_THRESHOLD ? 'ok' : 'warn';
+            return floorScore >= MCP_UNLOCK_THRESHOLD ? 'ok' : 'warn';
           });
         } catch {
           // An unopenable brain is a real state the home screen must show, not a crash.
@@ -591,9 +611,12 @@ export function createMethods({
     async mcpSnippet(params) {
       const repoPath = await requireAttached(params);
       const history = await readHistory(repoPath);
-      const floor = history[0]?.caseRate?.exact ?? null;
-      const unlocked = floor !== null && floor >= MCP_THRESHOLD;
-      if (!unlocked) return { unlocked: false, threshold: MCP_THRESHOLD, snippet: null };
+      const caseRate = history[0]?.caseRate ?? null;
+      if (!caseRate) return { unlocked: false, threshold: MCP_UNLOCK_THRESHOLD, snippet: null, reason: 'No floor has been measured for this repo yet.' };
+      // The decision AND its sentence come from floor.js, so the lock reason a user reads is
+      // the one the measurement wrote rather than a paraphrase of it.
+      const decision = mcpUnlock(caseRate);
+      if (!decision.unlocked) return { unlocked: false, threshold: decision.threshold, snippet: null, reason: decision.reason };
       const snippet = JSON.stringify({
         mcpServers: {
           daijin: {
@@ -602,7 +625,7 @@ export function createMethods({
           },
         },
       }, null, 2);
-      return { unlocked: true, threshold: MCP_THRESHOLD, snippet };
+      return { unlocked: true, threshold: decision.threshold, snippet, reason: decision.reason };
     },
 
     /**
@@ -947,10 +970,21 @@ export function createMethods({
 
       const jobId = jobs.start('init', async ({ emit, cancelled }) => {
         const client = makeEmbedderClient({ model, dimension, baseUrl });
-        // The SERVED identity, not the configured claim: the store records what actually
-        // answered, and retrieval later refuses an index built by a different embedder.
-        const served = await client.servedIdentity();
-        const store = await openStore(repoPath, { embedder: served });
+        const pipelineEnvironment = {
+          EMBEDDING_PROVIDER: 'ollama',
+          EMBEDDING_MODEL: model,
+          EMBEDDING_DIM: String(dimension),
+          EMBEDDING_MODEL_DIGEST: retrieval.embeddingDigest || '',
+          ...(baseUrl ? { OLLAMA_BASE_URL: baseUrl } : {}),
+        };
+        // Resolved through the SAME function retrieve uses, so the index identity and the
+        // query identity cannot drift. The digest still comes from the server; only the
+        // name is reconciled.
+        const served = await indexIdentity({ environment: pipelineEnvironment });
+        // A CONCRETE project scope: retrieval requires a non-empty project while the store
+        // treats null as the whole store, so a null-project store writes documents no query
+        // selects and every gold case misses for a reason unrelated to retrieval.
+        const store = await openStore(repoPath, { embedder: served, project: 'default' });
         try {
           if (cancelled()) return;
           const report = await runInit({
@@ -958,13 +992,12 @@ export function createMethods({
             mode,
             store,
             embedder: embedderFromClient(client),
-            environment: {
-              EMBEDDING_PROVIDER: served.provider ?? 'ollama',
-              EMBEDDING_MODEL: served.model ?? model,
-              EMBEDDING_MODEL_DIGEST: served.digest ?? '',
-              EMBEDDING_DIM: String(served.dimension ?? dimension),
-              ...(baseUrl ? { OLLAMA_BASE_URL: baseUrl } : {}),
-            },
+            environment: { ...pipelineEnvironment, EMBEDDING_MODEL_DIGEST: served.digest ?? '' },
+            // Where artifacts land and where gate commands run. Both default to the repo,
+            // which is what a user's own repo wants; a repo Daijin has no authorization to
+            // write into points them elsewhere.
+            ...(params?.artifactRoot ? { artifactRoot: params.artifactRoot } : {}),
+            ...(params?.gateRepoPath ? { gateRepoPath: params.gateRepoPath } : {}),
             k: retrieval.k ?? 8,
             jobId,
             // The pipeline already emits the contract's step shape, so it is forwarded

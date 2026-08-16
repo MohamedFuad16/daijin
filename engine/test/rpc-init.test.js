@@ -23,6 +23,7 @@ async function harness({ pipeline, repoPath } = {}) {
   const stateRoot = await mkdtemp(path.join(tmpdir(), 'daijin-init-state-'));
   const messages = [];
   const calls = [];
+  let storeOptions = null;
   const served = { provider: 'ollama', model: 'test-embed', digest: 'sha256:test', dimension: 8 };
 
   const server = createRpcServer({
@@ -35,7 +36,11 @@ async function harness({ pipeline, repoPath } = {}) {
         async embed(texts) { return texts.map(() => new Array(8).fill(0.1)); },
       }),
       embedderFromClient: (client) => ({ client, async embed(texts) { return client.embed(texts); } }),
-      openStore: async (root, options) => ({ root, options, project: 'default', async close() {} }),
+      // Injected because the daemon resolves the STORE's identity through the retrieval
+      // path's own resolver rather than the adapter's tag, and that resolver reaches the
+      // live embedder. Hermetic tests supply it; the trap it avoids is in the source.
+      servedIndexIdentity: async () => served,
+      openStore: async (root, options) => { storeOptions = options; return { root, options, project: 'default', async close() {} }; },
       initBrain: async (options) => {
         calls.push(options);
         return pipeline ? pipeline(options) : { floor: null };
@@ -47,6 +52,7 @@ async function harness({ pipeline, repoPath } = {}) {
   if (repoPath) await server.methods.repoAttach({ repoPath });
   return {
     server, messages, calls, stateRoot, served,
+    get storeOptions() { return storeOptions; },
     steps: () => messages.filter((row) => row.method === 'step').map((row) => row.params),
     async cleanup() {
       await server.close();
@@ -99,14 +105,22 @@ test('the daemon hands the pipeline the SERVED embedder identity, not the config
     const call = context.calls[0];
     assert.equal(call.mode, 'layer1');
     assert.equal(call.repoPath, repoPath);
-    // The environment is built from what ANSWERED, which is what the index records and what
-    // retrieval's identity assert later compares against.
-    assert.equal(call.environment.EMBEDDING_MODEL, context.served.model);
-    assert.equal(call.environment.EMBEDDING_MODEL_DIGEST, context.served.digest);
-    assert.equal(call.environment.EMBEDDING_DIM, String(context.served.dimension));
+    // THE IDENTITY TRAP, made into a test. The model NAME is the configured one and the
+    // DIGEST is the served one, resolved through the same function retrieve uses.
+    //
+    // Using the adapter's notion instead would name the model by the tag it found
+    // (bge-m3:latest) while retrieval names it by configuration (bge-m3), and
+    // assertRetrievalIdentity compares the string exactly. The store would then be refused
+    // by every query it was built to answer, with an error telling the user to re-ingest,
+    // which would not have helped. init-miner lost a live run to exactly this.
+    assert.equal(call.environment.EMBEDDING_MODEL, 'bge-m3', 'the CONFIGURED name, not the adapter tag');
+    assert.equal(call.environment.EMBEDDING_MODEL_DIGEST, context.served.digest, 'the SERVED digest');
     assert.ok(call.embedder?.embed, 'the pipeline needs an embedder with embed()');
     assert.equal(call.narrator, null, 'no narrator: Layer 2 is not reachable in this build');
-    assert.equal(call.jobId, (await Promise.resolve(call.jobId)));
+    // And a CONCRETE project scope: retrieval requires a non-empty project while the store
+    // treats null as the whole store, so a null-project store writes documents that no
+    // query selects and every gold case would miss for a reason unrelated to retrieval.
+    assert.equal(context.storeOptions?.project, 'default');
   } finally {
     await context.cleanup();
     await rm(repoPath, { recursive: true, force: true });
@@ -275,4 +289,21 @@ test('clusters are ordered by count, so the biggest problem reads first', async 
     new Map(),
   );
   assert.deepEqual(report.clusters.byType, [{ value: 'architecture', count: 2 }, { value: 'decision', count: 1 }]);
+});
+
+test('the clusterer carries its denominator, so an empty cluster can be read correctly', async () => {
+  // init-miner's live P3 run is the argument: 25 of 25 on an 11-document corpus, where a
+  // permuted control with every answer deliberately wrong still scored 18 of 25 because
+  // k=8 returns most of the corpus whatever the ranking. On a gauge that small an empty
+  // miss-cluster is not evidence retrieval is healthy, so the count travels with it.
+  const { clusterCases } = await import('../src/rpc/methods.js');
+  const allPassing = clusterCases(
+    Array.from({ length: 25 }, (unused, index) => ({ id: `g${index}`, complete: true, reciprocalRank: 1, misses: [], identifier: false })),
+    new Map(),
+    new Map(),
+  );
+  assert.deepEqual(allPassing.misses, []);
+  assert.deepEqual(allPassing.clusters.byType, [], 'nothing missed, so nothing to cluster');
+  assert.equal(allPassing.cases, 25, 'and the denominator is right there to size the emptiness');
+  assert.equal(allPassing.hits, 25);
 });

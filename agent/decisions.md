@@ -551,3 +551,25 @@ are now labeled cold or cache-warm and the headline price comes only
 from cold. The re-measurement trigger remains a corpus with real
 retrieval failures. The reranker server is stopped; the provisioning
 recipe lives in RERANK-MEASUREMENT.md.]
+
+[Addition to D-0030, 2026-08-16 13:00, ruling verifier finding 80: the MCP
+unlock threshold (0.75) sits 0.03 above the permuted control (0.72) on the
+portfolio-mine corpus, so on a small corpus the unlock can pass for the
+same reason the floor does: presence is nearly free, and the gate cannot
+tell a good brain from a noisy one. Ruling, the report-not-refloor option
+consistent with how this project treats MRR: the unlock STANDS on its
+threshold, and the unlock report now carries the permuted-control range
+BESIDE it with an explicit saturation sentence whenever the control sits
+within the range of the threshold ("the gauge is saturated at this corpus
+size; this unlock reflects presence, not discrimination"). Gating unlock
+on control distance is recorded as the open auditor-era design question,
+deliberately not taken now: a threshold tuned for saturation on small
+corpora would be wrong for large ones, and the range is the number that
+generalizes. Also ruled: the 7.6-of-11 delivery figure, the anchor of the
+saturation mechanism, is re-measured over all 25 queries before it is
+quoted further (it currently rests on 5). And P3.5's comparison metric is
+PRE-REGISTERED BEFORE THE RUN: the primary comparison between curated and
+generated brains is the DISCRIMINATING RANGE (case-range and MRR-range
+from each brain's own permuted control), with raw case rate reported but
+explicitly labeled saturated at this corpus size. Choosing the metric
+before the number exists is the whole discipline.]

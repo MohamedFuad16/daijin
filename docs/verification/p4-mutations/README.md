@@ -12,7 +12,7 @@ instrument, and the captured output of both. Session scratch dies; the evidence 
 | `gate-plants.mjs` | gym-porter's extended plant set (12 plants, 4 controls), per the verifier's standing note that four plants is ten minutes of thought and not a bound. |
 | `gate-plants-output.txt` | its captured output. |
 
-## Measured 2026-08-16 17:30 JST (2026-08-16 08:30Z)
+## Measured 2026-08-16 18:05 JST (2026-08-16 09:05Z)
 
 - `node docs/verification/p4-mutations/gate-scanner-plants.mjs`: caught 4/4 plants, control
   clean, ACCEPTANCE MET, exit 0. The verifier's four plants are also pinned inside
@@ -64,6 +64,19 @@ Two mutations were SKIPPED on 2026-08-16 because a refactor of mine moved the an
 expressions matched. The script printed SKIPPED and carried on, which reads like a result at a
 glance. It no longer does: skips and survivors are both counted, the message says RE-ANCHOR
 THIS, and the script exits non-zero on either.
+
+## The battery mutates a PRIVATE COPY (D-0032)
+
+A mutation is a WINDOW in which the source on disk is deliberately broken. Run against the
+shared tree, every other process's `npm test` can read that broken source, which produced a
+1-in-5 suite flake across the whole build whose cause was invisible from the failure: another
+lane's gate failing for a defect that existed for two seconds and belonged to nobody.
+
+The battery now copies `src`, `test` and `package.json` to a temp directory, links
+`node_modules`, and mutates there; the shared tree is never modified. `DAIJIN_MUTATE_IN_PLACE=1`
+is the explicit override for someone debugging a test that depends on the tree's real
+location, and it announces itself loudly. Proven per run rather than asserted: hashing the
+shared tree before and after a full battery gives an identical digest.
 
 ## Reading mtimes after a run
 
@@ -131,15 +144,15 @@ eb34e69d70556bbd4266ac05e5345d6c7805416158e573d2826af7f2874c6982  engine/test/gy
 574fd593a48afd80dd31b8b3e8c79f15f99c840f97027705314ea2b32767dbc3  engine/test/gym-mining.test.js
 4915ea53510dca9f9174bb66c476cd99bdf6cbac2bed43fa62af26ececf6e4d6  engine/test/gym-mode-quarantine.test.js
 7e9bfce6e5c663579fa712d72451510955e530cd6939d8b4dacf21dca4ae0809  engine/test/gym-provenance.test.js
-bb14cd67ad0887efeb55e31008cd10716f86ef86ad39cf1fc0ff381aeaae5fda  engine/test/gym-spend-gate.test.js
+32554d69de49df1ab983611a2cbd29ff93234f0f0335f1e96d041a70ab00e6e4  engine/test/gym-spend-gate.test.js
 e6affd28f7130eb34bedca68e785744fee946bdc70bc2492019975ee62f377c9  docs/verification/p7-grading-harvest-acceptance-draft.md
 8a1289e65707a5ba3b39ef9b599f899cd468e2af3b72233c5b9f40638ce7fe15  docs/verification/p7-grading-harvest-acceptance.md
 f2ff54b05ae07116ac5f763fa7cc4f15457d826e7d6936dd780807feaab4ec34  docs/verification/p4-mutations/gate-plants-output.txt
 e66ab1295c82a9c0a3ec6aa5fd9eb6dc87baf83dd6fbc0b4259b4578def35b8c  docs/verification/p4-mutations/gate-plants.mjs
 5f9c2255ce54fb3ba743458a198098eb98ddf4eca8b50d73706509ad075f6b55  docs/verification/p4-mutations/gate-scanner-plants-output.txt
 285369273763bd75ee7ec8b7732955cc8fe9dd8ab267ab979284d5f418b7d7ed  docs/verification/p4-mutations/gate-scanner-plants.mjs
-7e082a47696819e52d024ce3edcc43ecb6929639b1b0eee70e674b89592b0abb  docs/verification/p4-mutations/mutate-output.txt
-fb9dec43b77f0b5a88ac6ccaf34b1e9e1931ba6f72e4e3a05ed11f7520d5466a  docs/verification/p4-mutations/mutate.sh
+ef01ba13f7d6a9872b068110c5cbafe538d5bb76d23bbbb235ceffbe8a3f033d  docs/verification/p4-mutations/mutate-output.txt
+c20ec7912e678110131553cac229b41c4765c365867c7bcedb9c7058a4fccf4e  docs/verification/p4-mutations/mutate.sh
 ```
 
 `gates.js` and `sandbox.js` are the extractor's ports, consumed unchanged and hashed here

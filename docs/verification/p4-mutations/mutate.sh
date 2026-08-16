@@ -9,12 +9,46 @@
 #         the helper covered, and the step-0 disable, whose first test passed for a reason
 #         unrelated to the step). Both are in the report record.
 #
-# WARNING, and it matters during a verification hold: this script restores each mutated file
-# with `mv file.bak file`, leaving the CONTENT byte-identical and the MTIME new. Every file it
-# touches looks freshly modified afterwards. Bound drift by content hash, never by mtime; the
-# hashes of the reviewed tree are in README.md beside this script.
+# TWO WARNINGS, and the second is the larger one.
+#
+# MTIME: this script restores each mutated file with `mv file.bak file`, leaving the CONTENT
+# byte-identical and the MTIME new. Every file it touches looks freshly modified afterwards.
+# Bound drift by content hash, never by mtime; the hashes of the reviewed tree are in
+# README.md beside this script.
+#
+# CONCURRENCY (D-0032): a mutation is a WINDOW during which the source on disk is
+# deliberately broken. Run against the shared tree and every other process's `npm test` can
+# read that broken source, which is a 1-in-5 suite flake whose cause is invisible from the
+# failure: another lane's gate fails for a defect that exists for two seconds and belongs to
+# nobody. So the battery mutates a PRIVATE COPY by default and refuses the shared tree unless
+# someone names the intent. The failure this prevents is not in this lane's tests; it is in
+# everyone else's, which is why it went unnoticed by the author and the reviewer both.
 set -u
-ENGINE=${DAIJIN_ENGINE:-/Users/mfuad16/Documents/daijin/engine}
+# Resolved BEFORE any cd: the declared-count grep reads this script, and once the run moves
+# into a private copy a relative $0 no longer resolves. The counter caught that itself on the
+# first private-copy run, reporting a problem rather than printing a clean sweep.
+SCRIPT_PATH=$(cd "$(dirname "$0")" && pwd)/$(basename "$0")
+ENGINE_SOURCE=${DAIJIN_ENGINE:-/Users/mfuad16/Documents/daijin/engine}
+[ -d "$ENGINE_SOURCE" ] || { echo "No engine at $ENGINE_SOURCE"; exit 1; }
+
+if [ "${DAIJIN_MUTATE_IN_PLACE:-0}" = "1" ]; then
+  # The explicit override. It exists because a private copy hides a real class of bug (a test
+  # that depends on the tree's true location), so someone debugging that must be able to say
+  # so out loud. It is never the default and it announces itself.
+  echo "WARNING: mutating the SHARED tree at $ENGINE_SOURCE."
+  echo "Every mutation is a window in which another process's npm test reads broken source."
+  ENGINE="$ENGINE_SOURCE"
+else
+  WORKROOT=$(mktemp -d "${TMPDIR:-/tmp}/daijin-mutate-XXXXXX")
+  ENGINE="$WORKROOT/engine"
+  mkdir -p "$ENGINE"
+  # src, test and package.json are copied; node_modules is LINKED, because the native module
+  # is large and is never mutated. Node resolves it by walking up from the copy.
+  cp -R "$ENGINE_SOURCE/src" "$ENGINE_SOURCE/test" "$ENGINE_SOURCE/package.json" "$ENGINE/"
+  ln -s "$ENGINE_SOURCE/node_modules" "$ENGINE/node_modules"
+  trap 'rm -rf "$WORKROOT"' EXIT
+  echo "Mutating a private copy at $ENGINE (the shared tree is never touched)."
+fi
 cd "$ENGINE" || exit 1
 
 # Anything that is not a KILL: a survivor (the code is not pinned) or a skip (the expression
@@ -222,9 +256,12 @@ run_mutation "an unknown gold commit fails OPEN instead of loud" \
   "s/  const changed = new Set\(\(await run\(\['diff-tree', '--no-commit-id', '--name-only', '-r', exam\.goldCommit\]\)\)/  const changed = new Set(((await run(['diff-tree', '--no-commit-id', '--name-only', '-r', exam.goldCommit], { allowFailure: true })) || '')/" \
   "test/gym-provenance.test.js"
 
+# Anchored on SCANNED.slice(1) rather than on the list's contents: the scanned set is
+# DESIGNED to grow whenever a lane adds a directory, and this anchor went stale three times
+# chasing it. An anchor on a value that is supposed to change is a stale anchor waiting.
 run_mutation "the scanned set stops covering the engine" \
   test/gym-spend-gate.test.js \
-  "s/  const SCANNED = \['gym', 'rpc', 'state'\];/  const SCANNED = ['gym'];/" \
+  's/const declared = \[\.\.\.SCANNED,/const declared = [...SCANNED.slice(1),/' \
   "test/gym-spend-gate.test.js"
 
 # ---- pre-seal check (ADR-0147) ----------------------------------------------------------
@@ -460,7 +497,7 @@ run_mutation "F81: the wire safety net stops rendering an empty rubric as ungrad
 # incrementing EXECUTED, so the comparison would read as balanced while the count was wrong.
 # Zero instances today; the point is that the next person's ordinary edit must not silently
 # disarm the counter that exists to catch silent disarming.
-DECLARED=$(grep -cE '^[[:space:]]*run_mutation ' "$0")
+DECLARED=$(grep -cE '^[[:space:]]*run_mutation ' "$SCRIPT_PATH")
 echo
 echo "declared: $DECLARED   executed: $EXECUTED"
 if [ "$DECLARED" -ne "$EXECUTED" ]; then

@@ -38,6 +38,7 @@ from pathlib import Path
 import pytest
 from conftest import run_async
 
+from daijin_tui import mock_data
 from daijin_tui.rpc import RpcError, StdioRpcClient
 
 ENGINE = Path(__file__).resolve().parents[2] / "engine" / "src" / "rpc" / "daemon.js"
@@ -114,6 +115,8 @@ async def test_every_field_a_screen_reads_exists_on_the_live_engine():
     checked_paths = 0
     answered: list[str] = []
     gates_records: list[dict] = []
+    observed_status: set[str] = set()
+    observed_class: set[str] = set()
     skip_reason: str | None = None
     try:
         await client.start()
@@ -161,6 +164,12 @@ async def test_every_field_a_screen_reads_exists_on_the_live_engine():
                     answered.append(method)
                     if method == "gatesGet":
                         gates_records.append(result)
+                        for gate in ((result.get("discovered") or {}).get("gates") or []):
+                            if gate.get("classification"):
+                                observed_class.add(gate["classification"])
+                            status = (gate.get("baseline") or {}).get("status")
+                            if status:
+                                observed_status.add(status)
                     for path in paths:
                         if not _resolve(result, path):
                             missing.append(f"{method}.{path}")
@@ -216,6 +225,35 @@ async def test_every_field_a_screen_reads_exists_on_the_live_engine():
         summary = record["discovered"]["summary"]
         for field in ("total", "carryingSignal", "live", "measured", "preBroken", "unavailable"):
             assert field in summary, f"a present summary is missing {field}: {sorted(summary)}"
+    # The vocabulary check in test_rpc.py compares the mock against constants
+    # in this repo, so both halves are ours and neither reaches the wire. This
+    # closes ONE direction against the engine: a live value outside the set we
+    # documented means our set is too small, which is the half a subset check
+    # can catch. The other direction, a documented value the engine can never
+    # produce, is NOT closed here and cannot be: no live run enumerates a
+    # vocabulary, it only shows what one fixture happened to produce.
+    if observed_status or observed_class:
+        assert observed_status <= set(mock_data.BASELINE_STATUS), (
+            f"the live engine sent a baseline status we do not document: "
+            f"{sorted(observed_status - set(mock_data.BASELINE_STATUS))}"
+        )
+        assert observed_class <= set(mock_data.GATE_CLASSIFICATION), (
+            f"the live engine sent a classification we do not document: "
+            f"{sorted(observed_class - set(mock_data.GATE_CLASSIFICATION))}"
+        )
+        print(
+            f"\nWIRE VOCABULARY OBSERVED: statuses {sorted(observed_status)}, "
+            f"classifications {sorted(observed_class)}. "
+            f"NOT observed and therefore not confirmed against the wire: "
+            f"statuses {sorted(set(mock_data.BASELINE_STATUS) - observed_status)}, "
+            f"classifications {sorted(set(mock_data.GATE_CLASSIFICATION) - observed_class)}."
+        )
+    elif "gatesGet" in answered:
+        raise AssertionError(
+            "gatesGet answered with gates but no classification or status was "
+            "read off any of them, so the vocabulary check above was vacuous"
+        )
+
     if "gatesGet" in answered:
         assert summary_bearing, (
             "no repo returned a summary, so the summary fields above were never "

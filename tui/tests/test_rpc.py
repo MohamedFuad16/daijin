@@ -770,6 +770,18 @@ async def test_no_gate_carries_a_status_or_classification_outside_the_contract()
     assert seen_class <= documented_class, f"invented classifications: {seen_class - documented_class}"
     # REACHABILITY, the other half. Documented and reachable are different
     # claims and this test now makes both.
+    #
+    # BOUND: both sides of this comparison are mine. mock_data's tuples are
+    # hand-copied from the contract, so equality here proves the mock agrees
+    # with THIS REPO and not that either agrees with the engine. It cannot
+    # catch a value the engine stopped producing, and it cannot catch a
+    # phantom the contract names that the engine can never send, because a
+    # phantom would sit in the tuple AND in the mock and both halves would
+    # pass. That second direction is the worse one: a missing value makes a
+    # client guess and the guess eventually shows, while a phantom reads as a
+    # real state, gets a branch written for it, and that branch is dead code
+    # no use can ever disprove. Nothing on this side closes it; the engine
+    # harvests its vocabulary from its own source instead.
     assert seen_status == documented_status, (
         f"documented but produced by nothing, so their rendering is untested: "
         f"{sorted(documented_status - seen_status)}"

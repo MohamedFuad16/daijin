@@ -348,6 +348,20 @@ gates:
 
 # Locked in contract v5 from the engine's own code. A value outside these sets
 # is fiction, and this mock shipped one ("violations") until the sweep caught it.
+#
+# PROVENANCE, because these are hand-copied constants and a check against them
+# proves only that this mock agrees with THIS FILE. The contract is the
+# authority; the engine side harvests these from its own source (ae2083d), and
+# nothing on this side re-derives them. Of the four statuses I have observed
+# exactly ONE on the wire, `unavailable`, in the gatesGet probe of 2026-08-17
+# against a real repo. pass, fail and timeout are taken from the contract and
+# not observed here.
+#
+# So the reachability gate in test_rpc.py bounds the MOCK, not the wire: it
+# cannot catch a value the engine stopped producing, nor one the contract names
+# that the engine never produces, because both sides of that check would move
+# together. Only the live conformance run reaches the wire, and it reaches
+# whatever the fixture happens to produce rather than the whole vocabulary.
 BASELINE_STATUS = ("pass", "fail", "timeout", "unavailable")
 GATE_CLASSIFICATION = ("live", "measured", "pre-broken", "unavailable")
 

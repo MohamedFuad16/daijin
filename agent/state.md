@@ -35,6 +35,16 @@ stands as visible-and-arguable. Manifest supersedes to 5dff20b3
 (delta: the unified constant in gym-spend-gate.test.js + two evidence
 files).
 
+[Addendum 23:08] gym-porter independently verified the hook wiring
+from its side - both directions exercised through the INSTALLED hook
+(honest message exit 0; a declaration claim over a881df2's real
+widening diff exit 1) - so the installed thing is proven to be the
+thing that governs, by two parties. Its named class, kept: a hook is a
+mechanism whose failure is INVISIBLE (fails open, fails quietly, fails
+by mode bit or working directory, all identical to a clean run) - the
+same family as the dead gate, the skipped mutation, and the unexecuted
+battery entry. Four members found in one week; the family is large.
+
 THE EXTRACTOR CLOSED ITS jobCancel ASSUMPTION (bce6252) and the
 reading was worth more than the confirmation: cancel is cooperative,
 NEVER THROWS ({cancelled:false} on unknown/finished), but is NOT a

@@ -147,16 +147,20 @@ async def test_a_failed_connect_reports_a_reason_and_no_false_silence(short_root
     """Nothing to attach to and nothing to spawn."""
     root = short_root
     client = SocketRpcClient(default_socket_path(str(root)), connect_budget=0.3)
-    with pytest.raises(ConnectionError) as caught:
-        await client.start()
-    assert client.connect_state == CONNECT_FAILED
-    assert "No engine answered" in str(caught.value)
-    assert client.failure is not None
-    # Attached rather than spawned, so there is no stderr to quote and the
-    # message must not imply the engine was silent.
-    assert client.failure["engineStderr"] is None
-    assert "The engine said:" not in str(caught.value)
-    await client.aclose()
+    try:
+        with pytest.raises(ConnectionError) as caught:
+            await client.start()
+        assert client.connect_state == CONNECT_FAILED
+        assert "No engine answered" in str(caught.value)
+        assert client.failure is not None
+        # Attached rather than spawned, so there is no stderr to quote and the
+        # message must not imply the engine was silent.
+        assert client.failure["engineStderr"] is None
+        assert "The engine said:" not in str(caught.value)
+    finally:
+        # In a finally because a failing assertion must not leak a client into
+        # a loop that is about to close.
+        await client.aclose()
 
 
 @run_async
@@ -169,8 +173,10 @@ async def test_the_waiting_threshold_is_this_clients_own(short_root):
         connect_budget=0.0,
         clock=lambda: next(ticks, 5.0),
     )
-    with pytest.raises(ConnectionError):
-        await client.start()
-    # Past the threshold but failed, so there is nothing to wait for any more.
-    assert client.should_say_waiting is False
-    await client.aclose()
+    try:
+        with pytest.raises(ConnectionError):
+            await client.start()
+        # Past the threshold but failed, so there is nothing to wait for.
+        assert client.should_say_waiting is False
+    finally:
+        await client.aclose()

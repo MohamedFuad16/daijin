@@ -25,12 +25,18 @@ from .dialogs import TextPromptScreen
 EXAM_COLUMNS = ("exam", "title", "tier", "status", "benchmark", "held out", "quarantine reason")
 ATTEMPT_COLUMNS = ("attempt", "mode", "tokens", "verdict", "why not graded")
 
-# Only an evaluation attempt touches the scored record. A harness-debug attempt
-# is deliberately outside it, so rendering the two identically invites reading
-# a debug run as a scored one. An ABSENT mode is neither: it is not evidence of
-# an evaluation run, so it is left unstyled rather than defaulted to scored.
+# Only an evaluation attempt touches the scored record. The contract names
+# three modes, and TWO of them are recorded-never-scored: experiment and
+# harness-debug both sit outside the record deliberately, so both are marked.
+#
+# A mode the contract does not name is a fourth thing. It is not evidence of an
+# evaluation run and not evidence of an unscored one, so it is rendered
+# verbatim and unstyled rather than bucketed into either. Erroring on it would
+# break the day the contract legitimately grows a value; the loud place for a
+# bad enum is the engine, where the ledger enforces the three.
 SCORED_MODE = "evaluation"
-UNSCORED_MODE = "harness-debug"
+UNSCORED_MODES = ("experiment", "harness-debug")
+DOCUMENTED_MODES = (SCORED_MODE, *UNSCORED_MODES)
 
 # What each ungraded code means for the reader. Branch on the CODE; display the
 # engine's sentence, which is written to be improved.
@@ -98,13 +104,19 @@ def attempt_mode(attempt: dict[str, Any]) -> str | None:
 
 
 def is_unscored(attempt: dict[str, Any]) -> bool:
-    """True only when the row SAYS it was harness-debug.
+    """True when the row NAMES a mode the contract puts outside the record.
 
-    An unknown mode is not treated as scored and not treated as debug: the
-    absence of the field is not evidence either way, and guessing in the
-    direction of "scored" is the guess that misleads.
+    Not the same as "not scored": an absent or unrecognised mode is neither
+    known-scored nor known-unscored, and guessing toward scored would present
+    an unlabelled run as evidence while guessing the other way would dismiss a
+    run that may have counted. So the client makes neither guess.
     """
-    return attempt_mode(attempt) == UNSCORED_MODE
+    return attempt_mode(attempt) in UNSCORED_MODES
+
+
+def is_undeclared_mode(attempt: dict[str, Any]) -> bool:
+    """True when the row carries no mode, or one the contract does not name."""
+    return attempt_mode(attempt) not in DOCUMENTED_MODES
 
 
 def attempt_cap(attempt: dict[str, Any]) -> int | None:
@@ -326,7 +338,21 @@ class ExamsScreen(DaijinScreen):
                     part
                     for part in (
                         f"cap {cap:,}" if cap else "",
-                        "* harness-debug, outside the scored record"
+                        # Named verbatim, so the note says WHICH unscored
+                        # modes are present rather than one standing for both.
+                        (
+                            "* "
+                            + " and ".join(
+                                sorted(
+                                    {
+                                        str(attempt_mode(a))
+                                        for _, a in numbered
+                                        if is_unscored(a)
+                                    }
+                                )
+                            )
+                            + ", outside the scored record"
+                        )
                         if any(is_unscored(a) for _, a in numbered)
                         else "",
                     )

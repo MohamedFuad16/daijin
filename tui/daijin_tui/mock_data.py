@@ -613,8 +613,8 @@ EXAM_DETAIL: dict[str, dict[str, Any]] = {
         "attempts": [
             {"n": 1, "tokens": 118_400, "mode": "harness-debug", "verdict": "fail", "ungradedCode": None, "grades": {"correctness": 0.31, "integration": 0.22, "conventions": 0.55, "evidence": 0.18, "restraint": 0.40}},
             {"n": 2, "tokens": 142_900, "mode": "harness-debug", "verdict": "fail", "ungradedCode": None, "grades": {"correctness": 0.38, "integration": 0.30, "conventions": 0.60, "evidence": 0.25, "restraint": 0.48}},
-            {"n": 3, "tokens": 166_100, "verdict": "fail", "ungradedCode": None, "grades": {"correctness": 0.44, "integration": 0.35, "conventions": 0.66, "evidence": 0.31, "restraint": 0.52}},
-            {"n": 4, "tokens": 201_800, "verdict": "fail", "ungradedCode": None, "grades": {"correctness": 0.51, "integration": 0.41, "conventions": 0.71, "evidence": 0.36, "restraint": 0.59}},
+            {"n": 3, "tokens": 166_100, "mode": "experiment", "verdict": "fail", "ungradedCode": None, "grades": {"correctness": 0.44, "integration": 0.35, "conventions": 0.66, "evidence": 0.31, "restraint": 0.52}},
+            {"n": 4, "tokens": 201_800, "mode": "sideways", "verdict": "fail", "ungradedCode": None, "grades": {"correctness": 0.51, "integration": 0.41, "conventions": 0.71, "evidence": 0.36, "restraint": 0.59}},
             {"n": 5, "tokens": 238_500, "verdict": "fail", "ungradedCode": None, "grades": {"correctness": 0.58, "integration": 0.47, "conventions": 0.74, "evidence": 0.42, "restraint": 0.63}},
             {"n": 6, "tokens": 274_300, "verdict": "fail", "ungradedCode": None, "grades": {"correctness": 0.63, "integration": 0.52, "conventions": 0.79, "evidence": 0.47, "restraint": 0.70}},
             {"n": 7, "tokens": 318_700, "verdict": "fail", "ungradedCode": None, "grades": {"correctness": 0.70, "integration": 0.61, "conventions": 0.83, "evidence": 0.51, "restraint": 0.76}},

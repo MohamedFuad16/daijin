@@ -1069,9 +1069,11 @@ async def test_an_attempt_with_no_mode_is_not_presented_as_scored():
             "rows with no mode were defaulted to evaluation, which claims they were scored"
         )
         bars = app.screen.query_one("#exam-tokens", DitherBars)
-        # Unknown is neither marked as debug nor silently treated as scored.
+        # Marked: the two harness-debug plus the one experiment. Not marked:
+        # the row with no mode, and the row whose mode the contract does not
+        # name, both of which are unknown rather than unscored.
         marked = [label for label in bars.labels if label.endswith("*")]
-        assert len(marked) == 2, f"expected only the two declared debug attempts, saw {marked}"
+        assert len(marked) == 3, f"expected the three declared unscored attempts, saw {marked}"
 
 
 @run_async
@@ -1101,3 +1103,42 @@ async def test_the_veto_dialog_enforces_the_bound_the_engine_enforces():
         await settle(pilot)
         exam = next(e for e in app.screen.exams if e["examId"] == "exam-0058")
         assert exam["status"] == "vetoed"
+
+
+@run_async
+async def test_experiment_is_marked_unscored_not_dropped_into_unknown():
+    """The contract names three modes and TWO sit outside the scored record.
+
+    experiment is declared, so treating it as unknown would under-report a run
+    the contract says does not count, which is the same error as calling it
+    scored, only quieter.
+    """
+    from textual.widgets import DataTable as DT
+
+    from daijin_tui.screens.exams import is_undeclared_mode, is_unscored
+    from daijin_tui.widgets import DitherBars
+
+    assert is_unscored({"mode": "experiment"}) is True
+    assert is_unscored({"mode": "harness-debug"}) is True
+    assert is_unscored({"mode": "evaluation"}) is False
+    # An undeclared value is neither, in both directions.
+    assert is_unscored({"mode": "sideways"}) is False
+    assert is_unscored({}) is False
+    assert is_undeclared_mode({"mode": "sideways"}) is True
+    assert is_undeclared_mode({}) is True
+    assert is_undeclared_mode({"mode": "experiment"}) is False
+
+    async with running_app() as (app, pilot):
+        await goto(pilot, "6")
+        await app.screen.show_exam("exam-0058")
+        await settle(pilot)
+        table = app.screen.query_one("#attempt-table", DT)
+        modes = [str(table.get_row_at(i)[1]) for i in range(table.row_count)]
+        assert "experiment" in modes, "experiment is not named in the column"
+        # Rendered verbatim, never bucketed: the engine sent it, the screen says it.
+        assert "sideways" in modes, "an undeclared mode was rewritten rather than shown"
+        assert "unknown" in modes, "a row with no mode at all lost its unknown label"
+        bars = app.screen.query_one("#exam-tokens", DitherBars)
+        assert "experiment" in bars.ceiling_label and "harness-debug" in bars.ceiling_label, (
+            f"the note does not name both unscored modes: {bars.ceiling_label!r}"
+        )

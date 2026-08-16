@@ -56,13 +56,14 @@ const LIVE = Object.freeze({
   scoreHistory: 'the row shape comes from the writer, and the writer measures a floor',
 });
 
+// Prose STAYS for these, ruled rather than defaulted: their returns really are "the file,
+// plus classification", and seven speculative shapes would be documentation nobody asked
+// for pretending to be coverage. The gate printing them every run is the honest bound.
 const PROSE = Object.freeze({
   gatesGet: 'returns file content plus classification; the row describes it in English',
   gatesSet: 'returns the updated gates.yaml; described, not declared',
   settingsGet: 'described as "full settings object, secrets masked"',
   settingsSet: 'described as "updated settings"',
-  examVeto: 'described as "updated exam record"',
-  examUpdate: 'described as "updated exam record"',
   agentFileSet: 'described as "updated file record with recomputed hashes"',
 });
 
@@ -150,6 +151,11 @@ function recipes(repoPath) {
     // returned null and the check quietly did nothing. Found by the envelope rule below,
     // which is the point of having a rule rather than a count.
     examList: { params: { repoPath }, pick: (result) => result[0] },
+    // Moved out of prose by the D-0035 batch: their rows now reference the examList row
+    // shape by name, which the reader follows, so one clause apiece turned two described
+    // returns into two checked ones.
+    examVeto: { params: { repoPath, examId: 'exam-0001', reason: 'Superseded by a later commit that reverts this one entirely.' } },
+    examUpdate: { params: { repoPath, examId: 'exam-0001', patch: { title: 'A retitled exam' } } },
     board: { params: {} },
     agentFileGet: { params: { repoPath, role: 'student' } },
     initBrain: { params: { repoPath, mode: 'layer1' }, skipCall: true },
@@ -173,28 +179,12 @@ function recipes(repoPath) {
 
 // Known, named disagreements. THIS LIST MAY ONLY SHRINK. Each entry is a decision someone
 // has to make (fix the engine or amend the contract), not a permission to ignore.
-const DIVERGENT = Object.freeze({
-  mcpSnippet: {
-    extra: ['reason'], missing: [],
-    why: 'engine adds the lock sentence floor.js wrote, which the TUI displays; the row names only unlocked, threshold and snippet',
-  },
-  agentFileGet: {
-    extra: ['installed', 'path'], missing: [],
-    why: 'engine adds whether the repo has its own file and where it would be written; the row names neither',
-  },
-  analyze: {
-    extra: ['brainFolder', 'files', 'git', 'name', 'repoPath'], missing: [],
-    why: 'engine returns five keys beside the five documented; the row documents a subset of what it returns',
-  },
-  board: {
-    extra: ['rows', 'total'], missing: ['category', 'evidence', 'severity', 'source', 'status', 'target', 'ts'],
-    why: 'the contract documents the ROW shape and never the envelope, so the documented keys describe a finding and the emitted keys describe the page of them',
-  },
-  'examDetail (envelope)': {
-    extra: ['exam'], missing: [],
-    why: 'engine adds the full exam record the screen renders around the attempts. Found the first run after the notes-after-brace convention made this envelope parseable at all',
-  },
-});
+// EMPTY, and that is the ratchet having been turned rather than the gate having been
+// loosened. Every entry was resolved by the D-0035 batch: three field additions documented
+// because a client reads them, board's row corrected to the noun it returns, and two
+// removals (analyze's five extras and examDetail's exam) taken OFF the wire after
+// readership was verified in the client rather than assumed.
+const DIVERGENT = Object.freeze({});
 
 test('the contract-shape gate partitions the WHOLE surface, and says what it does not cover', async () => {
   const methods = await documentedMethods();
@@ -300,8 +290,7 @@ test('a covered method checks its ENVELOPE whenever the contract declares one', 
 test('the divergent list may only shrink, so a known gap cannot quietly grow', async () => {
   // The ratchet. A new disagreement must be fixed or added here deliberately, and adding
   // one is a visible act rather than a test that quietly keeps passing.
-  assert.deepEqual(Object.keys(DIVERGENT).sort(),
-    ['agentFileGet', 'analyze', 'board', 'examDetail (envelope)', 'mcpSnippet'],
+  assert.deepEqual(Object.keys(DIVERGENT).sort(), [],
     'the known-divergent set changed; that is a decision, not a detail');
   for (const [method, entry] of Object.entries(DIVERGENT)) {
     assert.ok(entry.why.length > 30, `${method} needs a real reason, not a label`);

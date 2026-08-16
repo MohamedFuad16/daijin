@@ -105,12 +105,15 @@ test('examList returns the bank, and an empty bank is not an error', async () =>
   }
 });
 
-test('examDetail returns the record and EMPTY axes until grading lands', async () => {
+test('examDetail returns the attempts and NULL axes until grading lands', async () => {
   const context = await harness({ exams: [exam()] });
   try {
     await context.attach();
     const detail = await context.server.methods.examDetail({ repoPath: context.repoPath, examId: 'exam-0001' });
-    assert.equal(detail.exam.examId, 'exam-0001');
+    // The exam RECORD is not on this wire (D-0035 batch): the client reads axes, attempts
+    // and provenance, verified rather than assumed. An unknown examId is still refused, so
+    // the record is read on the way through even though it is not sent.
+    assert.equal(Object.hasOwn(detail, 'exam'), false);
     assert.deepEqual(detail.attempts, [], 'no runs yet');
     assert.equal(detail.axes, null,
       'null, never {}: an empty object renders on a radar exactly like a set of measured zeros');
@@ -154,9 +157,10 @@ test('examVeto records the reason, and refuses one too short to be reviewable', 
     });
     assert.equal(vetoed.status, 'vetoed');
 
-    // And it PERSISTED, which is what makes a veto reviewable later.
-    const reread = await context.server.methods.examDetail({ repoPath: context.repoPath, examId: 'exam-0001' });
-    assert.equal(reread.exam.status, 'vetoed');
+    // And it PERSISTED, which is what makes a veto reviewable later. Read back through
+    // examList, whose row shape examVeto's own contract row now references by name.
+    const [reread] = await context.server.methods.examList({ repoPath: context.repoPath });
+    assert.equal(reread.status, 'vetoed');
   } finally {
     await context.cleanup();
   }
@@ -172,8 +176,8 @@ test('examUpdate validates through the parser, so an invalid patch never reaches
     }));
     assert.equal(bad.code, ERR_INVALID_PARAMS);
 
-    const stillActive = await context.server.methods.examDetail({ repoPath: context.repoPath, examId: 'exam-0001' });
-    assert.equal(stillActive.exam.benchmarkStatus, 'active', 'the refused patch did not land');
+    const [stillActive] = await context.server.methods.examList({ repoPath: context.repoPath });
+    assert.equal(stillActive.benchmarkStatus, 'active', 'the refused patch did not land');
 
     const quarantined = await context.server.methods.examUpdate({
       repoPath: context.repoPath,

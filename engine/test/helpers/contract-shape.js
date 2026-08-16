@@ -116,10 +116,24 @@ function splitEntries(text) {
  * fills with false entries stops meaning anything, which is the failure this gate exists
  * to prevent one level down.
  */
-export async function documentedShape(method, { field = null, file = METHODS_MD } = {}) {
+export async function documentedShape(method, { field = null, file = METHODS_MD, seen = [] } = {}) {
   const cell = await contractRow(method, { file });
   if (!cell) return null;
   const shape = shapeTextOf(cell);
+
+  // A ROW MAY REFERENCE ANOTHER ROW'S SHAPE by name, which is how examVeto and examUpdate
+  // say "the updated exam record, in the `examList` row shape" without restating ten keys.
+  // Following the reference is what makes that form checkable rather than decorative; a
+  // reader that stopped at the reference would leave those rows in the prose bucket, which
+  // is the outcome the amendment was meant to end.
+  const reference = shape.match(/in the `([a-zA-Z]+)` row shape/);
+  if (reference && !field) {
+    const target = reference[1];
+    // A cycle would otherwise recurse forever, and a row referencing itself is a mistake
+    // worth reporting as unreadable rather than hanging the suite.
+    if (seen.includes(target) || target === method) return null;
+    return documentedShape(target, { file, seen: [...seen, method] });
+  }
 
   let body = null;
   if (field) {

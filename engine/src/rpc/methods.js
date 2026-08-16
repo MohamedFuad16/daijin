@@ -32,7 +32,7 @@ import { retrieve as retrieveImpl } from '../rag/retrieve.js';
 import { getAgentFile as readAgentFile, setAgentFile as writeAgentFile, studentRules } from '../gym/agent-files.js';
 import { runGymCycle } from '../gym/cycle.js';
 import { AXES } from '../gym/grading.js';
-import { parseExamRecord, quarantineExam, vetoExam } from '../gym/exams.js';
+import { examListRow, parseExamRecord, quarantineExam, vetoExam } from '../gym/exams.js';
 import { GymLedger, gymDatabasePath } from '../gym/ledger.js';
 import { loadResultFiles } from '../gym/result-files.js';
 import { assertSpendGate, readSpendGate, gymSpendGatePath } from '../gym/spend-gate.js';
@@ -603,7 +603,19 @@ export function createMethods({
 
     async analyze(params) {
       const repoPath = requireRepoPath(params);
-      return analyze(repoPath);
+      const analysis = await analyze(repoPath);
+      // MAPPED AT THE BOUNDARY, like the attempts row. The internal function returns more
+      // (name, repoPath, files, git, brainFolder) because gate discovery and the init
+      // pipeline use it in process, and none of that is wire data: readership was verified
+      // in the client, which reads `hasBrainFolder` and nothing else. Adding a field later
+      // is cheaper than removing one someone has started using (D-0035 batch).
+      return {
+        languages: analysis.languages,
+        commitCount: analysis.commitCount,
+        structure: analysis.structure,
+        gateCandidates: analysis.gateCandidates,
+        hasBrainFolder: analysis.hasBrainFolder,
+      };
     },
 
     async serveStatus() {
@@ -1258,7 +1270,10 @@ export function createMethods({
         });
         const latestGraded = graded.find((attempt) => attempt.axes);
         return {
-          exam,
+          // `exam` is NOT on the wire: the client reads axes, attempts and provenance and
+          // nothing else, verified rather than assumed, and the same standard that took
+          // five keys off analyze applies here (D-0035 batch). The record is still read
+          // above, to reject an unknown examId and to carry provenance out.
           attempts: graded,
           provenance: exam.provenance ?? null,
           // The most recent GRADED attempt's axes, or null. Null is not "zero on every
@@ -1286,7 +1301,11 @@ export function createMethods({
         } catch (error) {
           asParameterError(error, 'veto refused');
         }
-        return ledger.getExam(params.examId);
+        // THE BANK ROW, not the whole record (D-0035 batch). The client ignores this
+        // return and reloads the bank, so nothing reads the extra eleven fields, and the
+        // row is what the contract references by name. Built with the gym's own
+        // examListRow so the wire format cannot drift from the one examList serves.
+        return examListRow(ledger.getExam(params.examId));
       });
     },
 
@@ -1307,7 +1326,8 @@ export function createMethods({
         } catch (error) {
           asParameterError(error, 'invalid exam patch');
         }
-        return ledger.getExam(params.examId);
+        // The bank row, for the reason examVeto gives above.
+        return examListRow(ledger.getExam(params.examId));
       });
     },
 

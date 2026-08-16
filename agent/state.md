@@ -1,5 +1,21 @@
 # Daijin build state (authoritative)
 
+## 2026-08-16 22:20 - Governance sharpened: inert changes need no window, and inert is verified
+
+The verifier found that the scanner file's own standing note ("EXTEND
+THIS SET", written pre-ruling) now contradicts the governance rule and
+points toward the unsafe action - and raised it rather than editing it,
+so the rule's first test was its author following it when inconvenient.
+RULED: the window requirement governs BEHAVIOR; a comment-only edit is
+not a gate change and lands immediately, on two conditions that make
+comment-only a verified property rather than a claimed one: the diff
+shows only comment lines, and the script is run post-edit and exits 0,
+both stated in the commit message. Fixed now rather than riding along,
+because a contradiction that misdirects is a defect today and "the
+next change" is made by exactly the person the trap was set for. The
+corrected note carries the rule inside the instrument: a plant set
+that stops growing becomes a checklist; one that grows casually turns
+someone else's push red for a shape nobody agreed to.
 ## 2026-08-16 22:15 - Report 21 closes the correction chain; team resumed after limit
 
 All five lanes hit the session limit at 18:09 JST and were resumed at

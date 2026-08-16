@@ -838,6 +838,40 @@ async def test_a_row_the_user_just_typed_is_not_shown_as_classified():
 
 
 
+
+@run_async
+async def test_a_repo_with_no_brain_says_so_rather_than_showing_an_empty_view():
+    """The fifth happy-path-only double, found by sweeping rather than by prediction.
+
+    The engine refuses search, examList and gymStatus for a repo with nothing
+    indexed. The mock answered all three, so every client branch that handles
+    the refusal was unreachable. Those branches were already correct, which is
+    the point: nothing was keeping them correct, and an empty table with no
+    stated reason is the gates defect in another screen.
+    """
+    async with running_app(repo="/Users/owner/code/kiln-api") as (app, pilot):
+        for key, notice_id, table_id in (
+            ("6", "#exam-notice", "#exam-table"),
+            ("5", "#gym-notice", None),
+        ):
+            await goto(pilot, key)
+            notice = text_of(app.screen.query_one(notice_id, Banner))
+            assert "no indexed brain" in notice, (
+                f"{notice_id} did not say why it is empty: {notice!r}"
+            )
+            assert "Initialize it first" in notice, "the way out of the state is not stated"
+            if table_id is not None:
+                assert app.screen.query_one(table_id, DataTable).row_count == 0
+
+        # The retrieval tester is the one a user drives by hand, so its refusal
+        # has to land where they are typing, not only in the banner.
+        await goto(pilot, "3")
+        app.screen.query_one("#search-input", Input).value = "retry"
+        await pilot.click("#search-go")
+        await settle(pilot, 12)
+        summary = text_of(app.screen.query_one("#search-summary", Static))
+        assert "no indexed brain" in summary, f"the tester showed nothing useful: {summary!r}"
+
 @run_async
 async def test_gate_discovery_reads_its_own_ending_and_reloads_what_it_wrote():
     """Nothing here read discovery's terminal event at all.

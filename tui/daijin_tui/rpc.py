@@ -1022,7 +1022,28 @@ class MockEngine:
                     result["rationale"] = "budget pinned by the user for this run"
         return result
 
+    def _require_brain(self, repo: Any) -> None:
+        """Refuse the way the engine does for a repo with nothing indexed.
+
+        Verified against the daemon on 2026-08-17: search, diagnose and
+        retrievalScore refuse with -32602 and this wording for a repo with no
+        indexed brain, and examList and gymStatus refuse too. This mock
+        answered all of them, which made every client branch that handles the
+        refusal unreachable. The branches were right; nothing was keeping them
+        right, which is the whole of the happy-path-only doubles argument.
+        """
+        path = str(repo or "")
+        row = next((r for r in self.repos if r["path"] == path), None)
+        if row is None or row.get("health") != "no-brain":
+            return
+        raise RpcError(
+            ERR_INVALID_PARAMS,
+            "no indexed brain",
+            {"hint": f"{path} has no indexed brain yet, so there is nothing to read. Initialize it first."},
+        )
+
     async def _rpc_search(self, params: dict[str, Any]) -> dict[str, Any]:
+        self._require_brain(params.get("repoPath"))
         query = str(params.get("query") or "").strip()
         options = params.get("options") or {}
         limit = int(options.get("k") or 10)
@@ -1227,9 +1248,11 @@ class MockEngine:
         return {"jobId": job_id}
 
     async def _rpc_gymStatus(self, params: dict[str, Any]) -> dict[str, Any]:
+        self._require_brain(params.get("repoPath"))
         return copy.deepcopy(mock_data.GYM_STATUS)
 
     async def _rpc_examList(self, params: dict[str, Any]) -> Any:
+        self._require_brain(params.get("repoPath"))
         filters = params.get("filters") or {}
         rows = copy.deepcopy(self.exams)
         for field in ("status", "benchmarkStatus", "tier"):

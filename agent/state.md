@@ -1,5 +1,36 @@
 # Daijin build state (authoritative)
 
+## 2026-08-17 05:40 - gatesGet was a mapping; prose rows are unchecked CLAIMS
+
+gatesGet landed (0c64509): the classification WAS NEVER MISSING -
+discovery persists everything and gatesGet simply did not read the
+file it was returning. One parse, not a seam; the measure-first ruling
+cost nothing and bought certainty. The shape carries two design calls
+worth the record: content is ALWAYS returned even for a broken file (a
+parse error is a fact about the file, not a failure of the method, and
+failing would take the user's own text away when they most need it);
+and discovered is NULL with a parseError when uninterpretable - NULL
+IS NOT ZERO GATES, a file that cannot be read and a file describing
+zero being different facts, which is exactly the conflation the empty
+table shipped. Rows pass through AS WRITTEN, deliberately opposite the
+attempts-row rule for the opposite reason: that row is the engine's
+record; this is a document the engine only reads, so a hand-added key
+belongs in the answer. 19 covered, 4 prose, 615/615 unit, 18/18
+acceptance, three mutations bite.
+
+THE SHARPENED RESIDUAL, printed every run now: PROSE ROWS ARE
+UNCHECKED CLAIMS, NOT MERELY UNCHECKED SHAPES - a prose row can assert
+something false about the engine and nothing in the system disagrees,
+which is worse than declaring nothing because a client author
+reasonably builds against it. gatesGet proved the failure rate is one
+in five, not hypothetical. ASSIGNED: a CLAIM AUDIT of the four
+remaining prose rows (settingsGet first - the row a first-boot user's
+whole model setup reads), checking each row's prose assertions against
+engine reality; false claims get the gatesGet treatment (which side
+moves decided per case), accurate rows stay prose annotated
+claims-verified with the date. Converting unchecked claims to
+checked-once claims closes the last bucket where a documented lie can
+live.
 ## 2026-08-17 05:20 - The conformance test catches the gates screen lying; one engine item reopens
 
 tui-builder closed all three items (f86c127, 326 green) and the guard

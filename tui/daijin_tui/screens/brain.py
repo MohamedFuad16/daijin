@@ -8,6 +8,7 @@ from textual import work
 from textual.containers import Horizontal
 from textual.widgets import Button, DataTable, Input, Select, Static, TabbedContent, TabPane
 
+from ..concurrency import gather_all
 from ..rpc import RpcError
 from ..widgets import (
     Banner,
@@ -108,10 +109,15 @@ class BrainScreen(DaijinScreen):
             self.query_one("#floor-summary", Static).update("[dim]no repo selected[/dim]")
             return
         notice.set_notice(f"Serving {repo}.", "info")
-        await self._load_floor(repo)
-        await self._load_mcp(repo)
-        await self._load_inventory(repo)
-        await self._load_diagnosis(repo)
+        # Four independent panels, each already owning its own error handling,
+        # so one failing does not blank the others and none needs to wait for
+        # the one before it.
+        await gather_all(
+            self._load_floor(repo),
+            self._load_mcp(repo),
+            self._load_inventory(repo),
+            self._load_diagnosis(repo),
+        )
 
     def _init_columns(self) -> None:
         for selector, columns in (

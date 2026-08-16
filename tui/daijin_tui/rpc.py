@@ -36,6 +36,17 @@ from typing import Any, Awaitable, Callable, Iterable, Sequence
 from . import mock_data
 
 CLIENT_VERSION = "0.1.0"
+# Ceiling on concurrent in-flight requests from ONE client.
+#
+# Screens fan out independent calls so a view costs max(latency) rather than
+# sum(latency). Under the socket transport several TUIs share one daemon, so
+# an uncapped fan-out multiplies by the number of attached clients. The cap
+# lives here rather than in each screen because a screen cannot then exceed it
+# by accident, and there is one number to tune.
+#
+# PROVISIONAL: 5, chosen with the leader's 4-to-6 prior and not yet measured
+# against a loaded daemon. Recorded in TRANSPORT-PROPOSAL.md with this basis.
+MAX_IN_FLIGHT = 5
 # How much of a failing engine's stderr to carry into the error we raise.
 STDERR_TAIL_LINES = 20
 # The contract version this client is built against. A mismatch is an upgrade
@@ -125,6 +136,11 @@ class RpcClient:
         self._next_id = 0
         self.contract_version: str | None = None
         self.engine_version: str | None = None
+        self._inflight = asyncio.Semaphore(MAX_IN_FLIGHT)
+        self._current_in_flight = 0
+        # Observability for the cap: a test asserts this never exceeds the
+        # ceiling, so the limit is a measured property rather than a comment.
+        self.peak_in_flight = 0
 
     # Event fan out ------------------------------------------------------
 
@@ -171,6 +187,16 @@ class RpcClient:
         return None
 
     async def call(self, method: str, params: dict[str, Any] | None = None) -> Any:
+        """Issue one request, never exceeding MAX_IN_FLIGHT concurrently."""
+        async with self._inflight:
+            self._current_in_flight += 1
+            self.peak_in_flight = max(self.peak_in_flight, self._current_in_flight)
+            try:
+                return await self._call_impl(method, params)
+            finally:
+                self._current_in_flight -= 1
+
+    async def _call_impl(self, method: str, params: dict[str, Any] | None = None) -> Any:
         raise NotImplementedError
 
     async def handshake(self) -> dict[str, Any]:
@@ -301,7 +327,7 @@ class StdioRpcClient(RpcClient):
                 future.set_exception(error)
         self._pending.clear()
 
-    async def call(self, method: str, params: dict[str, Any] | None = None) -> Any:
+    async def _call_impl(self, method: str, params: dict[str, Any] | None = None) -> Any:
         if self._proc is None:
             await self.start()
         assert self._proc is not None and self._proc.stdin is not None
@@ -983,7 +1009,7 @@ class MockRpcClient(RpcClient):
         )
         self.dispatch_notification(message["method"], message["params"])
 
-    async def call(self, method: str, params: dict[str, Any] | None = None) -> Any:
+    async def _call_impl(self, method: str, params: dict[str, Any] | None = None) -> Any:
         request = {
             "jsonrpc": "2.0",
             "id": self._request_id(),

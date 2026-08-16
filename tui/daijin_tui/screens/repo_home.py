@@ -7,6 +7,7 @@ from typing import Any, Iterable
 from textual.containers import Horizontal
 from textual.widgets import Button, Input, Static
 
+from ..concurrency import gather_all, gather_iter
 from ..rpc import RpcError
 from ..widgets import Banner, RepoCard, SectionTitle, format_count
 from .base import DaijinScreen
@@ -39,8 +40,11 @@ class RepoHomeScreen(DaijinScreen):
         for repo in status.get("repos", []):
             await container.mount(RepoCard(repo))
 
-        for card in self.query(RepoCard):
-            await self._enrich(card)
+        # The per-repo facts are independent of each other AND of the other
+        # repos, so nine calls that cost sum(latency) become one round of
+        # max(latency). This is the boot screen: it is the first thing a user
+        # waits on, so it is the first thing worth not making them wait for.
+        await gather_iter(self._enrich(card) for card in self.query(RepoCard))
 
         self.query_one("#engine-status", Static).update(self._engine_markup(status))
         needs = [card.repo_path for card in self.query(RepoCard) if card.needs_brain]
@@ -61,16 +65,27 @@ class RepoHomeScreen(DaijinScreen):
         contract methods and all three are zero-spend. The budget sweep is NOT
         drawn here: it belongs to the retrieval view, under its own caption.
         """
+        await gather_all(
+            self._has_brain(card),
+            self._floor(card),
+            self._history(card),
+        )
+
+    async def _has_brain(self, card: RepoCard) -> None:
         try:
             analysis = await self.client.call("analyze", {"repoPath": card.repo_path})
-            card.set_has_brain(bool(analysis.get("hasBrainFolder")))
         except RpcError:
-            pass
+            return
+        card.set_has_brain(bool(analysis.get("hasBrainFolder")))
+
+    async def _floor(self, card: RepoCard) -> None:
         try:
             card.set_score(await self.client.call("retrievalScore", {"repoPath": card.repo_path}))
         except RpcError:
             # No gold set means no floor. The card already says so.
             pass
+
+    async def _history(self, card: RepoCard) -> None:
         try:
             card.set_history(await self.client.call("scoreHistory", {"repoPath": card.repo_path}))
         except RpcError:

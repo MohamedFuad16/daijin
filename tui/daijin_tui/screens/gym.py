@@ -9,6 +9,7 @@ from textual.containers import Horizontal
 from textual.widgets import Button, DataTable, Static, TabbedContent, TabPane
 
 from .. import mock_data
+from ..concurrency import gather_all
 from ..rpc import RpcError
 from ..widgets import (
     Banner,
@@ -68,21 +69,27 @@ class GymScreen(DaijinScreen):
         self._subscribe()
         self.refresh_heading()
         self._init_columns()
-        try:
-            status = await self.client.call("gymStatus", {})
-        except RpcError as error:
-            self.show_rpc_error(error, "#gym-notice")
+        # The run ledger and the gate state have nothing to do with each other.
+        status_result, gate_result = await gather_all(
+            self.client.call("gymStatus", {}),
+            self.client.call("serveStatus", {}),
+        )
+        if isinstance(status_result, RpcError):
+            self.show_rpc_error(status_result, "#gym-notice")
             return
+        if isinstance(status_result, BaseException):
+            raise status_result
+        status = status_result
         self._render_run(status.get("activeRun") or {})
         self._render_cycles(status.get("cycles") or [], status.get("ledger") or {})
         # serveStatus carries the gate, so the state is readable BEFORE any
         # attempt. The user should never have to press a button to find out
         # that pressing the button was refused.
         gate: dict[str, Any] = {}
-        try:
-            gate = (await self.client.call("serveStatus", {})).get("spendGate") or {}
-        except RpcError as error:
-            self.report_rpc_error(error)
+        if isinstance(gate_result, RpcError):
+            self.report_rpc_error(gate_result)
+        elif isinstance(gate_result, dict):
+            gate = gate_result.get("spendGate") or {}
         self.gate_open = bool(gate.get("open"))
         state = "open" if self.gate_open else "blocked"
         tone = "green" if self.gate_open else "yellow"

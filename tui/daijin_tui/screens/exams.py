@@ -14,6 +14,7 @@ from textual import work
 from textual.containers import Horizontal
 from textual.widgets import Button, DataTable, Select, Static
 
+from ..concurrency import gather_all
 from ..rpc import RpcError
 from ..widgets import Banner, PlotextBar, PlotextLine, RadarChart, SectionTitle
 from .base import DaijinScreen
@@ -74,10 +75,10 @@ class ExamsScreen(DaijinScreen):
         table = self.query_one("#exam-table", DataTable)
         if not table.columns:
             table.add_columns(*EXAM_COLUMNS)
-        settings = await self._settings()
+        # The chart preference and the bank contents are unrelated.
+        settings, _bank = await gather_all(self._settings(), self.reload_bank())
         mode = ((settings or {}).get("charts") or {}).get("radarMode", "radar")
         self.query_one("#exam-radar", RadarChart).set_mode(mode)
-        await self.reload_bank()
 
     async def reload_bank(self) -> None:
         table = self.query_one("#exam-table", DataTable)

@@ -15,6 +15,7 @@ from textual import work
 from textual.containers import Horizontal
 from textual.widgets import Button, DataTable, Static
 
+from ..concurrency import gather_iter
 from ..rpc import RpcError
 from ..widgets import Banner, SectionTitle
 from .base import DaijinScreen
@@ -69,13 +70,17 @@ class SettingsScreen(DaijinScreen):
         except RpcError as error:
             self.show_rpc_error(error, "#settings-notice")
             return
-        # agentFileGet is zero-spend, so reading all four on open is fine.
-        for role in AGENT_ROLES:
-            try:
-                self.agent_files[role] = await self.client.call("agentFileGet", {"role": role})
-            except RpcError:
-                continue
+        # agentFileGet is zero-spend, so reading all four on open is fine, and
+        # the four files have nothing to do with each other, so reading them
+        # one after another only spent the user's time.
+        await gather_iter(self._load_agent_file(role) for role in AGENT_ROLES)
         self._update_view()
+
+    async def _load_agent_file(self, role: str) -> None:
+        try:
+            self.agent_files[role] = await self.client.call("agentFileGet", {"role": role})
+        except RpcError:
+            return
 
     def _update_view(self) -> None:
         roles = self.settings.get("roles", [])

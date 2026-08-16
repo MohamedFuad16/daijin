@@ -173,7 +173,7 @@ const pct = (value) => `${(value * 100).toFixed(1)}%`;
 /// metric would drift from the number everyone quotes.
 export async function scoreGoldset({
   corpus, k = 8, only = null, shipped = false, label = null, retrieveOptions = {}, store: injectedStore = null,
-  environment: injectedEnvironment = null, fetchImpl = null,
+  environment: injectedEnvironment = null, fetchImpl = null, reranker = null,
 } = {}) {
   const cases = validateGoldset(await loadGoldset(corpus))
     .filter((entry) => !only || only.includes(entry.id));
@@ -227,6 +227,10 @@ export async function scoreGoldset({
           // Threaded so a caller can drive retrieval against its own embedder client
           // without reaching into globals. Undefined leaves retrieve on its default.
           ...(fetchImpl ? { fetchImpl } : {}),
+          // The rerank backend for an A/B. It does nothing unless the run also passes
+          // `rerank: { enabled: true }` in retrieveOptions, so an A arm and a B arm differ
+          // by one option rather than by which dependencies were wired.
+          ...(reranker ? { reranker } : {}),
           retrievalFixes,
           pathGrammar: corpus.pathGrammar,
           standingPrefix: corpus.standingPrefix,
@@ -257,6 +261,11 @@ export async function scoreGoldset({
     goldsetCases: cases.length,
     shipped,
     label: label || (shipped ? 'shipped' : 'experiment'),
+    // Which arm this record is. A rerank A/B whose records do not say which side they came
+    // from is two numbers nobody can pair up later.
+    rerank: retrieveOptions?.rerank?.enabled
+      ? { enabled: true, topK: retrieveOptions.rerank.topK ?? null, backend: reranker?.id ?? null }
+      : { enabled: false },
     // The embedder that produced these numbers. Every absolute threshold downstream (the
     // 0.35 semantic threshold, the 0.35 pin floor, the 0.55 reserved-slot floor) sits on
     // one embedder's similarity distribution, so a record that does not name its embedder

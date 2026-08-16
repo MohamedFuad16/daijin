@@ -1,5 +1,19 @@
 # Daijin build state (authoritative)
 
+## 2026-08-17 01:20 - Roster: init-miner and gym-porter retired at owner direction
+
+Both lanes complete, both shutdowns requested. init-miner: P3, P3.5
+twice, the D-0031 canonical round, the self-catching battery, the
+survival signal's first budget move, finding 82, the leader-lane
+restatement - desk verified empty by its own porcelain check.
+gym-porter: P4, P7, certify-by-elimination, the verified D-0032
+conversion, the governance counter that refuses its own history, the
+sixteen-row audit table. If the P8 attack surfaces a defect in either
+lane, a fresh agent inherits the record; both lanes' evidence
+discipline made that inheritance cheap by design. Remaining roster:
+extractor (joint claim + acceptance script), tui-builder (five runs +
+claim + the owner's dithered-charts brief), verifier (the attack).
+Harvest hooks and the live gym half stay owner-gated as recorded.
 ## 2026-08-17 00:45 - Engine half measured at the pin; pin ruled to stand
 
 THE EXTRACTOR'S ENGINE HALF IS DONE at 85cc576

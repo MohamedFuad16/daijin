@@ -1,0 +1,111 @@
+battery tree: /var/folders/nq/jvmxfqtn475bqlkn9vvnz4y80000gn/T/daijin-init-mutate-JolcT6/engine (private copy)
+baseline: green across 8 file(s)
+
+killed       M1 existence gate always passes
+               fails: EXISTENCE passes on the live index, and a scrambled index kills it
+               fails: a vacuous ranking constraint is PRUNED, not grounds for retiring a good case
+killed       M2 leakage threshold removed
+               fails: LEAKAGE passes identifier cases and dies on a query copied from the answer
+               fails: a scoped package name in a query is not leakage, and a copied sentence still is
+killed       M3 staleness detection returns nothing
+               fails: STALENESS retires a case whose target is gone, and skipping the retirement kills the gate
+               fails: a carried-forward case whose module was deleted is RETIRED, not scored forever
+killed       M4 provenance gate accepts any origin
+               fails: PROVENANCE resolves every origin, and an invented commit kills it
+killed       M5 diversity floor lowered to zero
+               fails: DIVERSITY holds the floor, and 24 cases or 4 identifiers kill it
+               fails: a gold set that fails its own gates BLOCKS the measurement instead of scoring anyway
+killed       M6 pipeline scores even when the gauge fails its gates
+               fails: a gold set that fails its own gates BLOCKS the measurement instead of scoring anyway
+killed       M7 content survival never fails
+               fails: MUTATION: a core cut by the per-candidate cap FAILS the gate and names the raise signal
+               fails: MUTATION: a 45-file module loses its cited core to the real budget trim at 3000 tokens
+killed       M8 budget choice takes the best instead of the smallest within one case
+               fails: the smallest budget within ONE CASE of the best wins
+               fails: sweepBudgets measures every point and reports the curve with counts
+killed       M9 a failing baseline command is classified live
+               fails: classification: live, measured, pre-broken and unavailable each from a real run
+               fails: discovery runs every candidate and excludes pre-broken and unavailable from coverage
+killed       M10 citation validation accepts a unit citing a missing file
+               fails: every generated unit cites files that exist, and one that does not is DROPPED
+               fails: the narrator proposes and the mechanics accept: uncited and miscited units are dropped
+               fails: acceptNarration validates a cited commit against the walked history
+killed       M11 the Layer 2 spend gate refusal is removed
+               fails: narration refuses when the spend gate is closed, and for THAT reason
+killed       M12 the embedding alignment assert is removed
+               fails: MUTATION: an embedder that returns one vector short is refused, never written
+killed       M13 the atomic prune is removed from ingest
+               fails: ingest is an atomic full-mirror replace: a deleted module leaves no orphan behind
+killed       M14 Layer 1 mines a lesson from every fix commit
+               fails: errors.md starts empty, and a history full of fix commits does not change that
+killed       M15 the history cap is not reported
+               fails: the history cap is reported, and the walk stops at it
+killed       M16 the file-list cap is applied silently
+               fails: the file cap is reported rather than applied silently
+killed       M17 the project scope mismatch check is removed
+               fails: a store whose project does not match the query scope is refused loudly
+killed       M18 retired cases are written into the file the scorer loads
+               fails: ingest is an atomic full-mirror replace: a deleted module leaves no orphan behind
+               fails: a carried-forward case whose module was deleted is RETIRED, not scored forever
+killed       M19 the retirement record is overwritten instead of appended
+               fails: the gold-set files split what measures from what is only remembered
+killed       M20 the previous gold set is not carried forward, so nothing can ever go stale
+               fails: a carried-forward case whose module was deleted is RETIRED, not scored forever
+killed       M21 vacuous ranking constraints are not pruned, deadlocking existence against staleness
+               fails: a vacuous ranking constraint is PRUNED, not grounds for retiring a good case
+               fails: runGoldsetGates reports what it pruned rather than doing it silently
+               fails: a carried-forward case whose module was deleted is RETIRED, not scored forever
+killed       M22 the stable case key ignores the query, so two cases of one provenance collide
+               fails: the miner writes a stable key that survives a re-mine and a rewording
+               fails: the index is DERIVED: delete it, regenerate, and the gauge is unchanged
+killed       M23 the merge keys on the query again, so a reworded case becomes a duplicate
+               fails: mergeGoldset keys on the STABLE key, so a reworded case is not a duplicate
+killed       M24 the A/B promotes on MRR, which passes the 2026-08-09 regression shape
+               fails: judgment is D-0017: case rate and violations decide, MRR never promotes
+               fails: the A/B can report a LOSS and a NEUTRAL, not only a win
+               fails: the resolution measurement runs on the same store and rides with the result
+killed       M25 the control arm is not given the backend, so the arms differ by wiring
+               fails: the arms differ by ONE option: both receive the backend, only one enables it
+killed       M26 the arm disclosure is trusted instead of checked
+               fails: a control arm that reranked anyway is refused rather than reported
+killed       M27 a treatment whose option never reached the stage is accepted
+               fails: a treatment arm whose option never reached the stage is refused
+killed       M28 the floor ships without the range it was measured inside (D-0030)
+               fails: a full init runs headlessly and reports the floor it measured, whatever it is
+               fails: the index is DERIVED: delete it, regenerate, and the gauge is unchanged
+killed       M29 the rerank cost is not measured, so the knob ships without its price
+               fails: the knob reports its COST per query, which D-0025 requires displayed beside it
+               fails: only the arm that actually paid the price reports one; the rest carry the caveat
+killed       M30 identical summaries pass as identical runs, so a moved-but-unscored arm reads as inert
+               fails: a neutral verdict over arms that retrieved differently is reported as such
+killed       M31 the adopt splitter drops everything before the first record
+               fails: a record file splits on its own boundaries rather than indexing whole
+               fails: MUTATION: dropping the preamble loses content no other record carries
+               fails: a record label resolves to the record whose TITLE carries it, not to every mention
+               fails: mode "ingest" adopts a curated folder as-is and measures it on the same gauge
+killed       M32 a record label resolves by mention instead of by title ownership
+               fails: a label two records both claim in their titles is DROPPED, not guessed at
+killed       M33 the miner filters leakage with its own rule instead of the gate's
+               fails: every mined case survives the leakage gate that rejected the invented ones
+killed       M34 adopted units are not marked as human-written
+               fails: adopted units are marked as human-written, and cite the file they came from
+               fails: mode "ingest" adopts a curated folder as-is and measures it on the same gauge
+killed       M35 the contract guard is removed from the ingest boundary (D-0031 invariant 1)
+               fails: THE CONTRACT CANNOT ENTER THE STORE, whichever producer made the unit
+killed       M36 unit bodies are written without demotion, colliding with the record splitter
+               fails: a full init runs headlessly and reports the floor it measured, whatever it is
+               fails: the run is zero-spend: the only host contacted is the local embedder
+               fails: a gold set that fails its own gates BLOCKS the measurement instead of scoring anyway
+               fails: MUTATION: a 45-file module loses its cited core to the real budget trim at 3000 tokens
+               fails: ingest is an atomic full-mirror replace: a deleted module leaves no orphan behind
+               fails: layer1+layer2 records the spend refusal and still finishes Layer 1
+               fails: a carried-forward case whose module was deleted is RETIRED, not scored forever
+               fails: the index is DERIVED: delete it, regenerate, and the gauge is unchanged
+               fails: a unit with sub-headings survives the brain round trip byte for byte
+               fails: the brain files are CANONICAL: edit one and the rebuilt index says what the file says
+killed       M37 the round trip is checked by id instead of by content
+               fails: a unit that quotes a daijin marker is REFUSED rather than silently mangled
+killed       M38 the index is ingested from memory rather than from the written files
+               fails: a full init runs headlessly and reports the floor it measured, whatever it is
+
+declared: 38   executed: 38   killed: 38

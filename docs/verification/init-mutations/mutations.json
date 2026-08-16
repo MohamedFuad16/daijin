@@ -1,0 +1,353 @@
+[
+  {
+    "id": "M1 existence gate always passes",
+    "file": "src/init/goldset-gates.js",
+    "from": "  const missing = referenced.filter((id) => !known.has(id)).sort();",
+    "to": "  const missing = [];",
+    "tests": [
+      "test/init-goldset.test.js"
+    ]
+  },
+  {
+    "id": "M2 leakage threshold removed",
+    "file": "src/init/goldset-gates.js",
+    "from": "  return { leaks: contained || shared >= span, contained, shared };",
+    "to": "  return { leaks: false, contained, shared };",
+    "tests": [
+      "test/init-goldset.test.js",
+      "test/init-adopt.test.js"
+    ]
+  },
+  {
+    "id": "M3 staleness detection returns nothing",
+    "file": "src/init/goldset-gates.js",
+    "from": "    if (reason) stale.push({ case: entry.id, reason });",
+    "to": "    if (false) stale.push({ case: entry.id, reason });",
+    "tests": [
+      "test/init-goldset.test.js",
+      "test/init-pipeline.test.js"
+    ]
+  },
+  {
+    "id": "M4 provenance gate accepts any origin",
+    "file": "src/init/goldset-gates.js",
+    "from": "    const match = PROVENANCE_PATTERN.exec(entry.provenance || '');",
+    "to": "    const match = PROVENANCE_PATTERN.exec('structural:always') || PROVENANCE_PATTERN.exec(entry.provenance || '');",
+    "tests": [
+      "test/init-goldset.test.js"
+    ]
+  },
+  {
+    "id": "M5 diversity floor lowered to zero",
+    "file": "src/init/goldset-gates.js",
+    "from": "  minimumCases: 25,\n  minimumIdentifierCases: 5,",
+    "to": "  minimumCases: 0,\n  minimumIdentifierCases: 0,",
+    "tests": [
+      "test/init-goldset.test.js",
+      "test/init-pipeline.test.js"
+    ]
+  },
+  {
+    "id": "M6 pipeline scores even when the gauge fails its gates",
+    "file": "src/init/pipeline.js",
+    "from": "  if (!gated.passed) {",
+    "to": "  if (false) {",
+    "tests": [
+      "test/init-pipeline.test.js"
+    ]
+  },
+  {
+    "id": "M7 content survival never fails",
+    "file": "src/init/floor.js",
+    "from": "    status: truncatedAway.length === 0 ? 'pass' : 'fail',",
+    "to": "    status: 'pass',",
+    "tests": [
+      "test/init-floor.test.js",
+      "test/init-pipeline.test.js"
+    ]
+  },
+  {
+    "id": "M8 budget choice takes the best instead of the smallest within one case",
+    "file": "src/init/floor.js",
+    "from": "  const chosen = ascending.find((point) => best.caseRate.hits - point.caseRate.hits <= 1);",
+    "to": "  const chosen = best;",
+    "tests": [
+      "test/init-floor.test.js"
+    ]
+  },
+  {
+    "id": "M9 a failing baseline command is classified live",
+    "file": "src/init/gate-discovery.js",
+    "from": "  if (result.status === 'pass') return { classification: 'live', enabled: true, metric: null };",
+    "to": "  return { classification: 'live', enabled: true, metric: null };\n  // eslint-disable-next-line no-unreachable",
+    "tests": [
+      "test/init-gates.test.js"
+    ]
+  },
+  {
+    "id": "M10 citation validation accepts a unit citing a missing file",
+    "file": "src/init/scaffold.js",
+    "from": "    if (missing.length > 0) dropped.push({ id: entry.id, missing });",
+    "to": "    if (false) dropped.push({ id: entry.id, missing });",
+    "tests": [
+      "test/init-scaffold.test.js",
+      "test/init-pipeline.test.js"
+    ]
+  },
+  {
+    "id": "M11 the Layer 2 spend gate refusal is removed",
+    "file": "src/init/narrate.js",
+    "from": "  if (!spendGate?.open) {",
+    "to": "  if (false) {",
+    "tests": [
+      "test/init-scaffold.test.js"
+    ]
+  },
+  {
+    "id": "M12 the embedding alignment assert is removed",
+    "file": "src/init/ingest.js",
+    "from": "  assertAlignment(vectors, texts.length);",
+    "to": "  // assertAlignment removed",
+    "tests": [
+      "test/init-pipeline.test.js"
+    ]
+  },
+  {
+    "id": "M13 the atomic prune is removed from ingest",
+    "file": "src/init/ingest.js",
+    "from": "    await store.pruneDocumentsExcept(keepIds, project);",
+    "to": "    // prune removed",
+    "tests": [
+      "test/init-pipeline.test.js"
+    ]
+  },
+  {
+    "id": "M14 Layer 1 mines a lesson from every fix commit",
+    "file": "src/init/scaffold.js",
+    "from": "  const errors = {\n    units: [],",
+    "to": "  const errors = {\n    units: (evidence.history.fixCommits || []).map((commit) => ({ id: `daijin.lesson.${commit.sha}`, type: 'lesson' })),",
+    "tests": [
+      "test/init-scaffold.test.js"
+    ]
+  },
+  {
+    "id": "M15 the history cap is not reported",
+    "file": "src/init/git.js",
+    "from": "    capped: commits.length >= cap && total > commits.length,",
+    "to": "    capped: false,",
+    "tests": [
+      "test/init-analyze.test.js"
+    ]
+  },
+  {
+    "id": "M16 the file-list cap is applied silently",
+    "file": "src/init/walk.js",
+    "from": "  const truncated = sorted.length > limit;",
+    "to": "  const truncated = false;",
+    "tests": [
+      "test/init-analyze.test.js"
+    ]
+  },
+  {
+    "id": "M17 the project scope mismatch check is removed",
+    "file": "src/init/pipeline.js",
+    "from": "  if (storeProject !== undefined && storeProject !== scope) {",
+    "to": "  if (false) {",
+    "tests": [
+      "test/init-pipeline.test.js"
+    ]
+  },
+  {
+    "id": "M18 retired cases are written into the file the scorer loads",
+    "file": "src/init/pipeline.js",
+    "from": "const goldsetFile = writeArtifacts ? await writeGoldset(artifacts, gated.active) : null;",
+    "to": "const goldsetFile = writeArtifacts ? await writeGoldset(artifacts, gated.cases) : null;",
+    "tests": [
+      "test/init-pipeline.test.js"
+    ]
+  },
+  {
+    "id": "M19 the retirement record is overwritten instead of appended",
+    "file": "src/init/pipeline.js",
+    "from": "  const merged = [...(Array.isArray(existing) ? existing : []), ...retired];",
+    "to": "  const merged = [...retired];",
+    "tests": [
+      "test/init-pipeline.test.js"
+    ]
+  },
+  {
+    "id": "M20 the previous gold set is not carried forward, so nothing can ever go stale",
+    "file": "src/init/pipeline.js",
+    "from": "  const carried = await readExistingGoldset(artifacts);",
+    "to": "  const carried = [];",
+    "tests": [
+      "test/init-pipeline.test.js"
+    ]
+  },
+  {
+    "id": "M21 vacuous ranking constraints are not pruned, deadlocking existence against staleness",
+    "file": "src/init/goldset-gates.js",
+    "from": "    const kept = entry.must_not_outrank.filter((id) => unitsById.has(id));",
+    "to": "    const kept = [...entry.must_not_outrank];",
+    "tests": [
+      "test/init-goldset.test.js",
+      "test/init-pipeline.test.js"
+    ]
+  },
+  {
+    "id": "M22 the stable case key ignores the query, so two cases of one provenance collide",
+    "file": "src/init/goldset.js",
+    "from": "  const digest = createHash('sha256').update(`${canonicalQuery}`, 'utf8').digest('hex').slice(0, 8);",
+    "to": "  const digest = 'fixedkey';",
+    "tests": [
+      "test/init-pipeline.test.js"
+    ]
+  },
+  {
+    "id": "M23 the merge keys on the query again, so a reworded case becomes a duplicate",
+    "file": "src/init/pipeline.js",
+    "from": "  const identity = (entry) => entry.key || caseKey(entry.provenance || '', entry.query || '');",
+    "to": "  const identity = (entry) => `${entry.provenance || ''}::${entry.query || ''}`;",
+    "tests": [
+      "test/init-pipeline.test.js"
+    ]
+  },
+  {
+    "id": "M24 the A/B promotes on MRR, which passes the 2026-08-09 regression shape",
+    "file": "src/init/rerank-ab.js",
+    "from": "  else if (caseDelta > 0) verdict = 'win';",
+    "to": "  else if (caseDelta > 0 || mrrDelta > 0) verdict = 'win';",
+    "tests": [
+      "test/init-rerank-ab.test.js"
+    ]
+  },
+  {
+    "id": "M25 the control arm is not given the backend, so the arms differ by wiring",
+    "file": "src/init/rerank-ab.js",
+    "from": "    reranker,\n    retrieveOptions:",
+    "to": "    reranker: rerank?.enabled ? reranker : null,\n    retrieveOptions:",
+    "tests": [
+      "test/init-rerank-ab.test.js"
+    ]
+  },
+  {
+    "id": "M26 the arm disclosure is trusted instead of checked",
+    "file": "src/init/rerank-ab.js",
+    "from": "    if (control.rerank.enabled) {",
+    "to": "    if (false) {",
+    "tests": [
+      "test/init-rerank-ab.test.js"
+    ]
+  },
+  {
+    "id": "M27 a treatment whose option never reached the stage is accepted",
+    "file": "src/init/rerank-ab.js",
+    "from": "      if (!treatment.rerank.enabled || treatment.rerank.topK !== topK) {",
+    "to": "      if (false) {",
+    "tests": [
+      "test/init-rerank-ab.test.js"
+    ]
+  },
+  {
+    "id": "M28 the floor ships without the range it was measured inside (D-0030)",
+    "file": "src/init/pipeline.js",
+    "from": "    contentSurvival: survival,\n    resolution,",
+    "to": "    contentSurvival: survival,\n    resolution: null,",
+    "tests": [
+      "test/init-pipeline.test.js"
+    ]
+  },
+  {
+    "id": "M29 the rerank cost is not measured, so the knob ships without its price",
+    "file": "src/init/rerank-ab.js",
+    "from": "    msPerQuery: results.length ? Math.round(elapsedMs / results.length) : null,",
+    "to": "    msPerQuery: null,",
+    "tests": [
+      "test/init-rerank-ab.test.js"
+    ]
+  },
+  {
+    "id": "M30 identical summaries pass as identical runs, so a moved-but-unscored arm reads as inert",
+    "file": "src/init/rerank-ab.js",
+    "from": "      const perCase = compareRecords(control.record, treatment.record);",
+    "to": "      const perCase = { identical: true, differences: [] };",
+    "tests": [
+      "test/init-rerank-ab.test.js"
+    ]
+  },
+  {
+    "id": "M31 the adopt splitter drops everything before the first record",
+    "file": "src/init/adopt.js",
+    "from": "    const preamble = lines.slice(0, headingIndexes[0]).join('\\n').trim();",
+    "to": "    const preamble = '';",
+    "tests": [
+      "test/init-adopt.test.js",
+      "test/init-pipeline.test.js"
+    ]
+  },
+  {
+    "id": "M32 a record label resolves by mention instead of by title ownership",
+    "file": "src/init/goldset.js",
+    "from": "    if (homes.length !== 1) continue;",
+    "to": "    if (homes.length < 1) continue;",
+    "tests": [
+      "test/init-adopt.test.js"
+    ]
+  },
+  {
+    "id": "M33 the miner filters leakage with its own rule instead of the gate's",
+    "file": "src/init/goldset.js",
+    "from": "  const leaks = (query, content) => quotesAnswer(query, content, span).leaks;",
+    "to": "  const leaks = () => false;",
+    "tests": [
+      "test/init-adopt.test.js"
+    ]
+  },
+  {
+    "id": "M34 adopted units are not marked as human-written",
+    "file": "src/init/adopt.js",
+    "from": "        generated: false,",
+    "to": "        generated: true,",
+    "tests": [
+      "test/init-adopt.test.js",
+      "test/init-pipeline.test.js"
+    ]
+  },
+  {
+    "id": "M35 the contract guard is removed from the ingest boundary (D-0031 invariant 1)",
+    "file": "src/init/ingest.js",
+    "from": "  assertNoContractUnits(units);",
+    "to": "  // guard removed",
+    "tests": [
+      "test/init-pipeline.test.js"
+    ]
+  },
+  {
+    "id": "M36 unit bodies are written without demotion, colliding with the record splitter",
+    "file": "src/init/brain-artifacts.js",
+    "from": "  const body = demoteHeadings(String(unit.content).replace(/^#\\s+.*\\n?/, '').trim());",
+    "to": "  const body = String(unit.content).replace(/^#\\s+.*\\n?/, '').trim();",
+    "tests": [
+      "test/init-pipeline.test.js"
+    ]
+  },
+  {
+    "id": "M37 the round trip is checked by id instead of by content",
+    "file": "src/init/pipeline.js",
+    "from": "        return round.content.trim() !== unit.content.trim();",
+    "to": "        return false;",
+    "tests": [
+      "test/init-pipeline.test.js",
+      "test/init-adopt.test.js"
+    ]
+  },
+  {
+    "id": "M38 the index is ingested from memory rather than from the written files",
+    "file": "src/init/pipeline.js",
+    "from": "    units = readBack.units.map((unit) => ({ ...unit, core: before.get(unit.id)?.core ?? null }));",
+    "to": "    units = units.map((unit) => ({ ...unit }));",
+    "tests": [
+      "test/init-pipeline.test.js"
+    ]
+  }
+]

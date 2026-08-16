@@ -1,0 +1,10 @@
+=== DEMONSTRATING THE REFUSAL ===
+$ node mutate.mjs /Users/mfuad16/Documents/daijin/engine
+REFUSED: this battery does not mutate the shared tree.
+Other lanes run their suites against it, and every mutation is a window in which
+their tests read deliberately broken source and fail for a defect that belongs to
+nobody. That happened, which is why this refusal exists.
+
+Run without arguments to use a private copy, or set MUTATE_IN_PLACE=1 to say
+out loud that you mean the shared tree.
+exit: 2

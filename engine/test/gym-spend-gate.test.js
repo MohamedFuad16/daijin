@@ -437,6 +437,20 @@ test('the scanned set covers every engine source directory', async () => {
   // directory whose whole job is turning a pointer into a provider key, so it is where an
   // unauthorized spend path would be most useful to hide. The exemption check only greps
   // for the gate's name; the scan catches a write assembled through an alias.
+  //
+  // IF THIS TEST FAILED BECAUSE YOU ADDED A DIRECTORY, the two ways out are not equally
+  // free (ruling c8267a0):
+  //
+  //  DECLARING it here, in SCANNED or in UNSCANNED with a reason, grows coverage and excuses
+  //  nothing. It is strictly stronger, so land it yourself in the commit that added the
+  //  directory, whatever lane you are in, and say "scanned-set declaration, strictly
+  //  stronger" in the message so the audit trail tells it from a widening without anyone
+  //  reading the diff.
+  //
+  //  ADDING AN ALLOWLIST ENTRY in src/gym/spend-gate.js is the other thing entirely: it
+  //  excuses one file from the ownership rule and WEAKENS the guarantee. That goes through
+  //  the leader, in a freeze window, carrying its reason. If a red suite is pressuring you
+  //  toward one, that pressure is the argument for declaring rather than excusing.
   const SCANNED = ['gym', 'roles', 'rpc', 'state'];
   const UNSCANNED = [
     // Each exemption states why it cannot reach the gate. An exemption is a claim someone

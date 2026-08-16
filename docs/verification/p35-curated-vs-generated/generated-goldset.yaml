@@ -1,0 +1,296 @@
+# Daijin gold set. Mechanically mined; every case records where it came from.
+# Answers are ARTIFACTS (document ids), never prose. must_not_outrank is a RANKING
+# constraint: a listed id beating a required one is a violation, not an exclusion.
+# ACTIVE cases only: these are the ones that measure. Retired cases keep their record
+# in .daijin/goldset-retired.yaml, with the date and the reason they stopped being askable.
+- id: g001
+  key: commit-archaeology:251de0d2f529#777b751d
+  query: "Polish interaction animations: hover feedback everywhere, fix tooltip fade-out bug"
+  must_return:
+    - daijin.architecture.src
+  provenance: commit-archaeology:251de0d2f529
+  source: commit-archaeology
+  why: Commit 251de0d2f529 changed only src, so an engineer asking about that work should receive the src module card.
+  target:
+    kind: commit
+    sha: 251de0d2f529
+    area: src
+- id: g002
+  key: structural:convention:fileNaming#63215c12
+  query: how are source files named in this project
+  must_return:
+    - daijin.convention.filenaming
+  provenance: structural:convention:fileNaming
+  source: structural
+  why: The fileNaming convention is measured statistically and written up as one card, so this question has exactly one answer.
+  target:
+    kind: unit
+    id: daijin.convention.filenaming
+- id: g003
+  key: structural:convention:indentation#8de41132
+  query: how is code indented in this repo
+  must_return:
+    - daijin.convention.indentation
+  provenance: structural:convention:indentation
+  source: structural
+  why: The indentation convention is measured statistically and written up as one card, so this question has exactly one answer.
+  target:
+    kind: unit
+    id: daijin.convention.indentation
+- id: g004
+  key: structural:convention:moduleSystem#ab3a27e4
+  query: does this project use ES modules or CommonJS
+  must_return:
+    - daijin.convention.modulesystem
+  provenance: structural:convention:moduleSystem
+  source: structural
+  why: The moduleSystem convention is measured statistically and written up as one card, so this question has exactly one answer.
+  target:
+    kind: unit
+    id: daijin.convention.modulesystem
+- id: g005
+  key: structural:convention:quotes#7d794530
+  query: single or double quotes for strings here
+  must_return:
+    - daijin.convention.quotes
+  provenance: structural:convention:quotes
+  source: structural
+  why: The quotes convention is measured statistically and written up as one card, so this question has exactly one answer.
+  target:
+    kind: unit
+    id: daijin.convention.quotes
+- id: g006
+  key: structural:convention:semicolons#83435253
+  query: are semicolons used at the end of statements
+  must_return:
+    - daijin.convention.semicolons
+  provenance: structural:convention:semicolons
+  source: structural
+  why: The semicolons convention is measured statistically and written up as one card, so this question has exactly one answer.
+  target:
+    kind: unit
+    id: daijin.convention.semicolons
+- id: g007
+  key: structural:dependencies#a7e61e3f
+  query: which third party dependencies does this project declare
+  must_return:
+    - daijin.architecture.dependencies
+  provenance: structural:dependencies
+  source: structural
+  why: The dependency census is one card crossing the manifests with the import graph.
+  target:
+    kind: unit
+    id: daijin.architecture.dependencies
+- id: g008
+  key: structural:history#82f1062e
+  query: which files change most often in this repo
+  must_return:
+    - daijin.workflow.history
+  provenance: structural:history
+  source: structural
+  why: Change frequency and authorship are measured in one history card, so this question has exactly one answer.
+  target:
+    kind: unit
+    id: daijin.workflow.history
+- id: g009
+  key: structural:history#13739fee
+  query: who has been changing this codebase
+  must_return:
+    - daijin.workflow.history
+  provenance: structural:history
+  source: structural
+  why: Change frequency and authorship are measured in one history card, so this question has exactly one answer.
+  target:
+    kind: unit
+    id: daijin.workflow.history
+- id: g010
+  key: structural:sole-consumer:@gsap/react#dce2b183
+  query: where is the @gsap/react package used
+  must_return:
+    - daijin.architecture.src
+  provenance: structural:sole-consumer:@gsap/react
+  source: structural
+  why: "@gsap/react is imported only from src, measured from the import graph."
+  target:
+    kind: area
+    area: src
+- id: g011
+  key: structural:sole-consumer:@vitejs/plugin-react#6fce6f57
+  query: where is the @vitejs/plugin-react package used
+  must_return:
+    - daijin.architecture.root
+  provenance: structural:sole-consumer:@vitejs/plugin-react
+  source: structural
+  why: "@vitejs/plugin-react is imported only from (root), measured from the import graph."
+  target:
+    kind: area
+    area: (root)
+- id: g012
+  key: structural:sole-consumer:border-beam#7cd22821
+  query: where is the border-beam package used
+  must_return:
+    - daijin.architecture.src
+  provenance: structural:sole-consumer:border-beam
+  source: structural
+  why: border-beam is imported only from src, measured from the import graph.
+  target:
+    kind: area
+    area: src
+- id: g013
+  key: structural:sole-consumer:gsap#bc417407
+  query: where is the gsap package used
+  must_return:
+    - daijin.architecture.src
+  provenance: structural:sole-consumer:gsap
+  source: structural
+  why: gsap is imported only from src, measured from the import graph.
+  target:
+    kind: area
+    area: src
+- id: g014
+  key: structural:sole-consumer:lucide-react#092b2472
+  query: where is the lucide-react package used
+  must_return:
+    - daijin.architecture.src
+  provenance: structural:sole-consumer:lucide-react
+  source: structural
+  why: lucide-react is imported only from src, measured from the import graph.
+  target:
+    kind: area
+    area: src
+- id: g015
+  key: structural:sole-consumer:node:crypto#f278e273
+  query: where is the node:crypto built-in module used
+  must_return:
+    - daijin.architecture.api
+  provenance: structural:sole-consumer:node:crypto
+  source: structural
+  why: node:crypto is imported only from api, measured from the import graph.
+  target:
+    kind: area
+    area: api
+- id: g016
+  key: structural:sole-consumer:node:fs#4ebe0d71
+  query: where is the node:fs built-in module used
+  must_return:
+    - daijin.architecture.scripts
+  provenance: structural:sole-consumer:node:fs
+  source: structural
+  why: node:fs is imported only from scripts, measured from the import graph.
+  target:
+    kind: area
+    area: scripts
+- id: g017
+  key: structural:sole-consumer:node:path#4e0cbf93
+  query: where is the node:path built-in module used
+  must_return:
+    - daijin.architecture.scripts
+  provenance: structural:sole-consumer:node:path
+  source: structural
+  why: node:path is imported only from scripts, measured from the import graph.
+  target:
+    kind: area
+    area: scripts
+- id: g018
+  key: structural:sole-consumer:node:url#a158b09e
+  query: where is the node:url built-in module used
+  must_return:
+    - daijin.architecture.scripts
+  provenance: structural:sole-consumer:node:url
+  source: structural
+  why: node:url is imported only from scripts, measured from the import graph.
+  target:
+    kind: area
+    area: scripts
+- id: g019
+  key: structural:sole-consumer:react#fda0a9c2
+  query: where is the react package used
+  must_return:
+    - daijin.architecture.src
+  provenance: structural:sole-consumer:react
+  source: structural
+  why: react is imported only from src, measured from the import graph.
+  target:
+    kind: area
+    area: src
+- id: g020
+  key: structural:sole-consumer:vite#a834a789
+  query: where is the vite package used
+  must_return:
+    - daijin.architecture.root
+  provenance: structural:sole-consumer:vite
+  source: structural
+  why: vite is imported only from (root), measured from the import graph.
+  target:
+    kind: area
+    area: (root)
+- id: g021
+  key: identifier:DaijinMascot#63549aef
+  query: DaijinMascot
+  must_return:
+    - daijin.architecture.src
+  identifier: true
+  provenance: identifier:DaijinMascot
+  source: identifier
+  why: DaijinMascot is defined in exactly one file (src/DaijinMascot.jsx), so the card for src is the only correct answer to the bare token.
+  target:
+    kind: symbol
+    name: DaijinMascot
+    file: src/DaijinMascot.jsx
+    area: src
+- id: g022
+  key: identifier:handler#3128389b
+  query: handler
+  must_return:
+    - daijin.architecture.api
+  identifier: true
+  provenance: identifier:handler
+  source: identifier
+  why: handler is defined in exactly one file (api/visits.mjs), so the card for api is the only correct answer to the bare token.
+  target:
+    kind: symbol
+    name: handler
+    file: api/visits.mjs
+    area: api
+- id: g023
+  key: identifier:signatureDot#c91139ee
+  query: signatureDot
+  must_return:
+    - daijin.architecture.src
+  identifier: true
+  provenance: identifier:signatureDot
+  source: identifier
+  why: signatureDot is defined in exactly one file (src/signature-path.js), so the card for src is the only correct answer to the bare token.
+  target:
+    kind: symbol
+    name: signatureDot
+    file: src/signature-path.js
+    area: src
+- id: g024
+  key: identifier:signaturePath#ed233e63
+  query: signaturePath
+  must_return:
+    - daijin.architecture.src
+  identifier: true
+  provenance: identifier:signaturePath
+  source: identifier
+  why: signaturePath is defined in exactly one file (src/signature-path.js), so the card for src is the only correct answer to the bare token.
+  target:
+    kind: symbol
+    name: signaturePath
+    file: src/signature-path.js
+    area: src
+- id: g025
+  key: identifier:signatureStrokeWidth#e8592a32
+  query: signatureStrokeWidth
+  must_return:
+    - daijin.architecture.src
+  identifier: true
+  provenance: identifier:signatureStrokeWidth
+  source: identifier
+  why: signatureStrokeWidth is defined in exactly one file (src/signature-path.js), so the card for src is the only correct answer to the bare token.
+  target:
+    kind: symbol
+    name: signatureStrokeWidth
+    file: src/signature-path.js
+    area: src

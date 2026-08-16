@@ -1,0 +1,372 @@
+# Daijin gold set. Mechanically mined; every case records where it came from.
+# Answers are ARTIFACTS (document ids), never prose. must_not_outrank is a RANKING
+# constraint: a listed id beating a required one is a violation, not an exclusion.
+# ACTIVE cases only: these are the ones that measure. Retired cases keep their record
+# in .daijin/goldset-retired.yaml, with the date and the reason they stopped being askable.
+- id: g001
+  key: structural:sole-mention:.github/workflows/update-contributions.yml#1c31fd9e
+  query: which document covers .github/workflows/update-contributions.yml
+  must_return:
+    - adopted.decision.decisions.adr-033-2026-07-25-contribution-snapshot-refreshed-by-github
+  provenance: structural:sole-mention:.github/workflows/update-contributions.yml
+  source: structural
+  why: .github/workflows/update-contributions.yml is named by exactly one curated record, so that record is where the project documents it.
+  target:
+    kind: unit
+    id: adopted.decision.decisions.adr-033-2026-07-25-contribution-snapshot-refreshed-by-github
+- id: g002
+  key: structural:sole-mention:public/apple-touch-icon.png#16d5378c
+  query: which document covers public/apple-touch-icon.png
+  must_return:
+    - adopted.workflow.state.2026-07-08-mf-logo-tutor-badge-generated-an-mf-monogram-favi
+  provenance: structural:sole-mention:public/apple-touch-icon.png
+  source: structural
+  why: public/apple-touch-icon.png is named by exactly one curated record, so that record is where the project documents it.
+  target:
+    kind: unit
+    id: adopted.workflow.state.2026-07-08-mf-logo-tutor-badge-generated-an-mf-monogram-favi
+- id: g003
+  key: structural:sole-mention:public/assets/claudeshot-preview.svg#e5bddc6e
+  query: which document covers public/assets/claudeshot-preview.svg
+  must_return:
+    - adopted.architecture.graph.public-assets-claudeshot-preview
+  provenance: structural:sole-mention:public/assets/claudeshot-preview.svg
+  source: structural
+  why: public/assets/claudeshot-preview.svg is named by exactly one curated record, so that record is where the project documents it.
+  target:
+    kind: unit
+    id: adopted.architecture.graph.public-assets-claudeshot-preview
+- id: g004
+  key: structural:sole-mention:public/assets/jal-favicon.png#e8eacc14
+  query: which document covers public/assets/jal-favicon.png
+  must_return:
+    - adopted.decision.decisions.adr-008-2026-07-05-download-remote-favicons-locally-never-ho
+  provenance: structural:sole-mention:public/assets/jal-favicon.png
+  source: structural
+  why: public/assets/jal-favicon.png is named by exactly one curated record, so that record is where the project documents it.
+  target:
+    kind: unit
+    id: adopted.decision.decisions.adr-008-2026-07-05-download-remote-favicons-locally-never-ho
+- id: g005
+  key: record-label:ADR-0#537fe2ca
+  query: ADR-0
+  must_return:
+    - adopted.workflow.state.2026-08-02-open-animation-glitch-finally-diagnosed-and-fixed
+  identifier: true
+  provenance: record-label:ADR-0
+  source: identifier
+  why: ADR-0 appears in exactly one record's TITLE, so that record is the one the label names; -1 other unit(s) merely reference it.
+  target:
+    kind: unit
+    id: adopted.workflow.state.2026-08-02-open-animation-glitch-finally-diagnosed-and-fixed
+    label: ADR-0
+- id: g006
+  key: record-label:ADR-001#36273a0d
+  query: ADR-001
+  must_return:
+    - adopted.decision.decisions.adr-001-2026-07-04-use-vite-react-static-portfolio
+  must_not_outrank:
+    - adopted.decision.decisions.index
+    - adopted.lesson.errors.the-shared-adr-index
+  identifier: true
+  provenance: record-label:ADR-001
+  source: identifier
+  why: ADR-001 appears in exactly one record's TITLE, so that record is the one the label names; 2 other unit(s) merely reference it.
+  target:
+    kind: unit
+    id: adopted.decision.decisions.adr-001-2026-07-04-use-vite-react-static-portfolio
+    label: ADR-001
+- id: g007
+  key: record-label:ADR-002#3842c27a
+  query: ADR-002
+  must_return:
+    - adopted.decision.decisions.adr-002-2026-07-04-generate-local-bitmap-portfolio-visuals
+  must_not_outrank:
+    - adopted.decision.decisions.index
+  identifier: true
+  provenance: record-label:ADR-002
+  source: identifier
+  why: ADR-002 appears in exactly one record's TITLE, so that record is the one the label names; 1 other unit(s) merely reference it.
+  target:
+    kind: unit
+    id: adopted.decision.decisions.adr-002-2026-07-04-generate-local-bitmap-portfolio-visuals
+    label: ADR-002
+- id: g008
+  key: record-label:ADR-003#566fdf76
+  query: ADR-003
+  must_return:
+    - adopted.decision.decisions.adr-003-2026-07-04-use-live-project-screenshots-and-public-l
+  must_not_outrank:
+    - adopted.decision.decisions.index
+  identifier: true
+  provenance: record-label:ADR-003
+  source: identifier
+  why: ADR-003 appears in exactly one record's TITLE, so that record is the one the label names; 1 other unit(s) merely reference it.
+  target:
+    kind: unit
+    id: adopted.decision.decisions.adr-003-2026-07-04-use-live-project-screenshots-and-public-l
+    label: ADR-003
+- id: g009
+  key: record-label:ADR-004#9220fc2b
+  query: ADR-004
+  must_return:
+    - adopted.decision.decisions.adr-004-2026-07-04-match-reference-portfolio-measurements
+  must_not_outrank:
+    - adopted.decision.decisions.index
+  identifier: true
+  provenance: record-label:ADR-004
+  source: identifier
+  why: ADR-004 appears in exactly one record's TITLE, so that record is the one the label names; 1 other unit(s) merely reference it.
+  target:
+    kind: unit
+    id: adopted.decision.decisions.adr-004-2026-07-04-match-reference-portfolio-measurements
+    label: ADR-004
+- id: g010
+  key: record-label:ADR-005#ec047c4d
+  query: ADR-005
+  must_return:
+    - adopted.decision.decisions.adr-005-2026-07-04-use-local-avatar-decoration-layer
+  must_not_outrank:
+    - adopted.decision.decisions.index
+  identifier: true
+  provenance: record-label:ADR-005
+  source: identifier
+  why: ADR-005 appears in exactly one record's TITLE, so that record is the one the label names; 1 other unit(s) merely reference it.
+  target:
+    kind: unit
+    id: adopted.decision.decisions.adr-005-2026-07-04-use-local-avatar-decoration-layer
+    label: ADR-005
+- id: g011
+  key: record-label:ADR-006#06bab918
+  query: ADR-006
+  must_return:
+    - adopted.decision.decisions.adr-006-2026-07-04-prefer-local-icon-components-and-bilingua
+  must_not_outrank:
+    - adopted.decision.decisions.index
+    - adopted.decision.decisions.adr-008-2026-07-05-download-remote-favicons-locally-never-ho
+  identifier: true
+  provenance: record-label:ADR-006
+  source: identifier
+  why: ADR-006 appears in exactly one record's TITLE, so that record is the one the label names; 2 other unit(s) merely reference it.
+  target:
+    kind: unit
+    id: adopted.decision.decisions.adr-006-2026-07-04-prefer-local-icon-components-and-bilingua
+    label: ADR-006
+- id: g012
+  key: record-label:ADR-007#ad7a4657
+  query: ADR-007
+  must_return:
+    - adopted.decision.decisions.adr-007-2026-07-04-use-flip-qr-avatar-and-browser-locale-cop
+  must_not_outrank:
+    - adopted.decision.decisions.index
+  identifier: true
+  provenance: record-label:ADR-007
+  source: identifier
+  why: ADR-007 appears in exactly one record's TITLE, so that record is the one the label names; 1 other unit(s) merely reference it.
+  target:
+    kind: unit
+    id: adopted.decision.decisions.adr-007-2026-07-04-use-flip-qr-avatar-and-browser-locale-cop
+    label: ADR-007
+- id: g013
+  key: record-label:ADR-009#656d4455
+  query: ADR-009
+  must_return:
+    - adopted.decision.decisions.adr-009-2026-07-05-untrack-node-modules-and-dist-never-commi
+  must_not_outrank:
+    - adopted.decision.decisions.index
+    - adopted.workflow.state.2026-07-05-finished-the-in-progress-jp-locale-project-screen
+  identifier: true
+  provenance: record-label:ADR-009
+  source: identifier
+  why: ADR-009 appears in exactly one record's TITLE, so that record is the one the label names; 2 other unit(s) merely reference it.
+  target:
+    kind: unit
+    id: adopted.decision.decisions.adr-009-2026-07-05-untrack-node-modules-and-dist-never-commi
+    label: ADR-009
+- id: g014
+  key: record-label:ADR-010#afe8d941
+  query: ADR-010
+  must_return:
+    - adopted.decision.decisions.adr-010-2026-07-05-prevent-title-wrapping-with-ellipsis-not-
+  must_not_outrank:
+    - adopted.decision.decisions.index
+    - adopted.decision.decisions.adr-015-2026-07-05-project-title-nowrap-wrapping-heading-row
+  identifier: true
+  provenance: record-label:ADR-010
+  source: identifier
+  why: ADR-010 appears in exactly one record's TITLE, so that record is the one the label names; 3 other unit(s) merely reference it.
+  target:
+    kind: unit
+    id: adopted.decision.decisions.adr-010-2026-07-05-prevent-title-wrapping-with-ellipsis-not-
+    label: ADR-010
+- id: g015
+  key: record-label:ADR-011#2e94f18e
+  query: ADR-011
+  must_return:
+    - adopted.decision.decisions.adr-011-2026-07-05-delay-visibility-transitions-instead-of-s
+  must_not_outrank:
+    - adopted.decision.decisions.index
+    - adopted.workflow.state.2026-07-05-same-day-follow-up-full-animation-transition-audi
+  identifier: true
+  provenance: record-label:ADR-011
+  source: identifier
+  why: ADR-011 appears in exactly one record's TITLE, so that record is the one the label names; 2 other unit(s) merely reference it.
+  target:
+    kind: unit
+    id: adopted.decision.decisions.adr-011-2026-07-05-delay-visibility-transitions-instead-of-s
+    label: ADR-011
+- id: g016
+  key: record-label:ADR-012#cfd03ee6
+  query: ADR-012
+  must_return:
+    - adopted.decision.decisions.adr-012-2026-07-05-give-every-interactive-element-a-transiti
+  must_not_outrank:
+    - adopted.decision.decisions.index
+    - adopted.workflow.state.2026-07-05-same-day-follow-up-full-animation-transition-audi
+  identifier: true
+  provenance: record-label:ADR-012
+  source: identifier
+  why: ADR-012 appears in exactly one record's TITLE, so that record is the one the label names; 2 other unit(s) merely reference it.
+  target:
+    kind: unit
+    id: adopted.decision.decisions.adr-012-2026-07-05-give-every-interactive-element-a-transiti
+    label: ADR-012
+- id: g017
+  key: record-label:ADR-013#64ef1615
+  query: ADR-013
+  must_return:
+    - adopted.decision.decisions.adr-013-2026-07-05-add-gsap-scrolltrigger-for-scroll-reveals
+  must_not_outrank:
+    - adopted.architecture.components.app-page-composition-and-section-order
+    - adopted.decision.decisions.index
+  identifier: true
+  provenance: record-label:ADR-013
+  source: identifier
+  why: ADR-013 appears in exactly one record's TITLE, so that record is the one the label names; 5 other unit(s) merely reference it.
+  target:
+    kind: unit
+    id: adopted.decision.decisions.adr-013-2026-07-05-add-gsap-scrolltrigger-for-scroll-reveals
+    label: ADR-013
+- id: g018
+  key: record-label:ADR-014#9dc5698f
+  query: ADR-014
+  must_return:
+    - adopted.decision.decisions.adr-014-2026-07-05-timeline-dots-keep-flat-original-style-fi
+  must_not_outrank:
+    - adopted.decision.decisions.index
+    - adopted.decision.decisions.adr-016-2026-07-06-adapt-reference-image-ui-patterns-timelin
+  identifier: true
+  provenance: record-label:ADR-014
+  source: identifier
+  why: ADR-014 appears in exactly one record's TITLE, so that record is the one the label names; 2 other unit(s) merely reference it.
+  target:
+    kind: unit
+    id: adopted.decision.decisions.adr-014-2026-07-05-timeline-dots-keep-flat-original-style-fi
+    label: ADR-014
+- id: g019
+  key: record-label:ADR-015#de6ee9e8
+  query: ADR-015
+  must_return:
+    - adopted.decision.decisions.adr-015-2026-07-05-project-title-nowrap-wrapping-heading-row
+  must_not_outrank:
+    - adopted.decision.decisions.index
+  identifier: true
+  provenance: record-label:ADR-015
+  source: identifier
+  why: ADR-015 appears in exactly one record's TITLE, so that record is the one the label names; 1 other unit(s) merely reference it.
+  target:
+    kind: unit
+    id: adopted.decision.decisions.adr-015-2026-07-05-project-title-nowrap-wrapping-heading-row
+    label: ADR-015
+- id: g020
+  key: record-label:ADR-016#0505f678
+  query: ADR-016
+  must_return:
+    - adopted.decision.decisions.adr-016-2026-07-06-adapt-reference-image-ui-patterns-timelin
+  must_not_outrank:
+    - adopted.architecture.components.experienceitem-timeline-row-with-official-logo-date-status-c
+    - adopted.decision.decisions.index
+  identifier: true
+  provenance: record-label:ADR-016
+  source: identifier
+  why: ADR-016 appears in exactly one record's TITLE, so that record is the one the label names; 3 other unit(s) merely reference it.
+  target:
+    kind: unit
+    id: adopted.decision.decisions.adr-016-2026-07-06-adapt-reference-image-ui-patterns-timelin
+    label: ADR-016
+- id: g021
+  key: record-label:ADR-017#d8f0b9bf
+  query: ADR-017
+  must_return:
+    - adopted.decision.decisions.adr-017-2026-07-06-gsap-pass-2-coordinated-hero-timeline-per
+  must_not_outrank:
+    - adopted.decision.decisions.index
+    - adopted.workflow.state.2026-07-06-reference-image-adaptation-gsap-pass-2-adapted-th
+  identifier: true
+  provenance: record-label:ADR-017
+  source: identifier
+  why: ADR-017 appears in exactly one record's TITLE, so that record is the one the label names; 2 other unit(s) merely reference it.
+  target:
+    kind: unit
+    id: adopted.decision.decisions.adr-017-2026-07-06-gsap-pass-2-coordinated-hero-timeline-per
+    label: ADR-017
+- id: g022
+  key: record-label:ADR-019#7c7924f1
+  query: ADR-019
+  must_return:
+    - adopted.decision.decisions.adr-019-2026-07-06-round-2-reference-adaptations-and-respons
+  must_not_outrank:
+    - adopted.decision.decisions.index
+  identifier: true
+  provenance: record-label:ADR-019
+  source: identifier
+  why: ADR-019 appears in exactly one record's TITLE, so that record is the one the label names; 1 other unit(s) merely reference it.
+  target:
+    kind: unit
+    id: adopted.decision.decisions.adr-019-2026-07-06-round-2-reference-adaptations-and-respons
+    label: ADR-019
+- id: g023
+  key: record-label:ADR-025#718e7244
+  query: ADR-025
+  must_return:
+    - adopted.workflow.state.2026-07-06-tap-locale-icon-fixes-adr-025-1-page-ripple-now-l
+  identifier: true
+  provenance: record-label:ADR-025
+  source: identifier
+  why: ADR-025 appears in exactly one record's TITLE, so that record is the one the label names; 0 other unit(s) merely reference it.
+  target:
+    kind: unit
+    id: adopted.workflow.state.2026-07-06-tap-locale-icon-fixes-adr-025-1-page-ripple-now-l
+    label: ADR-025
+- id: g024
+  key: record-label:ADR-034#02efcc60
+  query: ADR-034
+  must_return:
+    - adopted.decision.decisions.adr-034-2026-07-25-border-beam-and-thinking-orb
+  must_not_outrank:
+    - adopted.architecture.components.profile-decorations-borderbeam-wraps-the-avatar-and-thinking
+    - adopted.decision.decisions.index
+  identifier: true
+  provenance: record-label:ADR-034
+  source: identifier
+  why: ADR-034 appears in exactly one record's TITLE, so that record is the one the label names; 2 other unit(s) merely reference it.
+  target:
+    kind: unit
+    id: adopted.decision.decisions.adr-034-2026-07-25-border-beam-and-thinking-orb
+    label: ADR-034
+- id: g025
+  key: record-label:ADR-035#df9f9624
+  query: ADR-035
+  must_return:
+    - adopted.decision.decisions.adr-035-2026-07-25-project-detail-gains-a-real-flow-chart
+  must_not_outrank:
+    - adopted.architecture.components.projectflowchart-svg-system-architecture-flow-chart-under-th
+    - adopted.decision.decisions.index
+  identifier: true
+  provenance: record-label:ADR-035
+  source: identifier
+  why: ADR-035 appears in exactly one record's TITLE, so that record is the one the label names; 3 other unit(s) merely reference it.
+  target:
+    kind: unit
+    id: adopted.decision.decisions.adr-035-2026-07-25-project-detail-gains-a-real-flow-chart
+    label: ADR-035

@@ -1,0 +1,18 @@
+{
+  "generated": {
+    "corpus": 11,
+    "meanUnitsReturned": 6.96,
+    "fractionOfCorpus": 0.6327272727272727,
+    "meanTokensReturned": 856.4,
+    "medianUnitTokens": 190,
+    "maxUnitTokens": 368
+  },
+  "adopted": {
+    "corpus": 257,
+    "meanUnitsReturned": 7.28,
+    "fractionOfCorpus": 0.028326848249027238,
+    "meanTokensReturned": 2672.08,
+    "medianUnitTokens": 95,
+    "maxUnitTokens": 1625
+  }
+}

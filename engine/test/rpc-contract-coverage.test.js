@@ -64,7 +64,6 @@ const LIVE = Object.freeze({
 // plus classification", and seven speculative shapes would be documentation nobody asked
 // for pretending to be coverage. The gate printing them every run is the honest bound.
 const PROSE = Object.freeze({
-  gatesGet: 'returns file content plus classification; the row describes it in English',
   gatesSet: 'returns the updated gates.yaml; described, not declared',
   settingsGet: 'described as "full settings object, secrets masked"',
   settingsSet: 'described as "updated settings"',
@@ -161,6 +160,9 @@ function recipes(repoPath) {
     examVeto: { params: { repoPath, examId: 'exam-0001', reason: 'Superseded by a later commit that reverts this one entirely.' } },
     examUpdate: { params: { repoPath, examId: 'exam-0001', patch: { title: 'A retitled exam' } } },
     board: { params: {} },
+    // Moved out of prose by the gatesGet finding: its row promised classification the wire
+    // never carried, and prose is where no gate checks.
+    gatesGet: { params: { repoPath } },
     agentFileGet: { params: { repoPath, role: 'student' } },
     initBrain: { params: { repoPath, mode: 'layer1' }, skipCall: true },
     gatesDiscover: { params: { repoPath }, skipCall: true },
@@ -205,6 +207,13 @@ test('the contract-shape gate partitions the WHOLE surface, and says what it doe
   console.log(`  covered here      ${Object.keys(recipes('/x')).length}`);
   console.log(`  live (acceptance) ${Object.keys(LIVE).join(', ')}`);
   console.log(`  prose, no shape   ${Object.keys(PROSE).join(', ')}`);
+  // The prose bucket's residual, said out loud every run rather than assumed away. Ruling
+  // a row prose assumes the prose is ACCURATE, and nothing here checks that: gatesGet sat
+  // in this bucket promising "per-gate classification and liveness evidence" while the wire
+  // carried a path and a string, and the screen built for the promise showed an empty table
+  // over a file describing three gates. Prose is not merely unchecked shape, it is unchecked
+  // CLAIM.
+  console.log('  ^ prose rows are unchecked CLAIMS, not merely unchecked shapes: gatesGet promised classification the wire never carried');
   console.log(`  refuse, no shape  ${Object.keys(REFUSING).join(', ')}`);
   console.log(`  known divergent   ${Object.keys(DIVERGENT).join(', ') || 'none'}`);
 });
@@ -301,4 +310,70 @@ test('the divergent list may only shrink, so a known gap cannot quietly grow', a
     assert.ok(entry.extra.length || entry.missing.length,
       `${method} pins no keys, so it exempts everything, which is the mute button this design replaced`);
   }
+});
+
+// ---- the gates file: parsed, and tolerant of a file the user owns -------------------------
+
+test('a discovery-written gates file comes back parsed, evidence and all', async () => {
+  const { parseGatesFile } = await import('../src/rpc/methods.js');
+  const parsed = parseGatesFile([
+    '# a comment discovery writes',
+    'version: 1',
+    'discoveredAt: 2026-08-17T00:00:00.000Z',
+    'timeoutMs: 300000',
+    'summary:',
+    '  total: 2',
+    '  carryingSignal: 1',
+    'gates:',
+    '  - id: test',
+    '    command: npm test',
+    '    classification: live',
+    '    enabled: true',
+    '    baseline:',
+    '      status: pass',
+    '      exitCode: 0',
+    '  - id: build',
+    '    command: npm run build',
+    '    classification: unavailable',
+    '    enabled: false',
+  ].join('\n'));
+
+  assert.equal(parsed.parseError, null);
+  assert.equal(parsed.discovered.gates.length, 2);
+  assert.equal(parsed.discovered.summary.carryingSignal, 1, 'the number the screen renders');
+  assert.equal(parsed.discovered.gates[0].classification, 'live');
+  assert.equal(parsed.discovered.gates[0].baseline.exitCode, 0, 'the liveness evidence survives');
+  // Rows pass through AS WRITTEN. This document is the user's; a key they added by hand
+  // belongs in the answer, which is the opposite of the attempts-row rule and for the
+  // opposite reason: that row is the engine's record, this one it only reads.
+  const custom = parseGatesFile('gates:\n  - id: mine\n    myOwnKey: kept\n');
+  assert.equal(custom.discovered.gates[0].myOwnKey, 'kept');
+});
+
+test('a file the user broke still comes back, and says WHY it is not interpreted', async () => {
+  // gates.yaml is a file the engine invites the user to edit, so a parse error is a fact
+  // about the file rather than a failure of the method. Failing the call would take the
+  // user's own text away from them at the moment they most need to see it.
+  const { parseGatesFile } = await import('../src/rpc/methods.js');
+
+  const broken = parseGatesFile('gates:\n  - id: test\n   command: bad indent\n');
+  assert.equal(broken.discovered, null);
+  assert.match(broken.parseError, /not valid YAML/);
+
+  const empty = parseGatesFile('');
+  assert.equal(empty.discovered, null);
+  assert.match(empty.parseError, /empty or is not a mapping/);
+
+  const noList = parseGatesFile('version: 1\nsummary:\n  total: 0\n');
+  assert.equal(noList.discovered, null);
+  assert.match(noList.parseError, /no `gates:` list/);
+
+  // NULL IS NOT ZERO GATES, which is the distinction the empty table got wrong: a file that
+  // cannot be interpreted and a file describing zero gates are different facts, and the
+  // screen said "0 carrying signal" for the first while meaning the second.
+  const none = parseGatesFile('gates: []\n');
+  assert.notEqual(none.discovered, null);
+  assert.deepEqual(none.discovered.gates, []);
+  assert.equal(none.parseError, null);
+  assert.equal(none.discovered.summary, null, 'a file with no summary is not a summary of nothing');
 });

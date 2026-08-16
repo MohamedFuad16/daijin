@@ -307,6 +307,48 @@ export function stalenessOf(stored, current) {
 }
 
 /**
+ * Read the structured half of a gates file, tolerating anything a user may have done to it.
+ *
+ * Returns `{ discovered, parseError }`. `discovered` is non-null only when the document
+ * parses AND carries a `gates` array, because those are the two things a client needs
+ * before it can render a table; anything else is a file this method will hand back
+ * verbatim without pretending to understand it.
+ *
+ * The rows are passed through AS WRITTEN rather than mapped to a fixed set. This file is
+ * the user's, not the engine's: a key someone added by hand belongs in the answer, and the
+ * contract documents what DISCOVERY writes rather than what a file may contain. That is the
+ * opposite of the attempts-row rule and for the opposite reason, since that row is the
+ * engine's own record and this one is a document it only reads.
+ */
+export function parseGatesFile(content) {
+  let document;
+  try {
+    document = YAML.parse(content);
+  } catch (error) {
+    return { discovered: null, parseError: `gates.yaml is not valid YAML (${error.message.split('\n')[0]})` };
+  }
+  if (!document || typeof document !== 'object') {
+    return { discovered: null, parseError: 'gates.yaml is empty or is not a mapping, so it describes no gates' };
+  }
+  if (!Array.isArray(document.gates)) {
+    return { discovered: null, parseError: 'gates.yaml has no `gates:` list, so there is nothing to classify' };
+  }
+  return {
+    discovered: {
+      version: document.version ?? null,
+      discoveredAt: document.discoveredAt ?? null,
+      timeoutMs: document.timeoutMs ?? null,
+      // Null rather than a zeroed object when absent: a summary of nothing and a file that
+      // never carried one are different facts, and this is the field the screen renders as
+      // "n carrying signal".
+      summary: document.summary ?? null,
+      gates: document.gates,
+    },
+    parseError: null,
+  };
+}
+
+/**
  * A digest of WHAT WAS INDEXED, so two measurements can be told apart after the fact.
  *
  * store-adapter's refinement, taken: one repo id is shared by every checkout of a project,
@@ -1040,17 +1082,42 @@ export function createMethods({
 
     // ---- gates ---------------------------------------------------------------------
 
+    /**
+     * The gates file, verbatim AND parsed.
+     *
+     * It used to return `{ path, content }` while its contract row promised "content plus
+     * per-gate classification and liveness evidence". The screen was built for the promise,
+     * read a gates list that was never on the wire, and therefore showed an empty table and
+     * "0 carrying signal" over a file describing three gates. That is the dead-gate shape
+     * inside the screen whose whole job is to prevent it, and it survived because the row
+     * sat in the PROSE tier, where nothing compares the promise to the bytes.
+     *
+     * The classification was never missing. Discovery persists it in full: every row carries
+     * its command, source, classification, enabled flag and a baseline block with the
+     * evidence, and gatesGet simply did not read the file it was returning.
+     *
+     * CONTENT IS ALWAYS RETURNED, whatever state the file is in. It is a file the user is
+     * invited to edit, so a hand-written or half-edited one must still come back rather than
+     * failing the call: the engine treats gates as data it does not author, and a parse
+     * error is a fact about the file rather than an error of this method.
+     *
+     * `discovered` is NULL when the file is not discovery-shaped, with `parseError` saying
+     * why. Null is not "no gates": a client can tell a file it cannot interpret from a file
+     * that describes zero, which is exactly the distinction the empty table got wrong.
+     */
     async gatesGet(params) {
       const repoPath = await requireAttached(params);
       const file = gatesFilePath(repoPath);
+      let content;
       try {
-        return { path: file, content: await readFile(file, 'utf8') };
+        content = await readFile(file, 'utf8');
       } catch (error) {
         if (error.code === 'ENOENT') {
           throw invalidParams('no gates discovered', `No gates.yaml exists for ${repoPath}. Run gate discovery first.`);
         }
         throw error;
       }
+      return { path: file, content, ...parseGatesFile(content) };
     },
 
     async gatesSet(params) {

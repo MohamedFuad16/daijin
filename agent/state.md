@@ -1,5 +1,40 @@
 # Daijin build state (authoritative)
 
+## 2026-08-17 07:20 - Enum sweep closes the third mode; every enum bound to its source
+
+The sweep landed (ca54f84, 620/620 + 18/18): two unnamed enums found -
+serveStatus.health (the repo home's status badge, a guaranteed repeat
+of the baseline.status guess) and examDetail.verdict - both now named
+with what each value MEANS (critical is a brain that could not be
+opened, a real state the home screen must show rather than a crash;
+a verdict and a status answer different questions, so an attempt can
+have a status with no verdict and never the reverse). THE MODE IS
+CLOSED BY A GATE, not a one-time sweep: nine enums bound to their
+sources (six exported constants, two harvested from emitting code, one
+computed over every run status), with a harvest yielding fewer than
+two values failing outright - a broken harvest would otherwise report
+every row compliant precisely by having stopped reading the code.
+
+Two confessed errors, the second the keeper: (1) a scope error reading
+only the returns cell (the vocabulary question's right scope is the
+whole row - does the contract name this where a reader would see it);
+(2) GIT CHECKOUT USED TO UNDO A MUTATION IN A FILE CARRYING
+UNCOMMITTED WORK, destroying the just-written enum test - the .bak
+discipline held nine times and lapsed on the tenth, nothing lost only
+because it could be rewritten, and noticed only because the pass count
+dropped by one. The lapse pattern is the lesson: discipline that
+depends on remembering fails exactly when familiarity peaks.
+
+Also kept: a mutation that looked like a survivor and was not -
+removing the enum LIST left the gate green because the row names each
+value twice and the gate measures DISCOVERABILITY, so the mutation was
+information-preserving; removing every mention fails it. The
+applied-check ran first, and the reading was still wrong for a
+different reason - two distinct ways a survivor can lie, now both in
+the record.
+
+Remaining project-wide: tui-builder's two fixes (mock content rule,
+baseline vocabulary). Then the owner's sequence.
 ## 2026-08-17 07:00 - Four answers, zero engine changes; a third row failure mode named
 
 All four wire questions answered from the bytes and locked into the

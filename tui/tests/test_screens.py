@@ -1072,3 +1072,32 @@ async def test_an_attempt_with_no_mode_is_not_presented_as_scored():
         # Unknown is neither marked as debug nor silently treated as scored.
         marked = [label for label in bars.labels if label.endswith("*")]
         assert len(marked) == 2, f"expected only the two declared debug attempts, saw {marked}"
+
+
+@run_async
+async def test_the_veto_dialog_enforces_the_bound_the_engine_enforces():
+    """A rejection that only arrives from the engine makes the user retype.
+
+    The engine requires 20 characters; the dialog used to accept one, so a
+    short reason was accepted by the screen and refused by the round trip.
+    """
+    from daijin_tui.screens.exams import VETO_REASON_MIN
+
+    async with running_app() as (app, pilot):
+        await goto(pilot, "6")
+        await pilot.click("#exam-veto")
+        await settle(pilot)
+        assert isinstance(app.screen, TextPromptScreen)
+        assert app.screen.min_length == VETO_REASON_MIN
+        app.screen.query_one("#prompt-input", Input).value = "too short"
+        await pilot.click("#prompt-ok")
+        await settle(pilot)
+        assert isinstance(app.screen, TextPromptScreen), "a short reason was accepted"
+        assert f"At least {VETO_REASON_MIN}" in text_of(app.screen.query_one("#prompt-error", Static))
+        app.screen.query_one("#prompt-input", Input).value = (
+            "the statement cannot be written without leaking the fix"
+        )
+        await pilot.click("#prompt-ok")
+        await settle(pilot)
+        exam = next(e for e in app.screen.exams if e["examId"] == "exam-0058")
+        assert exam["status"] == "vetoed"

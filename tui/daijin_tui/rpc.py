@@ -1117,11 +1117,20 @@ class MockEngine:
     async def _rpc_examVeto(self, params: dict[str, Any]) -> dict[str, Any]:
         exam = self._find_exam(params.get("examId"))
         reason = str(params.get("reason") or "").strip()
-        if not reason:
+        # 20 characters, the same bound the engine enforces. The mock accepted
+        # any non-empty string, which is how a client dialog with a shorter
+        # bound survived every test: a mock looser than reality tests nothing
+        # about the boundary it is standing in for.
+        if len(reason) < 20:
             raise RpcError(
                 ERR_INVALID_PARAMS,
-                "veto reason required",
-                {"hint": "A veto without a written reason is not reviewable later. Say why."},
+                "veto reason too short",
+                {
+                    "hint": (
+                        "A veto needs a written reason of at least 20 characters. "
+                        "A veto nobody can review later is a decision without a record."
+                    )
+                },
             )
         exam["status"] = "vetoed"
         exam.setdefault("provenance", {})["vetoReason"] = reason

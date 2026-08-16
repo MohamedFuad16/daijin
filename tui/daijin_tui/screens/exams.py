@@ -53,8 +53,12 @@ BENCHMARK_OPTIONS = [
     ("quarantined", "quarantined"),
 ]
 
-# quarantineReason is required at a minimum of 20 characters by the contract.
+# Both reasons are required at a minimum of 20 characters by the engine. The
+# dialog enforces the same bound so a user is told before the round trip
+# rather than after it: a rejection that only arrives from the engine makes the
+# user retype something the screen could have caught while they were typing.
 QUARANTINE_REASON_MIN = 20
+VETO_REASON_MIN = 20
 
 
 def with_repo(params: dict[str, Any], repo: Any) -> dict[str, Any]:
@@ -380,8 +384,11 @@ class ExamsScreen(DaijinScreen):
         reason = await self.app.push_screen_wait(
             TextPromptScreen(
                 title=f"Veto {exam['examId']}",
-                prompt="Say why. A veto with no written reason cannot be reviewed later.",
-                min_length=1,
+                prompt=(
+                    f"Say why. A veto with no written reason cannot be reviewed "
+                    f"later, so the engine requires at least {VETO_REASON_MIN} characters."
+                ),
+                min_length=VETO_REASON_MIN,
                 placeholder="reason for the veto",
             )
         )

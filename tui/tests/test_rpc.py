@@ -577,11 +577,11 @@ async def test_releasing_quarantine_drops_the_reason():
 async def test_veto_requires_a_written_reason():
     client = MockRpcClient(MockEngine(speed=0.0))
     with pytest.raises(RpcError) as caught:
-        await client.call("examVeto", {"examId": "exam-0074", "reason": "  "})
-    assert "Say why" in caught.value.hint
-    vetoed = await client.call("examVeto", {"examId": "exam-0074", "reason": "statement leaks the fix"})
+        await client.call("examVeto", {"examId": "exam-0074", "reason": "too short"})
+    assert "at least 20 characters" in caught.value.hint
+    vetoed = await client.call("examVeto", {"examId": "exam-0074", "reason": "the statement cannot be written without leaking the fix"})
     assert vetoed["status"] == "vetoed"
-    assert vetoed["provenance"]["vetoReason"] == "statement leaks the fix"
+    assert vetoed["provenance"]["vetoReason"].startswith("the statement cannot")
     await client.aclose()
 
 

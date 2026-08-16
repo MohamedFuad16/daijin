@@ -186,6 +186,24 @@ P6 install story: packaging + curl script. Check: clean-machine dry run document
    runtimes are version-checked with named refusals when absent or too old, and
    the failure of either runtime check refuses the install rather than degrading
    it.]
+P7 grading, rubric import, harvest: the teacher half of a cycle, and the only step
+   that puts anything back into the brain.
+   [ACCEPTANCE PRE-REGISTERED 2026-08-16, drafted by gym-porter against the
+   platform's failure modes, ruled and registered by the leader BEFORE the build
+   exists. One-line summary: with an INJECTED teacher and zero spend, the grading
+   and harvest machinery refuses everything it must refuse (uncited, transposed or
+   digest-mismatched rubrics, a rubric for a run that produced no diff, a grader
+   who authored the exam, harvest over a held-out run, invented document ids, empty
+   concerns), harvest stays proposal-only with apply as a separate act, every lesson
+   written back is validated against current code, a measured zero is a recorded
+   outcome, and every clause carries a mutation that kills it. The full 21 clauses,
+   the three registration decisions, the named symbol-resolver gap in clause 16, and
+   the out-of-scope list (grade QUALITY is a many-cycle measurement with its own
+   future sentence, never this one) are registered at
+   docs/verification/p7-grading-harvest-acceptance.md, commit 1cdc2b8. The plan is
+   the findable index; that document is the text the verifier attacks. The LIVE half,
+   one real graded cycle with a real teacher model, is deferred and owner-gated
+   exactly as P4's is.]
 
 ## Team shape (launch after a Claude Code restart; team runtime was glitchy)
 

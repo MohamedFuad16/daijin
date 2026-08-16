@@ -96,8 +96,12 @@ test('an open gate PLUS consent stops being the reason, and the refusal changes 
   await writeGate(JSON.stringify({ status: 'open', reason: 'owner authorized this cycle by hand' }));
   const error = errorOf(await daemon.request('gymStart', { repoPath, config: {}, confirm: true }));
   assert.notEqual(error.code, ERR_SPEND_REFUSED, 'gate open and consent given: spend is no longer the blocker');
-  assert.equal(error.code, -32001, 'it is the cycle runner that is missing now, not the authorization');
-  assert.match(error.data.phase, /^P4/);
+  // Past both spend boundaries, the next thing that stops it is a REAL precondition rather
+  // than a deferral: this fixture repo has no mined exams, so there is nothing to run. That
+  // ordering is the point, and it changed when the gym methods were wired: a user with an
+  // empty bank now learns about the bank instead of about a driver they cannot affect.
+  assert.equal(error.code, -32602);
+  assert.match(error.data.hint, /nothing to run/);
   await rm(gymSpendGatePath(repoPath), { force: true });
 });
 

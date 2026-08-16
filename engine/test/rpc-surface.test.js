@@ -89,10 +89,25 @@ test('every not-implemented answer names the phase that will implement it', asyn
     assert.match(data.phase, /^P\d/, `${method} phase should read like P3 or P4, got ${data.phase}`);
     assert.ok(data.hint.length > 20, `${method} hint is too thin to display`);
   }
-  // A guard against the opposite failure: if this list ever empties because someone
-  // wired everything, that is fine, but if it empties because the code stopped
-  // ANSWERING, the first test catches it.
-  assert.ok(deferred.length > 0, 'some capability is still deferred at this phase');
+  // The list is ALLOWED to be empty, and as of the gym wiring it is: every method in this
+  // sweep either works or refuses for a reason the caller can act on. It was not always,
+  // and the guard against the list emptying for the WRONG reason (the code stopping
+  // answering rather than starting working) is the first test, not a count here.
+  //
+  // What remains deferred is reachable only with different params than this sweep sends:
+  // initBrain mode ingest, and rolePing once confirmed. Both are covered in their own tests.
+  for (const method of deferred) assert.ok(method, method);
+});
+
+test('the deferrals that remain are reachable, and still name their phase', async () => {
+  // A deferral that no test reaches is a deferral nobody notices going stale.
+  const ingest = errorOf(await daemon.request('initBrain', { repoPath, mode: 'ingest' }));
+  assert.equal(ingest.code, ERR_NOT_IMPLEMENTED);
+  assert.match(ingest.data.phase, /^P3/);
+
+  const ping = errorOf(await daemon.request('rolePing', { role: 'engineer', confirm: true }));
+  assert.equal(ping.code, ERR_NOT_IMPLEMENTED);
+  assert.match(ping.data.phase, /^P3/);
 });
 
 test('the handshake, repo lifecycle and settings are really wired', async () => {

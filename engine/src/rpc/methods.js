@@ -23,7 +23,11 @@ import { createOllamaClient } from '../../../adapters/ollama/client.js';
 import { checkOllama } from '../rag/embed.js';
 import { formatContext } from '../rag/context.js';
 import { retrieve as retrieveImpl } from '../rag/retrieve.js';
-import { getAgentFile as readAgentFile, setAgentFile as writeAgentFile } from '../gym/agent-files.js';
+import { getAgentFile as readAgentFile, setAgentFile as writeAgentFile, studentRules } from '../gym/agent-files.js';
+import { runGymCycle } from '../gym/cycle.js';
+import { parseExamRecord, quarantineExam, vetoExam } from '../gym/exams.js';
+import { GymLedger, gymDatabasePath } from '../gym/ledger.js';
+import { loadResultFiles } from '../gym/result-files.js';
 import { assertSpendGate, readSpendGate, gymSpendGatePath } from '../gym/spend-gate.js';
 import { createSqliteStore } from '../store/sqlite.js';
 import { invalidParams, notImplemented, spendRefused } from './errors.js';
@@ -188,6 +192,12 @@ export function createMethods({
   const makeEmbedderClient = deps.createEmbedderClient || createOllamaClient;
   const embedderFromClient = deps.embedderFromClient || embedderFromOllama;
   const runInit = deps.initBrain || runInitPipeline;
+  const openLedger = deps.openLedger || ((repoPath) => GymLedger.open(gymDatabasePath(repoPath)));
+  const runCycle = deps.runGymCycle || runGymCycle;
+  // THE PAID SEAM. `engineer.next()` is the only provider call in a gym cycle, and no
+  // driver exists yet: building one needs a configured role, and roles arrive with the
+  // model-setup round. Injectable so a cycle is fully testable with a fake student.
+  const createEngineer = deps.createEngineer || null;
 
   /// Open a repo's brain, run `body`, and always close. A leaked sqlite handle in a
   /// long-lived daemon is a file descriptor that never comes back.
@@ -229,6 +239,25 @@ export function createMethods({
       budget: normalizeBudgetEcho(params?.budget),
       at: new Date(now()).toISOString(),
     });
+  }
+
+  /// Open a repo's gym ledger, use it, and always close. The ledger is synchronous
+  /// better-sqlite3 and REFUSES to open a database carrying brain tables, so a mis-pointed
+  /// path fails loudly on open rather than growing gym tables inside a user's brain.
+  async function withLedger(repoPath, body) {
+    const ledger = openLedger(repoPath);
+    try {
+      return await body(ledger);
+    } finally {
+      ledger.close?.();
+    }
+  }
+
+  /// gym-porter's modules throw messages written for a person and naming the field and the
+  /// rule. Those are the caller's to fix, so they map to a parameter error with the message
+  /// verbatim rather than being flattened into a generic failure.
+  function asParameterError(error, fallback) {
+    throw invalidParams(fallback, error.message);
   }
 
   const historyFile = (repoPath) => path.join(repoPath, '.daijin', 'score-history.json');
@@ -721,25 +750,118 @@ export function createMethods({
       // never infers consent.
       await requireConsent('gymStart', params,
         'A gym cycle calls a paid provider on every round. The gate authorizes the machine; this call still needs your explicit go ahead.');
-      throw notImplemented('gymStart', 'P4 (gym port)',
-        'The gate is open, so the refusal above is not what stopped this: the cycle runner itself ships in P4.');
+      // Preconditions are checked BEFORE the missing-driver refusal, deliberately. A user
+      // with a closed gate, no consent, an empty bank or a bad draw should learn about
+      // that, not about a driver they cannot do anything about.
+      const config = params?.config ?? {};
+      const settings = await state.settings();
+      const drawn = await withLedger(repoPath, async (ledger) => {
+        const bank = ledger.listExams({ benchmarkStatus: 'active', status: 'promoted' });
+        if (bank.length === 0) {
+          throw invalidParams('empty bank',
+            `No promoted, unquarantined exam exists for ${repoPath}, so there is nothing to run. Mine and promote exams first.`);
+        }
+        const wanted = config.examId ? bank.filter((row) => row.examId === config.examId) : bank;
+        if (wanted.length === 0) {
+          throw invalidParams('unknown examId', `${config.examId} is not a promoted, active exam in this bank.`);
+        }
+        // Full records, not list rows: the runner needs the whole exam.
+        return wanted.slice(0, config.cohortSize ?? 1).map((row) => ledger.getExam(row.examId));
+      });
+
+      if (!createEngineer) {
+        // THE ONE THING GENUINELY MISSING. Everything above ran: the gate authorized, the
+        // user consented, the bank produced a draw. What does not exist is the student
+        // driver, because `engineer.next()` is a provider call and no role is configured
+        // yet. Named precisely so nobody reads this as "the gym is not built".
+        throw notImplemented('gymStart', 'P4 (student driver over a configured engineer role)',
+          `The gate, your consent and the draw are all fine (${drawn.length} exam(s) ready). What is missing is the student driver: engineer.next() is a provider call and no engineer role is configured yet.`);
+      }
+
+      const jobId = jobs.start('gym', async ({ emit, cancelled }) => {
+        const engineer = await createEngineer({ settings, repoPath });
+        const store = await openStore(repoPath);
+        try {
+          const environment = await embedderEnvironment(store, { ollamaBaseUrl: settings.retrieval?.ollamaBaseUrl });
+          // A brainless repo RUNS but cannot certify, so documents are optional and their
+          // absence is not an error.
+          const documents = environment ? await store.allDocuments({ project: null }) : undefined;
+          await runCycle({
+            exams: drawn,
+            mode: config.mode ?? 'harness-debug',
+            cohort: config.cohort ?? 'training',
+            ledger: openLedger(repoPath),
+            gates: config.gates ?? [],
+            engineer,
+            rules: await studentRules(repoPath),
+            documents,
+            // THE EXCLUSION SEAM. The gym computes which documents would leak the answer
+            // and threads them here; they go straight into retrieve as excludeDocumentIds.
+            // A gold-provenance exclusion that silently did nothing would make every exam
+            // it touched an open-book test reported as a closed-book one.
+            retrieveContext: async ({ query, excludeDocumentIds }) => {
+              if (!environment) return '';
+              const result = await retrieve(
+                { query, project: store.project, excludeDocumentIds, tokenBudget: settings.retrieval?.tokenBudget ?? 4_000 },
+                { store, environment },
+              );
+              return formatContext(result);
+            },
+            policy: config.policy ?? {},
+            repoPath,
+            sourceRepo: config.sourceRepo ?? repoPath,
+            engineRoot: path.resolve(path.dirname(new URL(import.meta.url).pathname), '..', '..'),
+            sandboxesRoot: path.join(repoPath, '.daijin', 'gym', 'sandboxes'),
+            resultDir: path.join(repoPath, '.daijin', 'gym', 'results'),
+            logger: { step: async (event) => emit(event.phase ?? 'gym', event.step, event.detail, { counts: event.counts, level: event.level }) },
+            emitFinding: async (finding) => jobs.notifyFinding?.(finding),
+            abortSignal: { get aborted() { return cancelled(); } },
+          });
+        } finally {
+          await store.close?.();
+        }
+      });
+      return { jobId };
     },
 
-    async gymStatus() {
-      throw notImplemented('gymStatus', 'P4 (gym port)',
-        'The ledger schema exists; the cycle runner that writes to it does not yet.');
+    async gymStatus(params) {
+      const repoPath = await requireAttached(params);
+      return withLedger(repoPath, async (ledger) => {
+        const files = await loadResultFiles(path.join(repoPath, '.daijin', 'gym', 'results')).catch(() => null);
+        return {
+          cycles: ledger.database.prepare('SELECT * FROM cycle ORDER BY id DESC').all(),
+          activeRun: jobs.activeGymRun?.(params?.jobId) ?? undefined,
+          // drawnFromResultFiles is NULL when the denominator is not derivable. A client
+          // renders that as "not derivable" and never as 0: a zero meaning "four exams
+          // vanished" is the exact defect the drawn-cohort rule exists to remove.
+          ledger: ledger.summary({ resultFiles: files }),
+        };
+      });
     },
 
-    async examList() {
-      // An empty bank is a legitimate state, not an error: a repo whose exams have never
-      // been mined has no exams, and the TUI renders that as an empty bank view.
-      throw notImplemented('examList', 'P4 (exam mining)',
-        'The exam schema and validation exist; the miner that fills the bank ships in P4.');
+    /// The bank plus the draft queue. An empty bank is a legitimate state, not an error: a
+    /// repo whose exams have never been mined has none, and that renders as an empty view.
+    async examList(params) {
+      const repoPath = await requireAttached(params);
+      return withLedger(repoPath, async (ledger) => ledger.listExams(params?.filters ?? {}));
     },
 
     async examDetail(params) {
       if (!params?.examId) throw invalidParams('examId is required', 'examDetail needs an examId.');
-      throw notImplemented('examDetail', 'P4 (gym port)', 'Attempt records come from gym runs, which do not exist yet.');
+      const repoPath = await requireAttached(params);
+      return withLedger(repoPath, async (ledger) => {
+        const exam = ledger.getExam(params.examId);
+        if (!exam) throw invalidParams('unknown examId', `No exam named ${params.examId} is in the bank.`);
+        const attempts = ledger.database.prepare('SELECT * FROM run WHERE exam_id = ? ORDER BY id DESC').all(params.examId);
+        return {
+          exam,
+          attempts,
+          provenance: exam.provenance ?? null,
+          // EMPTY until the grading round lands. Inventing axes here would put five
+          // fabricated numbers on a radar chart that reads exactly like measured ones.
+          axes: {},
+        };
+      });
     },
 
     async examVeto(params) {
@@ -747,12 +869,41 @@ export function createMethods({
       if (!String(params?.reason || '').trim()) {
         throw invalidParams('veto reason required', 'A veto without a written reason is not reviewable later. Say why.');
       }
-      throw notImplemented('examVeto', 'P4 (exam mining)', 'There is no bank to veto from yet.');
+      const repoPath = await requireAttached(params);
+      return withLedger(repoPath, async (ledger) => {
+        const exam = ledger.getExam(params.examId);
+        if (!exam) throw invalidParams('unknown examId', `No exam named ${params.examId} is in the bank.`);
+        try {
+          // Through vetoExam rather than a direct write: the helper and the parser both
+          // enforce the reason minimum, and a record reaching the store any other way would
+          // carry "broken" as its whole audit trail.
+          ledger.putExam(vetoExam(exam, params.reason));
+        } catch (error) {
+          asParameterError(error, 'veto refused');
+        }
+        return ledger.getExam(params.examId);
+      });
     },
 
     async examUpdate(params) {
       if (!params?.examId) throw invalidParams('examId is required', 'examUpdate needs an examId.');
-      throw notImplemented('examUpdate', 'P4 (exam mining)', 'There is no bank to update yet.');
+      const repoPath = await requireAttached(params);
+      const patch = params?.patch ?? {};
+      return withLedger(repoPath, async (ledger) => {
+        const exam = ledger.getExam(params.examId);
+        if (!exam) throw invalidParams('unknown examId', `No exam named ${params.examId} is in the bank.`);
+        try {
+          // Quarantine goes through its helper for the same reason a veto does: both it and
+          // the parser enforce the 20-character reason.
+          const next = patch.benchmarkStatus === 'quarantined'
+            ? quarantineExam({ ...exam, ...patch }, patch.quarantineReason ?? exam.quarantineReason)
+            : parseExamRecord({ ...exam, ...patch }, params.examId);
+          ledger.putExam(next);
+        } catch (error) {
+          asParameterError(error, 'invalid exam patch');
+        }
+        return ledger.getExam(params.examId);
+      });
     },
 
     // ---- init and narration (spend-touching where marked) -----------------------------

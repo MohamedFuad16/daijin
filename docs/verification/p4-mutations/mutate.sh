@@ -328,3 +328,23 @@ run_mutation "P7 c18: the provider scan stops seeing calls" \
   test/gym-discipline.test.js \
   's/const PROVIDER_CALL = \/\\bfetch\\s\*\\\(/const PROVIDER_CALL = \/\\bnever_matches_anything\\b|\\bfetch_disabled\\s*\\(/' \
   "test/gym-discipline.test.js"
+
+run_mutation "P7 c7: rubrics filed by arrival order instead of by runId" \
+  src/gym/grading.js \
+  's/    const packet = packetsByRunId\[runId\];/    const packet = Object.values(packetsByRunId)[accepted.length];/' \
+  "test/gym-grading.test.js"
+
+run_mutation "P7 c8/c9: the importer stops validating, so it stops being the boundary" \
+  src/gym/grading.js \
+  's/    accepted\.push\(validateRubric\(rubric, packet, \{ grader, exam: examsByRunId\[runId\] \}\)\);/    accepted.push(rubric);/' \
+  "test/gym-grading.test.js"
+
+run_mutation "P7 c17: the batch counts every proposal as accepted" \
+  src/gym/harvest.js \
+  's/  const accepted = proposals\.filter\(\(proposal\) => proposal\.accepted\);/  const accepted = proposals;/' \
+  "test/gym-harvest.test.js"
+
+run_mutation "P7 c19: a stale exemption hides a file that no longer exists" \
+  test/gym-discipline.test.js \
+  "s/const CLAUSE_19_EXEMPT = Object\.freeze\(\[/const CLAUSE_19_EXEMPT = Object.freeze([\n  { path: 'gym-deleted-long-ago.test.js', reason: 'a stale exemption nobody removed when the file went away, which is a hole' },/" \
+  "test/gym-discipline.test.js"

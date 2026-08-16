@@ -5,22 +5,22 @@ instrument, and the captured output of both. Session scratch dies; the evidence 
 
 | file | what it is |
 | --- | --- |
-| `mutate.sh` | the 57-mutation battery, P4 and P7. Every line must read KILLED. |
+| `mutate.sh` | the 61-mutation battery, P4 and P7. Every line must read KILLED. |
 | `mutate-output.txt` | its captured output, with the run timestamp in the header. |
 | `gate-scanner-plants.mjs` | THE ARBITER for D-0023, authored by the VERIFIER, unmodified. Exit 0 is acceptance. |
 | `gate-scanner-plants-output.txt` | its captured output run against the landed scanner. |
 | `gate-plants.mjs` | gym-porter's extended plant set (12 plants, 4 controls), per the verifier's standing note that four plants is ten minutes of thought and not a bound. |
 | `gate-plants-output.txt` | its captured output. |
 
-## Measured 2026-08-16 12:44 JST (2026-08-16 03:44Z)
+## Measured 2026-08-16 12:46 JST (2026-08-16 03:46Z)
 
 - `node docs/verification/p4-mutations/gate-scanner-plants.mjs`: caught 4/4 plants, control
   clean, ACCEPTANCE MET, exit 0. The verifier's four plants are also pinned inside
   `engine/test/gym-spend-gate.test.js` so `npm test` enforces the same bar; if the two ever
   disagree, the script wins and the test copy is the stale one.
 - `node docs/verification/p4-mutations/gate-plants.mjs`: 12 plants, 4 controls, 0 failures.
-- `bash docs/verification/p4-mutations/mutate.sh`: 57 mutations, 57 KILLED (nine added for the
-  gold-provenance exclusion, four for the pre-seal check, eighteen for P7 grading and harvest).
+- `bash docs/verification/p4-mutations/mutate.sh`: 61 mutations, 61 KILLED (nine added for the
+  gold-provenance exclusion, four for the pre-seal check, twenty-two for P7 grading and harvest).
 - `node --test "test/gym-*.test.js"` from `engine/`: tests 122, pass 122, fail 0.
 - `npm test` from `engine/`: 503 tests, 503 pass, 0 fail. Suite-count caveat per D-0014: the
   engine suite is written by several workers at once, so every total here is a timestamped
@@ -112,8 +112,8 @@ f2ff54b05ae07116ac5f763fa7cc4f15457d826e7d6936dd780807feaab4ec34  docs/verificat
 e66ab1295c82a9c0a3ec6aa5fd9eb6dc87baf83dd6fbc0b4259b4578def35b8c  docs/verification/p4-mutations/gate-plants.mjs
 5f9c2255ce54fb3ba743458a198098eb98ddf4eca8b50d73706509ad075f6b55  docs/verification/p4-mutations/gate-scanner-plants-output.txt
 285369273763bd75ee7ec8b7732955cc8fe9dd8ab267ab979284d5f418b7d7ed  docs/verification/p4-mutations/gate-scanner-plants.mjs
-37169e2448ae0da06d8c1636c7e22135b0e31f6e758d58fbe223cceff2f27e8e  docs/verification/p4-mutations/mutate-output.txt
-545e1cbb6e4185d14fa5cf7e9f16c660e068135a0c72a823b54ec6dd0914bc93  docs/verification/p4-mutations/mutate.sh
+98edaf63732862691ff52117f56cb519867e7055676a3d888ab2c5fcdd4effd1  docs/verification/p4-mutations/mutate-output.txt
+30df42eb2ad2e3514f99676b5cdfc3f18799a93eacade3a0f1300f35f015121b  docs/verification/p4-mutations/mutate.sh
 ```
 
 `gates.js` and `sandbox.js` are the extractor's ports, consumed unchanged and hashed here

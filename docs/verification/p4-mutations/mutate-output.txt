@@ -1,4 +1,4 @@
-# Captured 2026-08-16T03:43:25Z (UTC)
+# Captured 2026-08-16T03:46:02Z (UTC)
 # Command: bash docs/verification/p4-mutations/mutate.sh
 
 KILLED   (4 failing): boundary check never fires (condition inverted)
@@ -58,3 +58,7 @@ KILLED   (1 failing): P7 c15: the citation backstop stops dropping unresolvable 
 KILLED   (1 failing): P7 c16: a deleted file still validates
 KILLED   (1 failing): P7 c10/21: a non-evaluation batch may teach the brain
 KILLED   (1 failing): P7 c18: the provider scan stops seeing calls
+KILLED   (3 failing): P7 c7: rubrics filed by arrival order instead of by runId
+KILLED   (3 failing): P7 c8/c9: the importer stops validating, so it stops being the boundary
+KILLED   (1 failing): P7 c17: the batch counts every proposal as accepted
+KILLED   (1 failing): P7 c19: a stale exemption hides a file that no longer exists

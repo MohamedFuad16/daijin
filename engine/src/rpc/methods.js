@@ -286,7 +286,10 @@ export async function measureDiscriminatingRange({ run, goldsetPath, store, envi
     await writeFile(file, YAML.stringify(permuted, { lineWidth: 0 }), 'utf8');
     const controlRun = await score({
       corpus: {
-        id: 'permuted-control', project: null, root: path.dirname(goldsetPath), goldsetPath: file,
+        // The SAME scope as the candidate arm. A control measured against a different
+        // project would be measuring a different index, and the range would be a number
+        // about that difference rather than about the gauge.
+        id: 'permuted-control', project: store?.project ?? null, root: path.dirname(goldsetPath), goldsetPath: file,
         retrievalFixesPath: null, baselinePath: null, envFiles: [], databaseUrlEnv: 'DATABASE_URL',
         retrieveOptions: {}, storeOptions: {},
       },
@@ -669,6 +672,11 @@ export function createMethods({
       const repoPath = await requireAttached(params);
       const goldsetPath = (await layoutFor(repoPath)).goldsetPath;
       const settings = await state.settings();
+      // `project` is filled in from the STORE below, not here. A null scope reaches
+      // retrieve.js, which refuses it by name ("project is required"), so this measured
+      // nothing against a real brain: every caller in the unit tests injects the scorer, so
+      // the refusal only appears the first time it is pointed at an actual index. Found by
+      // running the P8 fixture rather than by a test.
       const corpus = {
         id: path.basename(repoPath),
         project: null,
@@ -691,9 +699,13 @@ export function createMethods({
         }
         const budgets = params?.sweep ? [3_000, 4_000, 6_000, 8_000] : [params?.tokenBudget || settings.retrieval?.tokenBudget || 4_000];
         const measurements = [];
+        // The store's own scope, so the measurement asks the index the question the index
+        // was built to answer. `allDocuments({ project: null })` still means the whole
+        // store, deliberately; only the RETRIEVAL scope has to be concrete.
+        const scoped = { ...corpus, project: store.project };
         for (const tokenBudget of budgets) {
           const run = await score({
-            corpus,
+            corpus: scoped,
             k: settings.retrieval?.k ?? 8,
             store,
             // Passed rather than assigned into process.env. A daemon that mutated its own
@@ -861,7 +873,7 @@ export function createMethods({
         try {
           run = await score({
             corpus: {
-              id: path.basename(repoPath), project: null, root: repoPath, goldsetPath,
+              id: path.basename(repoPath), project: store.project, root: repoPath, goldsetPath,
               retrievalFixesPath: null, baselinePath: null, envFiles: [], databaseUrlEnv: 'DATABASE_URL',
               retrieveOptions: {}, storeOptions: {},
             },

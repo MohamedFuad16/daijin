@@ -342,3 +342,41 @@ test('a skipped control does not overwrite a range that was measured earlier', a
     await rm(repo.stateRoot, { recursive: true, force: true });
   }
 });
+
+// ---- the retrieval scope, which no injected scorer was checking ---------------------------
+
+test('every measured corpus carries the STORE\'s project, never a null scope', async () => {
+  // The defect this closes, found by pointing the daemon at a real brain rather than by a
+  // test: retrievalScore and diagnose both built their corpus with `project: null`, which
+  // retrieve.js refuses by name. Every unit test injects the scorer, so the refusal only
+  // appeared the first time either method met an actual index, and both were dead against
+  // a real repo while the suite was green.
+  //
+  // Asserted on the corpus rather than on the outcome, so it stays hermetic and still bites.
+  const repo = await fixture();
+  const { repoPath } = repo;
+  const seen = [];
+  const { methods, cleanup } = await methodsOver(repo, async (options) => {
+    seen.push(options.corpus);
+    return stubScore({})(options);
+  });
+  try {
+    await methods.retrievalScore({ repoPath });
+    await methods.diagnose({ repoPath, control: true });
+
+    assert.equal(seen.length, 3, 'one score, one diagnose, one permuted control');
+    for (const corpus of seen) {
+      assert.ok(corpus.project, `${corpus.id} was measured with a null scope, which retrieve refuses`);
+      assert.equal(corpus.project, 'default', 'and the scope is the store\'s own');
+    }
+    // The control arm shares the candidate's scope. A control measured against a different
+    // project would be measuring a different index, and the range would be a number about
+    // that difference rather than about the gauge.
+    const [, candidate, control] = seen;
+    assert.equal(control.project, candidate.project);
+  } finally {
+    await cleanup();
+    await rm(repo.repoPath, { recursive: true, force: true });
+    await rm(repo.stateRoot, { recursive: true, force: true });
+  }
+});

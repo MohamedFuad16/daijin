@@ -1,5 +1,35 @@
 # Daijin build state (authoritative)
 
+## 2026-08-16 22:15 - Report 21 closes the correction chain; team resumed after limit
+
+All five lanes hit the session limit at 18:09 JST and were resumed at
+22:12 with their standing assignments restated.
+
+VERIFIER REPORT 21 (the report-chain correction, 116 lines): report
+19's "two mechanisms" recorded as half right BY LUCK - the second
+member collapsed with the retracted datum, and the conclusion survives
+only because report 20 later traced a real one; written so the
+conclusion's survival cannot launder the argument. Report 18's
+dissolution restored with its date. The exemplary-method citation SPLIT
+rather than withdrawn (the escaped-fetch kill stays earned; the drift
+datum beside it was not; wholesale praise is the same error as
+wholesale condemnation). The transferable lesson, the verifier's own:
+IT APPLIED THE PIN DISCIPLINE TO CLAIMS IT ATTACKS AND NOT TO CLAIMS
+THAT HELPED IT - a measurement offered in support is still a
+measurement, and the pin question is not an accusation. Its recorded
+assumption (it READ the retraction's six-for-six rather than re-running
+it, the same posture that produced the error) is adopted as a P8 item:
+the fixed-commit stability re-derivation happens in the detached
+worktree alongside the five acceptance runs.
+
+gym-porter's close-out sharpened the day's principle into its honest
+conditional form, kept in preference to the slogan: ISOLATION BEATS
+COORDINATION WHEN THE SHARED THING IS CHEAP TO COPY - a lock makes
+everyone wait and fails open when someone forgets; a copy makes the
+question not arise; and it would not generalize to something expensive
+to duplicate. Its watch item for its own lane is noted: the exam bank
+will eventually compare commits across history, which is exactly where
+unpinned cross-time comparison could bite next.
 ## 2026-08-16 18:45 - Gate governance ruled; the D-0032 pattern ships as a module
 
 GOVERNANCE RULING on the scanner gate, from the verifier's EMISSIONS

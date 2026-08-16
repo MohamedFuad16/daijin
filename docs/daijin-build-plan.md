@@ -185,7 +185,16 @@ P8 INTEGRATION (registered 2026-08-16 17:52, pre-registered before any part is
    acceptance run, on the extractor's finding that nothing in this build has
    ever graded anything (the teacher role and student driver are paid and
    unbuilt), so a grader-produced rubric cannot exist at zero spend: the
-   rubric is SEEDED through the real import API, meeting every validator, and
+   rubric is SEEDED through the real import API, meeting every validator
+   [PRECISION 2026-08-17, verifier finding 83: "meeting every validator" is
+   satisfied BY CONSTRUCTION, not by execution - importRubricBatch
+   deliberately does not run validateRubric (validation is grading.js's job
+   at grade time, and doing it twice is how the two drift), so what the seed
+   meets is the three STORAGE guards: gradable mode, one rubric per run,
+   foreign key to a real run. The honest position is a third one between
+   "someone wrote a row" and "the validator accepted this": a WELL-FORMED
+   ROW THE STORAGE LAYER ACCEPTED through the real import API. The clause's
+   substantive claim is unaffected], and
    the claim this clause supports is GRADED AXES RENDER FROM REAL STORAGE,
    never "the gym grades"; a grader-produced rubric belongs to the owner-gated
    live half, the same handling clauses (f), P4 and P7 gave their paid

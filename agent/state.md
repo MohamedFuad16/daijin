@@ -1,5 +1,51 @@
 # Daijin build state (authoritative)
 
+## 2026-08-17 02:10 - P8 ACCEPTED. All nine phases of the build are closed.
+
+VERIFIER REPORT 22, verdict: the claim holds where reproducible, with
+two precision findings RULED AS CORRECTIONS (not blockers - nothing in
+the demonstration is wrong; both are words claiming slightly more than
+the evidence) and one boundary ruled ACCEPTABLE AS STATED.
+
+INDEPENDENTLY REPRODUCED by the verifier: clause (i) - its own
+detached worktree at the pin, 592/592 twice, digests stable, zero
+mutation processes, and the ordering condition (report-20 fix is an
+ancestor of the pin) verified by merge-base rather than assumed.
+Clause (e) - the seeding path IS the real import API
+(importRubricBatch at p8-seed-rubric.mjs:79, no INSERT or prepare
+anywhere in the file); the razor satisfied. The seed artifact's header
+called "the best-written thing in this claim".
+
+FINDING 83, corrected in the plan (dated): "meeting every validator"
+was satisfied by construction, not execution - importRubricBatch
+deliberately does not validate (grading.js's job, twice is drift), so
+the seed meets the three STORAGE guards. The honest third position is
+now registered: a well-formed row the storage layer accepted.
+
+FINDING 84, corrected here (dated): the claim's disclosure understated
+af4e19b - "styling, not in any clause" was defensible on the assertion
+and NOT on the file: 59 non-comment lines in widgets/activity.py,
+which is clause (c)'s surface (style resolution routed through
+style_for, name over level). THE VERDICT COVERS 85cc576 AND NOTHING
+AFTER IT; nobody reads it as certifying HEAD. c860f95 by contrast is
+genuinely inert, verified mechanically.
+
+THE BOUNDARY, stated in the acceptance rather than glossed: clauses
+(a)-(h)'s live half is CLAIMED WITH EVIDENCE THE VERIFIER READ AND
+FOUND COHERENT, NOT INDEPENDENTLY REPRODUCED (that needs a daemon, a
+terminal and a second session). Ruled acceptable: the engine half was
+independently reproduced, the claim's own two declined inferences are
+correctly declined, the owner exercises the TUI directly, and
+ultrareview reviews the code next. The bound is in the record so "the
+verifier attacked P8" cannot imply more coverage than was delivered.
+
+P8 IS ACCEPTED AT 85cc576. P0 through P8: all phases of the registered
+build are closed. Remaining work is the post-verdict queue (finding-84
+class corrections landed here; the attempts-row boundary mapping;
+done/finished as the exactly-one-done invariant; the contract-shape
+gate; the acceptance script; the owner's dithered charts) and then the
+owner's sequence: ultrareview, repo public, release with checksum,
+portfolio-mine redirect (D-0034).
 ## 2026-08-17 01:45 - THE P8 JOINT CLAIM IS POSTED at 85cc576; handed to the verifier
 
 All nine clauses stated demonstrated, with evidence paths, by

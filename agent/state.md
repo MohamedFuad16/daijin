@@ -1,5 +1,47 @@
 # Daijin build state (authoritative)
 
+## 2026-08-17 00:45 - Engine half measured at the pin; pin ruled to stand
+
+THE EXTRACTOR'S ENGINE HALF IS DONE at 85cc576
+(docs/verification/p8-engine-half.md, ac6544c): five consecutive
+detached-worktree runs, 592/592 each, source digest identical and zero
+mutation processes before and after every run. Inside that
+measurement, a wrong number caught BEFORE publication: the first
+no-battery check pattern-matched "battery" and reported 11 processes -
+macOS system processes - checked instead of written down, discarded,
+re-run with a precise pattern against the project's own mutate.mjs.
+"A wrong number caught before publication is the same work as one
+retracted after, done cheaper."
+
+CHUNKING RE-DERIVED FRESH at this pin: six runs, 172 writes and 764
+chunks each, ONE distinct decision list across all six. The counts
+differ from e65cd2d's 159/699, which RESTATES the retraction's point:
+chunk counts are commit-dependent and comparable only within a pin -
+exactly why re-deriving at each pin is posture, not formality.
+
+--no-probe documented at the flag (c860f95, verified comment-only by
+the leader: 8 insertions, zero non-comment lines): under it an
+embedding init emits two events and stops; right for RPC-surface work,
+wrong for init, search, retrievalScore or diagnose.
+
+PIN RULED TO STAND at 85cc576: evidence commits about a pin
+necessarily postdate it - re-cutting to swallow each one is a chase
+with no fixed point. c860f95 is verified inert, ac6544c is the
+evidence itself, and the discrepancy is recorded in the evidence
+document rather than reconciled by guesswork later. Also ruled:
+test-live scripts executed by hand for the acceptance (output recorded
+verbatim) are acceptable for clauses (c) and (e); and the acceptance
+procedure becomes ONE RE-RUNNABLE SCRIPT as post-claim work, so the
+next acceptance is re-run rather than re-derived.
+
+Two readings the claim text will refuse in its own words, per the
+extractor: clause (e) supports "graded axes render from real storage",
+never "the gym grades"; and the fixture's 25/25 floor is SATURATED
+(permuted control 13/25, 12 cases of headroom) - a screen showing 100
+percent is a property of the fixture, not of the build.
+
+WAITING ON: tui-builder's five runs at the pin, then the joint claim,
+then the verifier's attack.
 ## 2026-08-17 00:30 - The live half lands: seven clauses demonstrated, four live-only defects
 
 TUI-BUILDER'S LIVE HALF IS DONE (its pin 468f6fb, suite green four

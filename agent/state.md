@@ -1,5 +1,16 @@
 # Daijin build state (authoritative)
 
+## 2026-08-16 22:50 - Roster: store-adapter retired at owner direction
+
+store-adapter shut down, its lane complete: P2 conformance, the A/B,
+the D-0031 install side, the uninstaller's three lifetimes, and the
+shared-id refinement (landed by the extractor, 70e80f7). Its one
+deferred item - the publishing checksum - is blocked on a real release
+artifact existing (post-P8 packaging); a fresh agent picks it up from
+the record if it goes live. Remaining roster: extractor, init-miner,
+tui-builder, gym-porter (on call + the mechanical governance check),
+verifier (P8 attack).
+
 ## 2026-08-16 22:45 - Race fixed as a PATTERN; a product defect underneath; worktree demonstrated
 
 THE EXTRACTOR CLEARED ITS P8 PRECONDITION, all three parts, plus one

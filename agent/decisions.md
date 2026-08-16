@@ -792,3 +792,23 @@ visibility flip are owner-gated actions in the owner's own sequence;
 nothing here happens before ultrareview passes. The release work
 (tarball, install.sh hardening, checksum) is unassigned until post-P8;
 store-adapter's record holds the checksum's design constraint.
+
+## D-0026 addendum 2 (2026-08-16) The shared-path gap closes: agent/ and docs/ are the leader's lane
+
+init-miner restated the hook gap against current bytes: paths classed
+"shared" were invisible to the multi-lane count, so one lane's code
+plus another lane's staged agent/state.md read as one lane and passed
+- and the shared class contained the two highest-traffic files in the
+repo. RULED: agent/* and docs/* (outside docs/verification, which maps
+to owning lanes) now map to a LEADER lane, so lane-code plus a state
+or plan file counts two lanes and refuses without the explicit
+override. Residual shared class, accepted and stated: README.md,
+.gitignore, .github/*, engine/package.json and package-lock (lanes
+legitimately touch the manifests when adding dependencies; the
+traffic there is low and the risk is taken knowingly, not silently).
+Also mapped: docs/verification/init-mutations/* to init. The new
+mappings were exercised before being trusted (six-path probe, all
+correct); the refusal path of the counting logic itself has been
+watched failing three times in the record. Noted from the same
+report: the pathspec commit form makes the gap unreachable for lanes
+that use it; the hook protects the lanes that do not.

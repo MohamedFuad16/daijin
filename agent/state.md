@@ -1,5 +1,60 @@
 # Daijin build state (authoritative)
 
+## 2026-08-16 23:40 - init-miner clears its queue; survival moves a budget for the first time
+
+REPORT 7: everything done except the battery commit, which the hook
+was correctly holding as unmapped - the lane map now carries
+docs/verification/init-mutations/ (mapped, exercised, ready to land).
+init-miner declined the cross-lane override because its commit was
+single-lane and "the override would be a false claim" - the discipline
+working exactly as designed.
+
+THE BATTERY, and the finding it returned to the pattern: its first
+private-copy version LIED FLAWLESSLY - the copy list missed that
+sqlite.js imports adapters/ from outside the engine root, so every
+test failed to resolve, every run was red, and all 38 mutations scored
+KILLED while no test had executed under any mutation. A broken tree
+produces a perfect-looking battery. The guard is a FOURTH property
+offered back to the pattern module: a BASELINE CONTROL - the unmutated
+copy must be green or the run refuses (the project's own dead-gate
+rule, applied to batteries). Final battery: declared 38, executed 38,
+killed 38, refusal demonstrated in refusal-demo.txt, shared tree never
+written. Determinism: five consecutive runs, 139/139, source hash
+identical across all five - clause (i) satisfied for this lane.
+
+P3.5 RE-RUN: numbers UNCHANGED (generated 25/25 control 18, range 7;
+adopted 24/25 control 4, range 20; both arms, same scripts, same pin)
+- and the re-run caught a real defect the numbers could never show:
+the heading demotion turned an in-body h1 into h2, WHICH IS THE RECORD
+SEPARATOR, truncating the unit; the shift is now per-record and
+recorded in the marker so the reader undoes exactly what the writer
+did. Re-deriving beat inferring for a reason neither party predicted.
+
+FINDING 82: THREE causes distinguished, not two (core-larger-than-
+slot, per-candidate-cap, budget-exhausted) - forced by a fixture where
+two constraints were live at once and a binary split would have told a
+user to shorten a unit that cannot fit at any budget. The misleading
+allowance field is renamed nominalCap with its bound stated.
+
+THE PER-CORPUS SWEEP is the round's headline: case rate, MRR and range
+are FLAT across 3000-8000 on the curated corpus, but CONTENT SURVIVAL
+is not - it fails at 3000 and 4000 and passes from 6000. First time
+D-0003's survival signal has FIRED TO MOVE A BUDGET: same repo, two
+corpora, two answers (3000 generated, 6000 curated), which is what
+the per-corpus sharpening exists to measure. Made actionable: on
+survival failure the pipeline walks the sweep and NAMES the smallest
+passing budget, with a test. En route it caught its own vacuous pass
+(units read back carry no core, so the check skipped everything and
+passed) - denominators now printed by default, same family as the
+battery lie, twice in one session.
+
+HOOK GAP RULED CLOSED (D-0026 addendum 2): agent/* and non-
+verification docs/* map to a LEADER lane, so lane-code plus a staged
+state/plan file refuses; residual shared class (README, .github,
+package manifests) accepted and stated. Suite at 592/592.
+
+P8 preconditions: init-miner DONE once the battery commit lands
+(unblocked now); tui-builder's live runs remain the last one.
 ## 2026-08-16 23:25 - The audit denominator is now a table, not a memory
 
 gym-porter's follow-through (809779f, README only, verified inert):

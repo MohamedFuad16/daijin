@@ -24,11 +24,12 @@ import { retrieve } from '../rag/retrieve.js';
 import { analyze, readSources } from './analyze.js';
 import { buildEvidence } from './evidence.js';
 import {
-  BUDGET_SWEEP, checkContentSurvival, collectDeliveries, localCorpus, mcpUnlock, sweepBudgets,
+  BUDGET_SWEEP, checkContentSurvival, collectDeliveries, localCorpus, mcpUnlock, measureResolution, sweepBudgets,
 } from './floor.js';
 import { collectGateSources, discoverGates, gatesFilePath, probeGateCandidates, renderGatesYaml } from './gate-discovery.js';
 import { readHistory, shaIndex } from './git.js';
 import { caseKey, mineGoldset } from './goldset.js';
+import { permuteAnswers } from './rerank-ab.js';
 import { runGoldsetGates } from './goldset-gates.js';
 import { importRelationships, ingestUnits } from './ingest.js';
 import { narrate, SpendRefusedError } from './narrate.js';
@@ -466,6 +467,35 @@ export async function initBrain({
   const survival = checkContentSurvival(deliveries, { units, tokenBudget: sweep.chosen });
   const unlock = mcpUnlock(sweep.chosenPoint.caseRate);
 
+  // D-0030: the floor never ships without the range it was measured inside. The control is
+  // the SAME cases with deliberately wrong answers, so it measures this gauge on this
+  // corpus rather than a general property of small repos.
+  let resolution = null;
+  try {
+    const controlPath = writeArtifacts
+      ? await writeGoldset(path.join(artifacts, 'control'), permuteAnswers(gated.active))
+      : null;
+    if (controlPath) {
+      resolution = await measureResolution({
+        corpus,
+        controlCorpus: localCorpus({
+          id: `${analysis.name}-permuted`, project: scope, goldsetPath: controlPath, standingPrefix, pathGrammar,
+        }),
+        store,
+        tokenBudget: sweep.chosen,
+        k,
+        environment,
+        fetchImpl,
+      });
+      await steps.emit({ step: 'resolution-measured', detail: resolution.reading });
+    }
+  } catch (error) {
+    // A gauge too small to permute (one distinct answer) has no range to report. That is
+    // itself worth saying, and it must not take the floor down with it.
+    resolution = { unavailable: true, reason: error.message };
+    await steps.emit({ step: 'resolution-unavailable', detail: error.message, level: 'warn' });
+  }
+
   report.floor = {
     caseRate: sweep.chosenPoint.caseRate,
     mrr: sweep.chosenPoint.mrr,
@@ -478,6 +508,7 @@ export async function initBrain({
     budgetSweep: sweep.curve,
     k,
     contentSurvival: survival,
+    resolution,
     mcp: unlock,
     perCase: sweep.chosenPoint.results.map((entry) => ({
       caseId: entry.id,

@@ -161,6 +161,43 @@ export async function sweepBudgets({
   };
 }
 
+/**
+ * The gauge's own resolution, measured on the same corpus and store as the floor.
+ *
+ * D-0030: every floor report carries this. The reason is a measurement, not a principle.
+ * On portfolio-mine the floor came out 25 of 25 and a gold set with every answer
+ * deliberately wrong STILL scored 18 of 25, because at 11 documents k=8 returns a mean of
+ * 7.6 of them per query. Presence is nearly free on a small corpus, so the enforced metric
+ * saturates while the deliberately unfloored one (MRR) keeps its range. A floor quoted
+ * without this number reads as "retrieval is perfect here" when what it means is "this
+ * gauge cannot tell".
+ *
+ * Reported, never gated. A narrow range is a fact about the corpus and the gold set, and
+ * the honest use is to say how large an effect this gauge could have seen at all.
+ */
+export async function measureResolution({
+  corpus, controlCorpus, store, tokenBudget, k = 8, score = scoreGoldset, environment = null, fetchImpl = null,
+} = {}) {
+  const candidate = await scoreAtBudget({ corpus, store, tokenBudget, k, score, environment, fetchImpl });
+  const control = await scoreAtBudget({ corpus: controlCorpus, store, tokenBudget, k, score, environment, fetchImpl });
+  const caseRange = candidate.caseRate.exact - control.caseRate.exact;
+  return {
+    tokenBudget,
+    caseRate: {
+      candidate: candidate.caseRate,
+      control: control.caseRate,
+      range: caseRange,
+      casesOfHeadroom: candidate.caseRate.hits - control.caseRate.hits,
+    },
+    mrr: { candidate: candidate.mrr, control: control.mrr, range: candidate.mrr - control.mrr },
+    // Said in words, because the number alone gets quoted without its meaning.
+    reading: `A gold set with deliberately wrong answers scores ${control.caseRate.cases} against the real set's `
+      + `${candidate.caseRate.cases}. Case rate has ${candidate.caseRate.hits - control.caseRate.hits} case(s) of `
+      + `discriminating room on this corpus; MRR has ${(candidate.mrr - control.mrr).toFixed(4)}. `
+      + 'An effect smaller than that room cannot be seen by this gauge, whatever the floor says.',
+  };
+}
+
 /** RPC v4 mcpSnippet: unlocked at or above the threshold, locked below it. */
 export function mcpUnlock(caseRate, { threshold = MCP_UNLOCK_THRESHOLD } = {}) {
   const unlocked = caseRate.exact >= threshold;

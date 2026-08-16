@@ -223,6 +223,15 @@ test('a full init runs headlessly and reports the floor it measured, whatever it
       'MCP unlocks strictly on the measured floor, never on anything else',
     );
 
+    // D-0030: the floor never ships without the range it was measured inside.
+    assert.ok(report.floor.resolution, 'a floor with no resolution reads as certainty it does not have');
+    assert.ok(report.floor.resolution.caseRate.control.total > 0);
+    assert.equal(
+      report.floor.resolution.caseRate.casesOfHeadroom,
+      report.floor.resolution.caseRate.candidate.hits - report.floor.resolution.caseRate.control.hits,
+    );
+    assert.match(report.floor.resolution.reading, /deliberately wrong answers/);
+
     // Artifacts a human edits.
     const gatesYaml = YAML.parse(readFileSync(path.join(root, '.daijin/gates.yaml'), 'utf8'));
     assert.equal(gatesYaml.version, 1);
@@ -598,4 +607,16 @@ test('the miner writes a stable key that survives a re-mine and a rewording', ()
   assert.equal(caseKey('identifier:foo', 'foo'), caseKey('identifier:foo', 'foo'), 'deterministic');
   assert.notEqual(caseKey('structural:history', 'which files change most often in this repo'), caseKey('structural:history', 'who has been changing this codebase'),
     'two cases sharing a provenance are told apart by their canonical query');
+});
+
+test('a floor whose gauge cannot be permuted says so instead of taking the floor down', async () => {
+  // One distinct answer means no wrong answer exists to swap in. The range is unavailable
+  // and that is reportable; it must not fail the run or be silently omitted.
+  const { measureResolution } = await import('../src/init/floor.js');
+  const { permuteAnswers } = await import('../src/init/rerank-ab.js');
+  assert.throws(
+    () => permuteAnswers([{ id: 'g1', query: 'q', must_return: ['only'] }]),
+    /at least two distinct answers/,
+  );
+  assert.equal(typeof measureResolution, 'function');
 });

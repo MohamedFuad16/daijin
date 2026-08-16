@@ -112,6 +112,10 @@ export function judgeRerank(control, treatment) {
 
 /** One measurement, with its arm disclosed exactly as the harness recorded it. */
 async function measure({ corpus, store, environment, fetchImpl, k, tokenBudget, reranker, rerank, score }) {
+  // D-0025 requires the knob's COST to be displayed next to it, so the A/B measures it
+  // rather than leaving a later reader to guess. Wall time over the whole arm divided by
+  // the case count: the per-query number a user pays on every retrieval.
+  const started = performance.now();
   const { summary, results, record } = await score({
     corpus,
     store,
@@ -123,9 +127,12 @@ async function measure({ corpus, store, environment, fetchImpl, k, tokenBudget, 
     ...(environment ? { environment } : {}),
     ...(fetchImpl ? { fetchImpl } : {}),
   });
+  const elapsedMs = Math.round(performance.now() - started);
   return {
     tokenBudget,
     rerank: record.rerank ?? { enabled: false },
+    elapsedMs,
+    msPerQuery: results.length ? Math.round(elapsedMs / results.length) : null,
     caseRate: caseRateOf(summary, results),
     mrr: summary.mrr,
     violations: summary.violations,
@@ -160,6 +167,7 @@ export async function rerankAB({
 } = {}) {
   if (!reranker?.rerank) throw new Error('rerankAB requires a reranker with a rerank(query, documents) method.');
   const pairs = [];
+  const coldTopKs = new Set();
 
   for (const tokenBudget of [...budgets].sort((left, right) => left - right)) {
     const control = await measure({
@@ -179,7 +187,15 @@ export async function rerankAB({
         throw new Error(`The treatment arm at topK ${topK} did not report reranking; the option did not reach the stage.`);
       }
       const judgment = judgeRerank(control, treatment);
-      pairs.push({ tokenBudget, topK, control, treatment, judgment });
+      // Only the FIRST arm to score a given topK is a cost measurement. Measured live on
+      // 2026-08-16: topK 40 came back at 15087 ms per query on its first arm and 1491 on a
+      // later one, a tenfold difference for identical work, because the backend caches
+      // query-document pairs and every later arm re-asks questions it has already answered.
+      // Reporting the later number as the knob's price would understate it by an order of
+      // magnitude. The flag rides with the number rather than living in a footnote.
+      const cold = !coldTopKs.has(topK);
+      coldTopKs.add(topK);
+      pairs.push({ tokenBudget, topK, control, treatment, judgment, cold });
       if (onStep) {
         await onStep({
           step: 'rerank-pair',
@@ -209,14 +225,32 @@ export async function rerankAB({
     pairs: pairs.map((pair) => ({
       tokenBudget: pair.tokenBudget,
       topK: pair.topK,
-      control: { caseRate: pair.control.caseRate, mrr: pair.control.mrr, violations: pair.control.violations, arm: pair.control.rerank },
-      treatment: { caseRate: pair.treatment.caseRate, mrr: pair.treatment.mrr, violations: pair.treatment.violations, arm: pair.treatment.rerank },
+      control: { caseRate: pair.control.caseRate, mrr: pair.control.mrr, violations: pair.control.violations, arm: pair.control.rerank, msPerQuery: pair.control.msPerQuery },
+      treatment: { caseRate: pair.treatment.caseRate, mrr: pair.treatment.mrr, violations: pair.treatment.violations, arm: pair.treatment.rerank, msPerQuery: pair.treatment.msPerQuery },
       judgment: pair.judgment,
+      // The price of the knob on this machine, alongside what it bought, and whether this
+      // pair is a price measurement at all.
+      cost: {
+        msPerQuery: pair.treatment.msPerQuery,
+        addedMsPerQuery: (pair.treatment.msPerQuery ?? 0) - (pair.control.msPerQuery ?? 0),
+        cold: pair.cold,
+        caveat: pair.cold
+          ? null
+          : 'Backend cache warm: this arm re-asked questions an earlier arm already answered, so its latency understates the knob. Read the cold arm for this topK.',
+      },
     })),
     verdict,
     resolution,
     backend: reranker.id ?? null,
     k,
+    // The price, taken only from arms that actually paid it.
+    cost: Object.fromEntries([...coldTopKs].map((topK) => {
+      const cold = pairs.find((pair) => pair.topK === topK && pair.cold);
+      return [`topK${topK}`, {
+        msPerQuery: cold?.treatment.msPerQuery ?? null,
+        addedMsPerQuery: (cold?.treatment.msPerQuery ?? 0) - (cold?.control.msPerQuery ?? 0),
+      }];
+    })),
     // The sentence D-0025 asks for when the win is absent, written here so the report
     // cannot quietly omit it.
     conclusion: verdict === 'win'

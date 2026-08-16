@@ -188,3 +188,47 @@ test('a missing backend is refused rather than measured as an off/off pair', asy
     /requires a reranker with a rerank\(query, documents\) method/,
   );
 });
+
+test('the knob reports its COST per query, which D-0025 requires displayed beside it', async () => {
+  const { score } = scoreDouble({
+    '3000:off': { hits: 10, total: 20, mrr: 0.5 },
+    '3000:40': { hits: 11, total: 20, mrr: 0.5 },
+  });
+  const slow = async (options) => {
+    if (options.retrieveOptions?.rerank?.enabled) await new Promise((resolve) => setTimeout(resolve, 40));
+    return score(options);
+  };
+  const result = await rerankAB({ corpus: {}, store: {}, reranker: stubReranker, budgets: [3000], topKs: [40], score: slow });
+  const pair = result.pairs[0];
+  assert.equal(typeof pair.cost.msPerQuery, 'number');
+  assert.ok(pair.cost.addedMsPerQuery >= 1, 'the reranked arm is measurably slower, and the number rides with the verdict');
+  assert.ok(pair.treatment.msPerQuery >= pair.control.msPerQuery);
+});
+
+test('only the arm that actually paid the price reports one; the rest carry the caveat', async () => {
+  // Live anomaly this encodes: topK 40 measured 15087 ms per query on its first arm and
+  // 1491 on a later one. Identical work, tenfold difference, because the backend caches.
+  const { score } = scoreDouble({
+    '3000:off': { hits: 10, total: 20, mrr: 0.5 },
+    '3000:40': { hits: 10, total: 20, mrr: 0.5 },
+    '4000:off': { hits: 10, total: 20, mrr: 0.5 },
+    '4000:40': { hits: 10, total: 20, mrr: 0.5 },
+  });
+  let seen = 0;
+  const caching = async (options) => {
+    if (options.retrieveOptions?.rerank?.enabled) {
+      seen += 1;
+      await new Promise((resolve) => setTimeout(resolve, seen === 1 ? 60 : 1));
+    }
+    return score(options);
+  };
+  const result = await rerankAB({ corpus: {}, store: {}, reranker: stubReranker, budgets: [3000, 4000], topKs: [40], score: caching });
+  const [first, second] = result.pairs;
+  assert.equal(first.cost.cold, true, 'the first arm to score this topK paid full price');
+  assert.equal(first.cost.caveat, null);
+  assert.equal(second.cost.cold, false);
+  assert.match(second.cost.caveat, /understates the knob/);
+  assert.ok(second.cost.msPerQuery < first.cost.msPerQuery, 'the warm arm is cheaper, which is the confound');
+  // The headline price comes from the cold arm only.
+  assert.equal(result.cost.topK40.msPerQuery, first.treatment.msPerQuery);
+});

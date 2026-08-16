@@ -1,5 +1,39 @@
 # Daijin build state (authoritative)
 
+## 2026-08-17 12:20 - The fourth double; the happy-path claim upgraded; tip 7f81878
+
+tui-builder REOPENED its closed lane on the extractor's checkable
+prediction ("if there is a fourth double anywhere that scripts only
+happy paths, it has the same defect waiting"), checked it because a
+lead is not a compliment, and it was right: gates_script. Two defects
+(7f81878, CI green watched, run 31967866786): nothing read discovery's
+terminal event AT ALL - the banner claimed "Discovery running"
+indefinitely after the job ended, and the table kept showing the state
+from BEFORE the run that had just rewritten the file the screen
+exists to display, so the screen's primary action appeared to do
+nothing and then lied about still working; and a failed discovery
+left old classification rows in silence where a user reads them as
+the run's result.
+
+THE UPGRADED CLAIM, kept as the round's export: the prediction was
+about FAILURE branches and what it uncovered was mostly a SUCCESS
+defect - the happy path had been broken since it was written and
+passed every test, because no test asked what the screen does after
+discovery ends. A happy-path-only double does something worse than
+leaving failure branches untested: IT REMOVES THE REASON ANYONE OPENS
+THE SURROUNDING CODE. Stronger than "failure branches are free to be
+wrong", and the one to carry forward.
+
+Also: the which-test-killed-it detector (added after the tautology)
+came back CLEAN for the first time rather than catching its author -
+an instrument's first negative result is part of its calibration. The
+stale banner string was reproduced and quoted before being claimed.
+
+PROCESS RATIFIED: reopening a closed lane on a checkable claim about
+shipped code, with the message arriving BEFORE the commit is found,
+is the right order - a defect outranks an administrative close, and
+visibility is what makes self-initiated reopening safe. Tip moves to
+7f81878; the close holds there; all lanes on call.
 ## 2026-08-17 12:00 - The terminal names become unforgeable; ASSUMPTIONS becomes a protocol
 
 The extractor answered tui-builder's three assumption-questions by

@@ -44,6 +44,12 @@ SOURCE="${DAIJIN_SOURCE:-}"
 REPO_URL="${DAIJIN_REPO_URL:-}"
 MIN_NODE_MAJOR=22
 MIN_PYTHON="3.10"
+# The embedder is a RUNTIME dependency, not an install dependency. These knobs exist so
+# the probe can be pointed at a mock or a closed port under test, and so a user who runs
+# Ollama somewhere else is not told a lie about their own machine.
+EMBED_MODEL="${DAIJIN_EMBED_MODEL:-bge-m3}"
+OLLAMA_URL="${DAIJIN_OLLAMA_URL:-${OLLAMA_BASE_URL:-http://localhost:11434}}"
+EMBEDDER_STATE="unknown"
 
 LOG_FILE=""
 
@@ -259,12 +265,28 @@ PY
 
   mkdir -p "$PREFIX/install"
   cp "$SOURCE/install/smoke.mjs" "$PREFIX/install/smoke.mjs"
+  cp "$SOURCE/install/probe-ollama.mjs" "$PREFIX/install/probe-ollama.mjs"
   cp "$SOURCE/install/uninstall.sh" "$PREFIX/install/uninstall.sh"
   chmod +x "$PREFIX/install/uninstall.sh"
 
   mkdir -p "$BIN_DIR"
   ln -sf "$PREFIX/bin/daijin" "$BIN_DIR/daijin"
   log "shim: linked $BIN_DIR/daijin"
+}
+
+# Asked at COMPLETION and never fatal. An install on a machine whose embedder arrives
+# tomorrow is a correct install; what would be wrong is finishing with a line that implies
+# retrieval works when nothing has checked.
+probe_embedder() {
+  local status=0
+  log "embedder: probing ${OLLAMA_URL} for ${EMBED_MODEL}"
+  node "$PREFIX/install/probe-ollama.mjs" --url "$OLLAMA_URL" --model "$EMBED_MODEL" >>"$LOG_FILE" 2>&1 || status=$?
+  case "$status" in
+    0) EMBEDDER_STATE="ready" ;;
+    3) EMBEDDER_STATE="model-missing" ;;
+    *) EMBEDDER_STATE="unreachable" ;;
+  esac
+  log "embedder: ${EMBEDDER_STATE}"
 }
 
 smoke() {
@@ -274,14 +296,40 @@ smoke() {
   log "smoke: hello returned the stamped engine version"
 }
 
+# The last line a person reads. It must never imply that retrieval works when the probe
+# says otherwise: an installer that overstates what it produced is how someone spends an
+# afternoon debugging an empty search instead of running one command.
+embedder_report() {
+  case "$EMBEDDER_STATE" in
+    ready)
+      printf 'Embedder:  %s is serving %s. Retrieval is ready.\n' "$OLLAMA_URL" "$EMBED_MODEL"
+      ;;
+    model-missing)
+      printf 'Embedder:  %s is running but is NOT serving %s, so retrieval will not work yet.\n' "$OLLAMA_URL" "$EMBED_MODEL"
+      printf '           Pull it:  ollama pull %s\n' "$EMBED_MODEL"
+      ;;
+    *)
+      printf 'Embedder:  no Ollama at %s, so retrieval will not work yet.\n' "$OLLAMA_URL"
+      printf '           Install Ollama:  https://ollama.com/download\n'
+      printf '           Then pull the model:  ollama pull %s\n' "$EMBED_MODEL"
+      ;;
+  esac
+}
+
 report() {
   log "done: installed at $PREFIX"
   printf '\n'
-  printf 'Daijin is installed.\n\n'
+  if [ "$EMBEDDER_STATE" = "ready" ]; then
+    printf 'Daijin is installed.\n\n'
+  else
+    printf 'Daijin is installed; retrieval requires the embedder, not yet present.\n\n'
+  fi
   printf '  command   %s/daijin\n' "$BIN_DIR"
   printf '  prefix    %s\n' "$PREFIX"
   printf '  stamp     %s/VERSION\n' "$PREFIX"
   printf '  log       %s\n' "$LOG_FILE"
+  printf '\n'
+  embedder_report
   printf '\n'
   case ":$PATH:" in
     *":$BIN_DIR:"*) printf 'Run:  daijin .\n' ;;
@@ -302,6 +350,7 @@ main() {
   write_shim
   write_stamp
   smoke
+  probe_embedder
   report
 }
 

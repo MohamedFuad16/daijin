@@ -23,10 +23,26 @@ Options, all environment variables:
 | `DAIJIN_BIN_DIR` | `~/.local/bin` | where the single `daijin` command is linked |
 | `DAIJIN_SOURCE` | the checkout the script came from | install from a specific checkout |
 | `DAIJIN_REPO_URL` | none | clone and install from a repository instead |
+| `DAIJIN_OLLAMA_URL` | `$OLLAMA_BASE_URL` or `http://localhost:11434` | where the completion probe looks for the embedder |
+| `DAIJIN_EMBED_MODEL` | `bge-m3` | the embedding model the probe expects |
 
 Requirements, checked before anything is written: Node 22 or newer (better-sqlite3 needs
 it), Python 3.10 or newer with `venv`, and git. Each failure names the tool it looked at
 and what to do about it.
+
+**Retrieval also needs a local [Ollama](https://ollama.com/download) serving `bge-m3`.**
+That is a RUNTIME requirement, not an install requirement, and the difference is
+deliberate: the install completes and is correct on a machine whose embedder arrives
+later, so the installer never fails on it. What it does instead is probe at the end and
+tell you which of the two situations you are in, because an installer that prints
+"installed" while retrieval cannot work is the more expensive kind of wrong.
+
+```
+ollama pull bge-m3     # 1024 dimensions, the measured default
+```
+
+If Ollama is somewhere other than `http://localhost:11434`, point the probe at it with
+`DAIJIN_OLLAMA_URL`, and the model name is `DAIJIN_EMBED_MODEL`.
 
 ## What it puts where
 
@@ -107,6 +123,13 @@ repository. Criteria, in the order it checks them:
 - **(e) uninstall.** Removes the program, leaves a repository brain alone, and is not an
   error the second time.
 - **(f) dash sweep.**
+- **(g) the embedder is probed at completion and never blocks the install.** Both branches
+  are exercised against a mock endpoint and a closed port, never a live service, and each
+  asserts its own message: the ready branch says retrieval is ready, the missing branch
+  names the next command and the completion line stops claiming a working install.
+- **(h) the preflight refusals actually refuse.** Node hidden from PATH, a node reporting
+  v20, and a Python without `venv`, each asserting the installer stops with its named
+  message. A requirement nobody has ever seen fail is a requirement nobody has checked.
 
 Two criteria are checked by **mutation** rather than observation, because a check that
 cannot fail is not a check:

@@ -1,5 +1,39 @@
 # Daijin build state (authoritative)
 
+## 2026-08-17 02:25 - Finding 85: the divergence is larger; queue reordered
+
+REPORT 22 ADDENDUM, from the verifier spending its check on the one
+item in the extractor's would-attack list it had not covered: the
+examDetail divergence REINTRODUCES A RULED-AGAINST SHAPE. Beyond the
+absent fields and the ~13 leaked columns, the { ...attempt } spread
+ships attempt.rubric.axes - the fully hydrated BY-NAME axes object
+(hydrateRubric parses by name) - directly beside the correctly-mapped
+canonical list in attempt.axes. That is the exact shape finding 79
+forbade on the wire, arriving through a spread rather than the mapping
+the ruling governed; a client reading rubric.axes gets an unordered
+object and no error, and the ruling's guarantee holds only for
+clients reading the field the ruling names.
+
+VERDICT UNCHANGED, in the verifier's own words: clause (e) stands
+confirmed (the axes are right, the mapping verified); the surface the
+clause was demonstrated against diverges from the surface the
+contract describes; and the five runs could never have caught it
+because the suite asserts what the implementation does, not what the
+contract says - which is finding 85's real lesson and D-0035's third
+argument for the contract-shape gate.
+
+RULED: P8 acceptance STANDS. Finding 85 (WARN) merges with the
+attempts-row item and MOVES TO THE FRONT of the extractor's queue -
+reopening a ruled shape outranks the done-invariant. The fix shape:
+explicit map at the boundary (no spread, so a new column cannot reach
+the wire by default), the raw rubric hydration not shipped, and the
+detection test asserting the wire row's key set EQUALS the contract's.
+Then the done-invariant, then the gate and script.
+
+Also kept, the verifier on the extractor's discarded 11: "a number
+that supports your case is the one you least want to throw away, and
+it threw it away inside the measurement rather than after being
+asked."
 ## 2026-08-17 02:10 - P8 ACCEPTED. All nine phases of the build are closed.
 
 VERIFIER REPORT 22, verdict: the claim holds where reproducible, with

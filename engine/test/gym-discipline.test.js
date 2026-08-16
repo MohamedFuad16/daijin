@@ -15,10 +15,31 @@ import { stripCommentLines } from '../src/gym/spend-gate.js';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const gymRoot = path.resolve(here, '../src/gym');
 
-/** A provider call: a network fetch, an SDK, or a key read. Prose is not a call, so the scan
- *  runs over code with comment lines removed; the gym's own comments discuss the platform's
- *  model names and its OpenAI-compatible transport at length. */
-const PROVIDER_CALL = /\bfetch\s*\(|\bhttps?:\/\/(?!provider\.invalid|other\.invalid)[a-z]|openai|anthropic|OPENROUTER|API_KEY|api_key|Bearer\s/;
+/**
+ * A provider call: a network fetch, an SDK, or a key read.
+ *
+ * Declared as NAMED BRANCHES rather than as one alternation, so the test below can drop each
+ * branch and prove that exactly one control notices. Finding 78: two branches previously had
+ * no control of their own (the router shape also matched API_KEY, so OPENROUTER could have
+ * been deleted green, and lowercase api_key had no shape at all), which is the same defect as
+ * a gate that cannot fail, one level up again.
+ *
+ * Prose is not a call, so the scan runs over code with comment lines removed; the gym's own
+ * comments discuss the platform's model names and its OpenAI-compatible transport at length.
+ */
+const PROVIDER_BRANCHES = Object.freeze([
+  ['network-call', String.raw`\bfetch\s*\(`],
+  ['provider-url', String.raw`\bhttps?:\/\/(?!provider\.invalid|other\.invalid)[a-z]`],
+  ['openai-sdk', 'openai'],
+  ['anthropic-sdk', 'anthropic'],
+  ['router-key', 'OPENROUTER'],
+  ['upper-key', 'API_KEY'],
+  ['lower-key', 'api_key'],
+  ['bearer-header', String.raw`Bearer\s`],
+]);
+
+const composePattern = (branches) => new RegExp(branches.map(([, source]) => source).join('|'));
+const PROVIDER_CALL = composePattern(PROVIDER_BRANCHES);
 
 /** A write outside a temp directory. Every gym test that writes uses mkdtemp; the platform
  *  twice nearly chased a fixture batch that landed seconds from a real one. */
@@ -58,12 +79,26 @@ test('clause 18: no gym source can reach a provider', async () => {
     ['a provider URL', 'const endpoint = "https://models.example.com/v1/chat";'],
     ['an SDK import', 'import OpenAI from "openai";'],
     ['another SDK', 'import { anthropic } from "sdk";'],
-    ['a router key', 'const key = process.env.OPENROUTER_API_KEY;'],
-    ['a key read', 'const key = process.env.API_KEY;'],
+    // Finding 78: the router shape must be one API_KEY cannot catch, or the router branch
+    // could be deleted and every control would stay green.
+    ['a router key', 'const key = process.env.OPENROUTER_TOKEN;'],
+    ['an upper-case key read', 'const key = process.env.API_KEY;'],
+    ['a lower-case key field', 'const config = { api_key: token };'],
     ['a bearer header', 'headers.set("Authorization", `Bearer ${token}`);'],
   ];
   for (const [what, shape] of PROVIDER_SHAPES) {
     assert.ok(PROVIDER_CALL.test(stripCommentLines(shape)), `the scan must catch ${what}`);
+  }
+
+  // THE PROPERTY, ENFORCED RATHER THAN AUDITED (finding 78, and the verifier's method made
+  // standing): drop each branch in turn and exactly ONE control must stop matching. Fewer
+  // than one means the branch is dead weight nobody would notice removing; more than one
+  // means a control is passing for several reasons and cannot pinpoint what broke.
+  for (const [name] of PROVIDER_BRANCHES) {
+    const without = composePattern(PROVIDER_BRANCHES.filter(([other]) => other !== name));
+    const orphaned = PROVIDER_SHAPES.filter(([, shape]) => !without.test(shape)).map(([what]) => what);
+    assert.equal(orphaned.length, 1,
+      `dropping the ${name} branch should break exactly one control, broke ${orphaned.length}: ${orphaned.join(', ') || 'none'}`);
   }
   // And prose about providers stays prose, or the rule becomes one people silence.
   assert.equal(PROVIDER_CALL.test(stripCommentLines(

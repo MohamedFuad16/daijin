@@ -17,12 +17,20 @@ set -u
 ENGINE=${DAIJIN_ENGINE:-/Users/mfuad16/Documents/daijin/engine}
 cd "$ENGINE" || exit 1
 
+# Anything that is not a KILL: a survivor (the code is not pinned) or a skip (the expression
+# matched nothing, so nothing was tested). Both are counted, and the script exits non-zero.
+PROBLEMS=0
+
 run_mutation() {
   local name="$1" file="$2" expr="$3" tests="$4"
   cp "$file" "$file.bak"
   perl -0pi -e "$expr" "$file"
   if cmp -s "$file" "$file.bak"; then
-    echo "SKIPPED (no textual change): $name"
+    # A SKIPPED mutation is NOT evidence: the expression matched nothing, so nothing was
+    # tested, and the line still reads like a result at a glance. Both skips seen on
+    # 2026-08-16 were caused by a refactor moving an anchor out from under an expression.
+    echo "SKIPPED (no textual change, RE-ANCHOR THIS): $name"
+    PROBLEMS=$((PROBLEMS + 1))
     mv "$file.bak" "$file"
     return
   fi
@@ -34,6 +42,7 @@ run_mutation() {
     echo "KILLED   ($failed failing): $name"
   else
     echo "SURVIVED (!!): $name"
+    PROBLEMS=$((PROBLEMS + 1))
   fi
   mv "$file.bak" "$file"
 }
@@ -271,7 +280,7 @@ run_mutation "P7 c4: the exam author may grade its own exam" \
 
 run_mutation "P7 c4: independence keyed on role, which can never fire" \
   src/gym/exams.js \
-  's/  return \{ role: role \|\| null, model, endpoint, key: `\$\{model\}@\$\{endpoint\}` \};/  return { role: role || null, model, endpoint, key: `${role}` };/' \
+  's/key: `\$\{model\}@\$\{endpoint\}`,/key: `${role}`,/' \
   "test/gym-mode-quarantine.test.js test/gym-grading.test.js"
 
 run_mutation "P7 c5: a measured-metric-only regression is not capped at partial" \
@@ -326,7 +335,7 @@ run_mutation "P7 c10/21: a non-evaluation batch may teach the brain" \
 
 run_mutation "P7 c18: the provider scan stops seeing calls" \
   test/gym-discipline.test.js \
-  's/const PROVIDER_CALL = \/\\bfetch\\s\*\\\(/const PROVIDER_CALL = \/\\bnever_matches_anything\\b|\\bfetch_disabled\\s*\\(/' \
+  's/const PROVIDER_CALL = composePattern\(PROVIDER_BRANCHES\);/const PROVIDER_CALL = new RegExp("matches_nothing_at_all");/' \
   "test/gym-discipline.test.js"
 
 run_mutation "P7 c7: rubrics filed by arrival order instead of by runId" \
@@ -348,3 +357,38 @@ run_mutation "P7 c19: a stale exemption hides a file that no longer exists" \
   test/gym-discipline.test.js \
   "s/const CLAUSE_19_EXEMPT = Object\.freeze\(\[/const CLAUSE_19_EXEMPT = Object.freeze([\n  { path: 'gym-deleted-long-ago.test.js', reason: 'a stale exemption nobody removed when the file went away, which is a hole' },/" \
   "test/gym-discipline.test.js"
+
+# ---- verifier findings 77 and 78 ---------------------------------------------------------
+
+run_mutation "F77: identity stops casefolding the model, so capitalization evades the refusal" \
+  src/gym/exams.js \
+  's/  return String\(model\)\.trim\(\)\.toLowerCase\(\);/  return String(model).trim();/' \
+  "test/gym-mode-quarantine.test.js"
+
+run_mutation "F77: identity stops stripping the trailing slash, so a slash evades the refusal" \
+  src/gym/exams.js \
+  "s/  const text = String\(endpoint\)\.trim\(\)\.replace\(\/\\\\\/\+\\\$\/, ''\) \|\| 'default';/  const text = String(endpoint).trim() || 'default';/" \
+  "test/gym-mode-quarantine.test.js"
+
+run_mutation "F77: normalization flattens the URL path too, conflating real deployments" \
+  src/gym/exams.js \
+  's/url\.pathname\.replace/url.pathname.toLowerCase().replace/' \
+  "test/gym-mode-quarantine.test.js"
+
+run_mutation "F78: the router branch is deleted from the provider scan" \
+  test/gym-discipline.test.js \
+  "s/  \['router-key', 'OPENROUTER'\],//" \
+  "test/gym-discipline.test.js"
+
+run_mutation "F78: the lower-case key branch is deleted from the provider scan" \
+  test/gym-discipline.test.js \
+  "s/  \['lower-key', 'api_key'\],//" \
+  "test/gym-discipline.test.js"
+
+echo
+if [ "$PROBLEMS" -eq 0 ]; then
+  echo "All mutations killed."
+else
+  echo "$PROBLEMS mutation(s) survived or were skipped; neither is evidence."
+fi
+exit $([ "$PROBLEMS" -eq 0 ] && echo 0 || echo 1)

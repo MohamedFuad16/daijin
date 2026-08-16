@@ -51,10 +51,56 @@ export const AUTHORED_SOURCES = Object.freeze(['auditor-selection', 'auditor-ove
  */
 export function agentIdentity(agent) {
   const role = typeof agent?.role === 'string' ? agent.role.trim() : '';
-  const model = typeof agent?.model === 'string' ? agent.model.trim() : '';
-  if (!model) throw new Error('An agent identity needs a model id; role alone cannot establish independence.');
-  const endpoint = typeof agent?.endpoint === 'string' && agent.endpoint.trim() ? agent.endpoint.trim() : 'default';
-  return { role: role || null, model, endpoint, key: `${model}@${endpoint}` };
+  const rawModel = typeof agent?.model === 'string' ? agent.model.trim() : '';
+  if (!rawModel) throw new Error('An agent identity needs a model id; role alone cannot establish independence.');
+  const rawEndpoint = typeof agent?.endpoint === 'string' && agent.endpoint.trim() ? agent.endpoint.trim() : 'default';
+  const model = normalizeModelId(rawModel);
+  const endpoint = normalizeEndpoint(rawEndpoint);
+  return {
+    role: role || null,
+    model,
+    endpoint,
+    key: `${model}@${endpoint}`,
+    // The values as CONFIGURED, kept rather than destroyed by normalization, for the same
+    // reason a differing self-report is kept as reportedAuthor: the record should show what
+    // someone actually typed, and a normalized key is a comparison tool, not the truth.
+    configured: { model: rawModel, endpoint: rawEndpoint },
+  };
+}
+
+/**
+ * Normalization exists because the evasions are ACCIDENTS, not attacks (finding 77).
+ *
+ * A user who types GLM-5.2 into one role and glm-5.2 into the other has configured one key
+ * into both roles; a user whose endpoint carries a trailing slash in one field and not the
+ * other has done the same. Without normalization the independence refusal never fires, the
+ * grade lands, and the record shows a clean cycle. The failure is silent, which is what makes
+ * it worth normalizing rather than documenting.
+ *
+ * Model ids are compared casefolded because providers treat them that way.
+ */
+export function normalizeModelId(model) {
+  return String(model).trim().toLowerCase();
+}
+
+/**
+ * Endpoints: the scheme and host are casefolded because they are case-insensitive by
+ * definition, the trailing slash is stripped, and THE PATH KEEPS ITS CASE because a URL path
+ * is case-sensitive and two deployments can legitimately differ only there. A blunter
+ * lowercase-everything would conflate deployments that are genuinely different, which is the
+ * opposite error and just as silent.
+ */
+export function normalizeEndpoint(endpoint) {
+  const text = String(endpoint).trim().replace(/\/+$/, '') || 'default';
+  try {
+    const url = new URL(text);
+    const port = url.port ? `:${url.port}` : '';
+    return `${url.protocol.toLowerCase()}//${url.hostname.toLowerCase()}${port}${url.pathname.replace(/\/+$/, '')}${url.search}`;
+  } catch {
+    // Not a URL: a bare name, or the 'default' sentinel. Casefold it, since there is no path
+    // to preserve.
+    return text.toLowerCase();
+  }
 }
 
 /**

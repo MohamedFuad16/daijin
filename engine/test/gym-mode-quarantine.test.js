@@ -8,8 +8,8 @@ import {
   DEFAULT_RUN_MODE, RUN_MODES, assertRunMode, assertScoredWrite, isGradableRun, isScoreableRun,
 } from '../src/gym/run-mode.js';
 import {
-  MIN_QUARANTINE_REASON, examDrawRefusal, examListRow, graderIndependenceRefusal, parseExamRecord,
-  quarantineExam, vetoExam,
+  MIN_QUARANTINE_REASON, agentIdentity, examDrawRefusal, examListRow, graderIndependenceRefusal,
+  parseExamRecord, quarantineExam, vetoExam,
 } from '../src/gym/exams.js';
 
 const SHA_BASE = 'a'.repeat(40);
@@ -171,6 +171,37 @@ test('P7 clause 4: an exam a model authored records WHICH model, at write time',
   assert.equal(exam().provenance.authoredBy.key, 'auditor-model@https://provider.invalid');
 });
 
+test('FINDING 77: identity normalization, and what it deliberately does NOT conflate', () => {
+  const key = (agent) => agentIdentity(agent).key;
+  const base = { role: 'teacher', model: 'GLM-5.2', endpoint: 'https://api.example.com/v1/' };
+
+  assert.equal(key(base), 'glm-5.2@https://api.example.com/v1');
+  assert.equal(key({ ...base, model: 'glm-5.2' }), key(base), 'casefolded');
+  assert.equal(key({ ...base, endpoint: 'https://api.example.com/v1' }), key(base), 'trailing slash stripped');
+  assert.equal(key({ ...base, endpoint: 'HTTPS://API.EXAMPLE.COM/v1' }), key(base), 'scheme and host casefolded');
+  assert.equal(key({ ...base, model: '  glm-5.2 ' }), key(base), 'trimmed');
+
+  // What it does NOT do, which is as important: a URL PATH is case-sensitive by definition,
+  // and two deployments can legitimately differ only there. Lowercasing everything would
+  // conflate genuinely different endpoints, which is the same silent failure inverted.
+  assert.notEqual(key({ ...base, endpoint: 'https://api.example.com/V1' }), key(base));
+  // Different models stay different, and a bare name still normalizes.
+  assert.notEqual(key({ ...base, model: 'glm-5.3' }), key(base));
+  assert.equal(key({ role: 'teacher', model: 'x', endpoint: 'Local' }), 'x@local');
+  assert.equal(agentIdentity({ role: 'teacher', model: 'x' }).endpoint, 'default');
+  // A BARE NAME with a trailing slash, which is the case the first strip exists for: a URL
+  // gets its slash removed again by the URL branch, so without this case that strip is
+  // untested. Found by mutation, which survived until this line existed.
+  assert.equal(key({ role: 'teacher', model: 'x', endpoint: 'ollama/' }), 'x@ollama');
+  assert.equal(
+    key({ role: 'teacher', model: 'x', endpoint: 'ollama/' }),
+    key({ role: 'teacher', model: 'x', endpoint: 'ollama' }),
+  );
+
+  // The configured values survive normalization: the record shows what was typed.
+  assert.deepEqual(agentIdentity(base).configured, { model: 'GLM-5.2', endpoint: 'https://api.example.com/v1/' });
+});
+
 test('P7 clause 4: the author cannot grade its own exam, and the check can fire', () => {
   const authored = exam();
   const auditor = { role: 'auditor', model: 'auditor-model', endpoint: 'https://provider.invalid' };
@@ -193,6 +224,26 @@ test('P7 clause 4: the author cannot grade its own exam, and the check can fire'
   assert.equal(
     graderIndependenceRefusal(authored, { role: 'teacher', model: 'auditor-model', endpoint: 'https://other.invalid' }),
     null,
+  );
+
+  // FINDING 77: the two evasions, both of which are ORDINARY ACCIDENTS rather than attacks.
+  // A user who types the same model with different capitalization into two roles, or the same
+  // endpoint with and without a trailing slash, has configured one key into both roles. Before
+  // normalization the refusal stayed silent and the record showed a clean grade.
+  assert.match(
+    graderIndependenceRefusal(authored, { role: 'teacher', model: 'AUDITOR-MODEL', endpoint: 'https://provider.invalid' }),
+    /cannot be graded by the same identity/,
+    'casing must not evade the refusal',
+  );
+  assert.match(
+    graderIndependenceRefusal(authored, { role: 'teacher', model: 'auditor-model', endpoint: 'https://provider.invalid/' }),
+    /cannot be graded by the same identity/,
+    'a trailing slash must not evade the refusal',
+  );
+  assert.match(
+    graderIndependenceRefusal(authored, { role: 'teacher', model: '  Auditor-Model  ', endpoint: 'HTTPS://Provider.Invalid/' }),
+    /cannot be graded by the same identity/,
+    'and neither must all of them together',
   );
 
   // A deterministically mined exam has no author, so independence holds by construction.

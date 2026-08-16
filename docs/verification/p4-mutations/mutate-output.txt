@@ -1,4 +1,4 @@
-# Captured 2026-08-16T03:46:02Z (UTC)
+# Captured 2026-08-16T03:58:50Z (UTC)
 # Command: bash docs/verification/p4-mutations/mutate.sh
 
 KILLED   (4 failing): boundary check never fires (condition inverted)
@@ -46,7 +46,7 @@ KILLED   (2 failing): P7 c2: a citation naming an untouched file is accepted
 KILLED   (1 failing): P7 c2: a withheld document may be cited
 KILLED   (3 failing): P7 c3: binding to the task digest alone
 KILLED   (2 failing): P7 c4: the exam author may grade its own exam
-KILLED   (10 failing): P7 c4: independence keyed on role, which can never fire
+KILLED   (11 failing): P7 c4: independence keyed on role, which can never fire
 KILLED   (1 failing): P7 c5: a measured-metric-only regression is not capped at partial
 KILLED   (2 failing): P7 c5: a run with no diff may carry a rubric
 KILLED   (1 failing): P7 c6: a differing self-report is overwritten instead of preserved
@@ -62,3 +62,11 @@ KILLED   (3 failing): P7 c7: rubrics filed by arrival order instead of by runId
 KILLED   (3 failing): P7 c8/c9: the importer stops validating, so it stops being the boundary
 KILLED   (1 failing): P7 c17: the batch counts every proposal as accepted
 KILLED   (1 failing): P7 c19: a stale exemption hides a file that no longer exists
+KILLED   (2 failing): F77: identity stops casefolding the model, so capitalization evades the refusal
+KILLED   (1 failing): F77: identity stops stripping the trailing slash, so a slash evades the refusal
+KILLED   (1 failing): F77: normalization flattens the URL path too, conflating real deployments
+KILLED   (1 failing): F78: the router branch is deleted from the provider scan
+KILLED   (1 failing): F78: the lower-case key branch is deleted from the provider scan
+
+All mutations killed.
+# exit=0

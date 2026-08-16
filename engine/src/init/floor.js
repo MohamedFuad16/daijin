@@ -198,13 +198,42 @@ export async function measureResolution({
   };
 }
 
-/** RPC v4 mcpSnippet: unlocked at or above the threshold, locked below it. */
-export function mcpUnlock(caseRate, { threshold = MCP_UNLOCK_THRESHOLD } = {}) {
+/**
+ * RPC v4 mcpSnippet: unlocked at or above the threshold, locked below it.
+ *
+ * The THRESHOLD stands and is not adjusted by the range (verifier finding 80). What the
+ * range changes is what the reader is told alongside it. If a gold set with deliberately
+ * wrong answers would also clear the bar, or comes within one case of clearing it, then
+ * the unlock decision was made on a metric that cannot distinguish a good brain from a
+ * scrambled one, and the report says so in a sentence rather than leaving a green tick to
+ * speak for itself.
+ */
+export function mcpUnlock(caseRate, { threshold = MCP_UNLOCK_THRESHOLD, resolution = null } = {}) {
   const unlocked = caseRate.exact >= threshold;
+  const control = resolution?.caseRate?.control ?? null;
+  // One case is the smallest movement the metric can express, so "within one case of the
+  // threshold" is the honest boundary for a warning rather than an arbitrary margin.
+  const oneCase = caseRate.total ? 1 / caseRate.total : 0;
+  const controlClears = control ? control.exact >= threshold : false;
+  const controlNearlyClears = control ? control.exact + oneCase >= threshold : false;
+
+  let saturation = null;
+  if (controlClears) {
+    saturation = `A gold set with deliberately WRONG answers scores ${control.cases}, which also clears the ${threshold} `
+      + 'threshold. This unlock decision carries no information about retrieval quality: the metric cannot tell this '
+      + 'brain from a scrambled one at this corpus size.';
+  } else if (controlNearlyClears) {
+    saturation = `A gold set with deliberately WRONG answers scores ${control.cases}, within one case of the ${threshold} `
+      + `threshold. The unlock stands, and the margin it stands on is ${resolution.caseRate.casesOfHeadroom} case(s) of `
+      + 'discriminating room, not the distance from zero.';
+  }
+
   return {
     unlocked,
     threshold,
     caseRate,
+    resolution,
+    saturation,
     reason: unlocked
       ? `${caseRate.cases} is at or above the ${threshold} threshold, so the brain is fit to serve over MCP.`
       : `${caseRate.cases} is below the ${threshold} threshold. The mechanical diagnosis names which cases missed; MCP stays locked until the floor is earned.`,

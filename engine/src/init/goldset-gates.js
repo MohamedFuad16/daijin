@@ -105,6 +105,25 @@ export function longestSharedSpan(queryText, answerText) {
 }
 
 /**
+ * Does this query quote this answer.
+ *
+ * THE one definition of the leakage rule, exported so the miner filters with exactly what
+ * the gate judges with. It exists because deriving the rule twice went wrong twice: the
+ * first pre-filter checked only the contiguous span and every proposed title case still
+ * failed on containment; the second checked containment with queryTokens while the gate
+ * counts with tokens, so a three-stopword-stripped query slipped through. A pre-filter that
+ * is half the rule is worse than none, because it makes the case look vetted.
+ */
+export function quotesAnswer(query, content, span = LEAKAGE_SPAN) {
+  const normalizedContent = String(content).toLowerCase().replace(/\s+/g, ' ');
+  const normalizedQuery = String(query).toLowerCase().replace(/\s+/g, ' ');
+  const contained = tokens(query).length >= LEAKAGE_MIN_QUERY_TOKENS
+    && normalizedContent.includes(normalizedQuery);
+  const shared = longestSharedSpan(query, content);
+  return { leaks: contained || shared >= span, contained, shared };
+}
+
+/**
  * LEAKAGE. A query never quotes its own answer.
  *
  * Two rules, because they catch different mistakes: a long contiguous span is a copied
@@ -120,11 +139,8 @@ export function leakageGate(cases, { unitsById, span = LEAKAGE_SPAN }) {
     for (const id of entry.must_return) {
       const unit = unitsById.get(id);
       if (!unit) continue;
-      const shared = longestSharedSpan(entry.query, unit.content);
-      const queryTokenCount = tokens(entry.query).length;
-      const contained = queryTokenCount >= LEAKAGE_MIN_QUERY_TOKENS
-        && unit.content.toLowerCase().replace(/\s+/g, ' ').includes(entry.query.toLowerCase().replace(/\s+/g, ' '));
-      if (shared >= span || contained) {
+      const { leaks, contained, shared } = quotesAnswer(entry.query, unit.content, span);
+      if (leaks) {
         failures.push({
           case: entry.id,
           answer: id,
@@ -226,7 +242,7 @@ export function stalenessGate(activeCases, context) {
   );
 }
 
-const PROVENANCE_PATTERN = /^(commit-archaeology|structural|identifier|paraphrase:auditor):(.+)$/;
+const PROVENANCE_PATTERN = /^(commit-archaeology|structural|identifier|record-label|paraphrase:auditor):(.+)$/;
 
 /**
  * PROVENANCE. Every case records a real origin, and the origin resolves.
@@ -253,6 +269,15 @@ export function provenanceGate(cases, { commits = new Set(), symbols = null, uni
     } else if (kind === 'identifier') {
       if (symbols && !symbols.byName.has(rest)) {
         failures.push({ case: entry.id, provenance: entry.provenance, reason: `symbol ${rest} was not found by the deterministic scan` });
+      }
+    } else if (kind === 'record-label') {
+      // A curated record label resolves against the unit whose title carries it, which is
+      // the same rule the miner used to choose the answer. Resolving it against the code
+      // symbol index (as an `identifier:` origin is) would fail every one of them: a label
+      // is not a symbol.
+      const home = unitsById.get(entry.target?.id);
+      if (!home || !String(home.title || '').includes(rest)) {
+        failures.push({ case: entry.id, provenance: entry.provenance, reason: `no unit carries ${rest} in its title` });
       }
     } else if (kind === 'structural') {
       const target = entry.target || {};

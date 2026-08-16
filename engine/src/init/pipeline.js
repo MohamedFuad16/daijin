@@ -21,6 +21,7 @@ import path from 'node:path';
 import YAML from 'yaml';
 
 import { retrieve } from '../rag/retrieve.js';
+import { adoptKnowledgeFolder } from './adopt.js';
 import { analyze, readSources } from './analyze.js';
 import { buildEvidence } from './evidence.js';
 import {
@@ -28,7 +29,7 @@ import {
 } from './floor.js';
 import { collectGateSources, discoverGates, gatesFilePath, probeGateCandidates, renderGatesYaml } from './gate-discovery.js';
 import { readHistory, shaIndex } from './git.js';
-import { caseKey, mineGoldset } from './goldset.js';
+import { caseKey, mineAdoptedGoldset, mineGoldset } from './goldset.js';
 import { permuteAnswers } from './rerank-ab.js';
 import { runGoldsetGates } from './goldset-gates.js';
 import { importRelationships, ingestUnits } from './ingest.js';
@@ -266,15 +267,13 @@ export async function initBrain({
     counts: { files: analysis.files.count, commits: analysis.commitCount, gateCandidates: analysis.gateCandidates.length },
   });
 
-  if (mode === 'ingest') {
-    // An existing knowledge folder is DETECTED here (analysis.brainFolder) and ingesting
-    // it as-is is a separate feature with its own auditor drift check. Refusing by name is
-    // the honest move: silently generating a Layer 1 brain over a repo that already has a
-    // curated one would overwrite the user's own work with machine output.
+  if (mode === 'ingest' && !analysis.brainFolder.present) {
+    // Refusing by name rather than quietly generating: a user who asked to adopt has a
+    // folder in mind, and handing them machine output instead is the wrong answer to the
+    // question they asked.
     throw new Error(
-      'Mode "ingest" (adopt an existing knowledge folder as-is) is not implemented in this build. '
-      + `Detected folder: ${analysis.brainFolder.present ? analysis.brainFolder.directory : 'none'}. `
-      + 'Use mode "layer1" to generate, or wait for the adopt path with its drift check.',
+      'Mode "ingest" adopts an existing knowledge folder and this repo has none that qualifies. '
+      + 'A folder counts when it holds at least one markdown file. Use mode "layer1" to generate one.',
     );
   }
 
@@ -306,11 +305,30 @@ export async function initBrain({
     counts: report.phases.evidence,
   });
 
-  // --- scaffold ------------------------------------------------------------------
-  steps.setPhase('scaffold');
-  const scaffold = scaffoldLayer1(evidence, scaffoldOptions);
+  // --- scaffold, or adopt --------------------------------------------------------
   const commits = shaIndex(history.commits || []);
-  const validated = validateCitations(scaffold.units, { files: listing.files, commits });
+  let scaffold = null;
+  let adopted = null;
+  let proposedUnits = [];
+  if (mode === 'ingest') {
+    steps.setPhase('adopt');
+    adopted = await adoptKnowledgeFolder(root, {
+      directory: analysis.brainFolder.directory,
+      files: listing.files,
+    });
+    proposedUnits = adopted.units;
+    await steps.emit({
+      step: 'adopted',
+      detail: `${adopted.granularity.units} units from ${adopted.granularity.documents} curated documents `
+        + `(split rules: ${Object.entries(adopted.granularity.byRule).map(([rule, count]) => `${rule} ${count}`).join(', ') || 'none'})`,
+      counts: adopted.granularity,
+    });
+  } else {
+    steps.setPhase('scaffold');
+    scaffold = scaffoldLayer1(evidence, scaffoldOptions);
+    proposedUnits = scaffold.units;
+  }
+  const validated = validateCitations(proposedUnits, { files: listing.files, commits });
   if (validated.dropped.length > 0) {
     await steps.emit({
       step: 'citations-dropped',
@@ -319,21 +337,33 @@ export async function initBrain({
     });
   }
   let units = validated.accepted;
-  report.phases.scaffold = {
-    generated: scaffold.units.length,
-    accepted: units.length,
-    dropped: validated.dropped,
-    notes: scaffold.notes,
-    errors: { units: scaffold.errors.units.length, reason: scaffold.errors.reason, candidates: {
-      fixCommits: scaffold.errors.candidates.fixCommits.length,
-      revertCommits: scaffold.errors.candidates.revertCommits.length,
-    } },
-  };
-  await steps.emit({
-    step: 'scaffolded',
-    detail: `${units.length} Layer 1 units, 0 error records (${scaffold.errors.candidates.fixCommits.length} fix and ${scaffold.errors.candidates.revertCommits.length} revert commits kept as evidence only)`,
-    counts: { units: units.length },
-  });
+  if (mode === 'ingest') {
+    report.phases.adopt = {
+      documents: adopted.granularity.documents,
+      proposed: adopted.units.length,
+      accepted: units.length,
+      dropped: validated.dropped,
+      granularity: adopted.granularity,
+      files: adopted.files,
+      notes: adopted.notes,
+    };
+  } else {
+    report.phases.scaffold = {
+      generated: scaffold.units.length,
+      accepted: units.length,
+      dropped: validated.dropped,
+      notes: scaffold.notes,
+      errors: { units: scaffold.errors.units.length, reason: scaffold.errors.reason, candidates: {
+        fixCommits: scaffold.errors.candidates.fixCommits.length,
+        revertCommits: scaffold.errors.candidates.revertCommits.length,
+      } },
+    };
+    await steps.emit({
+      step: 'scaffolded',
+      detail: `${units.length} Layer 1 units, 0 error records (${scaffold.errors.candidates.fixCommits.length} fix and ${scaffold.errors.candidates.revertCommits.length} revert commits kept as evidence only)`,
+      counts: { units: units.length },
+    });
+  }
 
   // --- narration (spend boundary) -------------------------------------------------
   if (mode === 'layer1+layer2') {
@@ -398,7 +428,13 @@ export async function initBrain({
 
   // --- gold set ------------------------------------------------------------------
   steps.setPhase('goldset');
-  const mined = mineGoldset({ evidence, units, history, chunkCount: ingested.chunks });
+  // The adopted brain has no area cards, no import graph behind its units and no fixed
+  // convention ids, so the generated sources cannot reach it. Same trust order, same target
+  // formula, same gates: only the evidence differs, which is what keeps a
+  // curated-versus-generated comparison a comparison of brains rather than of methods.
+  const mined = mode === 'ingest'
+    ? mineAdoptedGoldset({ units, symbols: evidence.symbols, history, repoFiles: listing.files.filter((file) => !file.startsWith(`${analysis.brainFolder.directory}/`)), chunkCount: ingested.chunks })
+    : mineGoldset({ evidence, units, history, chunkCount: ingested.chunks });
   // Cases a previous run or a user left behind ride along. They are the only cases that
   // can go stale, and the staleness gate is what retires them.
   const carried = await readExistingGoldset(artifacts);
@@ -465,7 +501,6 @@ export async function initBrain({
     cases: gated.active, retrieveFn, tokenBudget: sweep.chosen,
   });
   const survival = checkContentSurvival(deliveries, { units, tokenBudget: sweep.chosen });
-  const unlock = mcpUnlock(sweep.chosenPoint.caseRate);
 
   // D-0030: the floor never ships without the range it was measured inside. The control is
   // the SAME cases with deliberately wrong answers, so it measures this gauge on this
@@ -494,6 +529,13 @@ export async function initBrain({
     // itself worth saying, and it must not take the floor down with it.
     resolution = { unavailable: true, reason: error.message };
     await steps.emit({ step: 'resolution-unavailable', detail: error.message, level: 'warn' });
+  }
+
+  // The unlock is decided AFTER the range is known, so the decision can carry it (finding
+  // 80). The threshold itself is untouched; only what the reader is told changes.
+  const unlock = mcpUnlock(sweep.chosenPoint.caseRate, { resolution: resolution?.unavailable ? null : resolution });
+  if (unlock.saturation) {
+    await steps.emit({ step: 'mcp-saturation', detail: unlock.saturation, level: 'warn' });
   }
 
   report.floor = {

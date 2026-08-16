@@ -231,6 +231,9 @@ test('a full init runs headlessly and reports the floor it measured, whatever it
       report.floor.resolution.caseRate.candidate.hits - report.floor.resolution.caseRate.control.hits,
     );
     assert.match(report.floor.resolution.reading, /deliberately wrong answers/);
+    // Finding 80: the unlock decision carries the range it was made against.
+    assert.ok('saturation' in report.floor.mcp, 'the unlock reports the range or explicitly nothing');
+    assert.equal(report.floor.mcp.resolution, report.floor.resolution);
 
     // Artifacts a human edits.
     const gatesYaml = YAML.parse(readFileSync(path.join(root, '.daijin/gates.yaml'), 'utf8'));
@@ -457,15 +460,92 @@ test('a store whose project does not match the query scope is refused loudly', a
   }
 });
 
-test('mode "ingest" refuses by name rather than overwriting a curated knowledge folder', async () => {
-  const root = makeRepo({ 'agent/agent.md': '# Agent router\n' });
+test('mode "ingest" refuses by name when there is no folder to adopt', async () => {
+  const root = makeRepo();
   const { directory, file } = makeStore();
   const store = await createSqliteStore({ path: file, project: 'default', embedder: EMBEDDER });
   try {
     await assert.rejects(
       () => initBrain({ repoPath: root, mode: 'ingest', store, embedder: { embed: async () => [] }, environment: ENVIRONMENT }),
-      /not implemented in this build.*Detected folder: agent/s,
+      /adopts an existing knowledge folder and this repo has none that qualifies/,
     );
+  } finally {
+    await store.close();
+    rmSync(directory, { recursive: true, force: true });
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('mode "ingest" adopts a curated folder as-is and measures it on the same gauge', async () => {
+  // The units a human wrote must be distinguishable from machine output in the brain
+  // itself, not only in the report: that distinction is the whole value of adopting.
+  const curated = {
+    'agent/agent.md': '# Agent router\n\nRead this first for the fixture app.\n',
+    'agent/decisions.md': [
+      '# Decisions',
+      '',
+      '## ADR-001 Use the sqlite store for the fixture',
+      'The sqlite backend was chosen because one file per repo is simpler to ship.',
+      '',
+      '## ADR-002 Rank candidates by descending score',
+      'Ranking sorts on score so the strongest candidate is funded first.',
+      '',
+      '## ADR-003 Keep whitespace normalization in chunking',
+      'Chunk text is normalized before embedding so identical prose hashes identically.',
+      '',
+      '## ADR-004 Serve the api from an injected store',
+      'The server takes its store as a parameter so tests can supply a double.',
+      '',
+    ].join('\n'),
+    'agent/errors.md': [
+      '# Errors',
+      '',
+      '- The memory store dropped rows when the caller reused a cursor across calls.',
+      '- Token counting split on whitespace and undercounted CJK text badly.',
+      '- The health route started the server twice under concurrent requests.',
+      '',
+    ].join('\n'),
+    'agent/conventions.md': '# Conventions\n\nSource files use two-space indentation and single quotes.\n',
+  };
+  const root = makeRepo(curated);
+  const { report, steps, store, directory } = await runInit(root, { mode: 'ingest', discoverRepoGates: false });
+  try {
+    assert.ok(report.phases.adopt, 'the adopt phase ran');
+    assert.equal(report.phases.adopt.documents, 4);
+    assert.ok(steps.some((step) => step.phase === 'adopt' && step.step === 'adopted'));
+
+    // The split rule per file is reported, because a silent granularity decision is
+    // indistinguishable from a bug when the numbers come out.
+    const byFile = new Map(report.phases.adopt.files.map((entry) => [entry.file, entry]));
+    assert.equal(byFile.get('agent/decisions.md').rule, 'headings');
+    assert.equal(
+      byFile.get('agent/decisions.md').units,
+      5,
+      'one unit per ADR (4) plus the preamble, which is a record too: dropping the text before the first heading silently loses content',
+    );
+    assert.ok(
+      report.units.some((unit) => unit.meta.preamble === true),
+      'the preamble is marked, so a gold-set miner can tell an index from a record',
+    );
+    assert.equal(byFile.get('agent/errors.md').rule, 'bullets');
+    assert.equal(byFile.get('agent/errors.md').units, 4, 'one unit per hand-written lesson, plus its heading preamble');
+    assert.equal(byFile.get('agent/conventions.md').rule, 'whole');
+
+    // Types follow the folder's own convention.
+    const adoptedUnits = report.units;
+    const byId = new Map(adoptedUnits.map((unit) => [unit.id, unit]));
+    assert.ok([...byId.keys()].some((id) => id.startsWith('adopted.decision.decisions.')));
+    assert.ok([...byId.keys()].some((id) => id.startsWith('adopted.lesson.errors.')));
+    assert.ok([...byId.keys()].some((id) => id.startsWith('adopted.convention.conventions')));
+
+    // The distinction that matters: a human wrote these.
+    assert.ok(adoptedUnits.every((unit) => unit.meta.generated === false), 'adopted units are NOT machine-generated');
+    assert.ok(adoptedUnits.every((unit) => unit.meta.adopted === true && unit.meta.layer === 0));
+    assert.ok(adoptedUnits.every((unit) => unit.meta.sourceFile.startsWith('agent/')), 'every unit cites the file it came from');
+
+    // And it is measured on exactly the same gauge, so the two brains are comparable.
+    assert.ok(report.phases.goldset, 'a gold set was mined from the curated brain');
+    assert.ok(report.phases.goldset.gates.length === 5);
   } finally {
     await store.close();
     rmSync(directory, { recursive: true, force: true });

@@ -26,6 +26,7 @@ import { createHash } from 'node:crypto';
 
 import { queryTokens } from '../rag/tokens.js';
 import { classifyCommit } from './git.js';
+import { LEAKAGE_SPAN, quotesAnswer } from './goldset-gates.js';
 import { areaOf, compareStrings } from './walk.js';
 
 /** Diversity floor, from the plan's authorship section. Minimum count, not a target. */
@@ -442,6 +443,224 @@ export function mineGoldset({
       structural: fromStructure.length,
       identifier: fromIdentifiers.length,
       afterDedupe: dedupe([...fromCommits, ...fromStructure, ...fromIdentifiers]).length,
+    },
+    notes,
+  };
+}
+
+// ---------------------------------------------------------------------------------
+// Adopted brains: the same trust order over curated documents
+// ---------------------------------------------------------------------------------
+
+/**
+ * Mine a gold set from an ADOPTED (human-written) brain.
+ *
+ * The generated-brain sources do not transfer: there are no area cards to point commits at,
+ * no import graph behind the units, and no fixed convention ids. What a curated folder
+ * offers instead is the same three kinds of evidence in the same trust order:
+ *
+ *   1. commit archaeology  a commit whose files are NAMED in exactly one document
+ *   2. structural          a record's own title, when exactly one record carries it
+ *   3. identifier          a symbol defined in one source file and mentioned in one document
+ *
+ * Uniqueness is required everywhere, for the reason it is required on the generated side: a
+ * question with two correct answers scores as a miss against whichever one it did not name,
+ * and that reports an authoring failure as a retrieval failure.
+ *
+ * Title cases are PRE-FILTERED against the leakage rule rather than left for the gate to
+ * reject. A record's title is inside its own body by construction, so a long title quotes
+ * its answer; the gate is a backstop and should not be the filter (the same discipline the
+ * generated miner follows).
+ */
+export function adoptedCases({ units, symbols = null, history = null, repoFiles = [], span = LEAKAGE_SPAN }) {
+  const cases = [];
+  const mentionsOf = (needle) => units.filter((unit) => unit.content.includes(needle));
+
+  // The gate's OWN predicate, imported rather than re-derived. Deriving it here went wrong
+  // twice: once checking only the span, once counting tokens with a different tokenizer
+  // than the gate uses. A pre-filter is only worth having if it is the same rule.
+  const leaks = (query, content) => quotesAnswer(query, content, span).leaks;
+
+  // 1. Commit archaeology through file mentions.
+  if (history?.available) {
+    for (const commit of history.commits) {
+      const kind = classifyCommit(commit);
+      if (kind.revert || kind.lockfileOnly || kind.renameOnly || kind.binaryOnly || kind.empty) continue;
+      const paths = [...new Set(commit.files.map((file) => file.path))];
+      if (paths.length !== 1) continue;
+      const naming = mentionsOf(paths[0]);
+      if (naming.length !== 1) continue;
+      const query = subjectToQuery(commit.subject);
+      if (queryTokens(query).length < 3) continue;
+      if (leaks(query, naming[0].content)) continue;
+      cases.push(candidate({
+        query,
+        mustReturn: [naming[0].id],
+        why: `Commit ${commit.shortSha} touched only ${paths[0]}, which exactly one curated document names.`,
+        provenance: `commit-archaeology:${commit.shortSha}`,
+        source: 'commit-archaeology',
+        target: { kind: 'commit', sha: commit.shortSha },
+      }));
+    }
+  }
+
+  // 2. A record's own title, where a human actually wrote one.
+  //
+  // HEADING records only. A bullet has no title, and the splitter's first-sentence label is
+  // a convenience for display, not something anyone authored: using it as a query asks a
+  // question in words the miner invented, which is narration by the back door, and on the
+  // P3.5 target it produced fragments like "ClaudeShot: `https://github." that were both
+  // unaskable and leaky. Measured yield of dropping them: 15 of 16 proposed cases, all of
+  // which the leakage gate was rejecting anyway.
+  const titleCounts = new Map();
+  for (const unit of units) {
+    const title = String(unit.title || '').trim();
+    if (title) titleCounts.set(title, (titleCounts.get(title) || 0) + 1);
+  }
+  for (const unit of units) {
+    if (unit.meta?.splitRule !== 'headings' || unit.meta?.preamble) continue;
+    const title = String(unit.title || '').trim();
+    if (!title || titleCounts.get(title) !== 1) continue;
+    if (queryTokens(title).length < 3) continue;
+    if (leaks(title, unit.content)) continue;
+    cases.push(candidate({
+      query: title,
+      mustReturn: [unit.id],
+      why: `Exactly one curated record is titled "${title}".`,
+      provenance: `structural:record-title:${unit.id}`,
+      source: 'structural',
+      target: { kind: 'unit', id: unit.id },
+    }));
+  }
+
+  // 2b. Path self-reference: a repo file named by exactly one curated record.
+  //
+  // The spread source. Labels only exist where a folder numbers its records (decisions and
+  // the state log on the P3.5 target), so a label-only gauge measures two document types
+  // and fails the diversity floor for a real reason. Paths are named across components,
+  // architecture, data and errors, which is where the rest of the knowledge lives.
+  //
+  // Non-leaky by shape rather than by luck: the query wraps the path in a question the
+  // document does not contain, and a path contributes only three or four word tokens, well
+  // under the contiguous-span threshold.
+  for (const file of [...repoFiles].sort(compareStrings)) {
+    if (!file.includes('/')) continue;
+    const naming = mentionsOf(file);
+    if (naming.length !== 1) continue;
+    const query = `which document covers ${file}`;
+    if (leaks(query, naming[0].content)) continue;
+    cases.push(candidate({
+      query,
+      mustReturn: [naming[0].id],
+      why: `${file} is named by exactly one curated record, so that record is where the project documents it.`,
+      provenance: `structural:sole-mention:${file}`,
+      source: 'structural',
+      target: { kind: 'unit', id: naming[0].id },
+    }));
+  }
+
+  // 3a. Record labels: the curated analogue of a symbol case, and the only high-yield
+  // deterministic source a hand-written folder reliably offers.
+  //
+  // The rule that makes it sound is TITLE OWNERSHIP: a curated brain cross-references its
+  // own records constantly, so on the P3.5 target each ADR label appeared in two to eight
+  // units (its own record, the index, other ADRs citing it, state entries, component docs).
+  // Uniqueness by mention is therefore hopeless, and that is a property of curated writing
+  // rather than a defect. But exactly one record carries the label in its TITLE, and that is
+  // the record the label names. The others are references, which is what must_not_outrank
+  // exists to express.
+  const labelPattern = /\b[A-Z]{2,6}-\d{1,4}\b/g;
+  const labelHomes = new Map();
+  const labelMentions = new Map();
+  for (const unit of units) {
+    const inTitle = new Set(String(unit.title || '').match(labelPattern) || []);
+    for (const label of inTitle) {
+      const homes = labelHomes.get(label) || [];
+      homes.push(unit);
+      labelHomes.set(label, homes);
+    }
+    for (const label of new Set(String(unit.content).match(labelPattern) || [])) {
+      const mentions = labelMentions.get(label) || [];
+      mentions.push(unit);
+      labelMentions.set(label, mentions);
+    }
+  }
+  for (const [label, homes] of [...labelHomes.entries()].sort()) {
+    if (homes.length !== 1) continue;
+    const home = homes[0];
+    const distractors = (labelMentions.get(label) || [])
+      .filter((unit) => unit.id !== home.id)
+      .slice(0, 2)
+      .map((unit) => unit.id);
+    cases.push(candidate({
+      query: label,
+      mustReturn: [home.id],
+      why: `${label} appears in exactly one record's TITLE, so that record is the one the label names; `
+        + `${(labelMentions.get(label) || []).length - 1} other unit(s) merely reference it.`,
+      provenance: `record-label:${label}`,
+      source: 'identifier',
+      identifier: true,
+      mustNotOutrank: distractors,
+      target: { kind: 'unit', id: home.id, label },
+    }));
+  }
+
+  // 3b. Identifier cases: a symbol one source file defines and one document mentions.
+  for (const symbol of symbols?.unique || []) {
+    const naming = mentionsOf(symbol.name);
+    if (naming.length !== 1) continue;
+    cases.push(candidate({
+      query: symbol.name,
+      mustReturn: [naming[0].id],
+      why: `${symbol.name} is defined in exactly one source file (${symbol.file}) and mentioned by exactly one curated document.`,
+      provenance: `identifier:${symbol.name}`,
+      source: 'identifier',
+      identifier: true,
+      target: { kind: 'symbol', name: symbol.name, file: symbol.file },
+    }));
+  }
+
+  return cases;
+}
+
+/**
+ * Mine, size and select a gold set for an adopted brain. Same target formula, same
+ * selection, same gates downstream: only the SOURCES differ, which is what keeps a
+ * curated-versus-generated comparison a comparison of brains rather than of methods.
+ */
+export function mineAdoptedGoldset({
+  units, symbols = null, history = null, repoFiles = [], chunkCount,
+  identifierQuota = MINIMUM_IDENTIFIER_CASES,
+} = {}) {
+  const sizing = targetCaseCount(chunkCount);
+  const pool = adoptedCases({ units, symbols, history, repoFiles });
+  const selected = selectCases(pool, { target: sizing.target, identifierQuota });
+  const cases = selected.map((entry, index) => ({
+    id: `g${String(index + 1).padStart(3, '0')}`,
+    key: caseKey(entry.provenance, entry.query),
+    query: entry.query,
+    must_return: entry.must_return,
+    ...(entry.must_not_outrank.length ? { must_not_outrank: entry.must_not_outrank } : {}),
+    ...(entry.identifier ? { identifier: true } : {}),
+    provenance: entry.provenance,
+    source: entry.source,
+    why: entry.why,
+    target: entry.target,
+  }));
+  const notes = [];
+  if (cases.length < sizing.target) {
+    notes.push(
+      `Mined ${cases.length} cases against a target of ${sizing.target} (${sizing.formula}). `
+      + 'The shortfall is reported rather than padded.',
+    );
+  }
+  return {
+    cases,
+    target: sizing,
+    pool: {
+      'commit-archaeology': pool.filter((entry) => entry.source === 'commit-archaeology').length,
+      structural: pool.filter((entry) => entry.source === 'structural').length,
+      identifier: pool.filter((entry) => entry.identifier).length,
     },
     notes,
   };

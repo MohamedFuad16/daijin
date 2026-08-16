@@ -82,6 +82,33 @@ test('the MCP unlock threshold is 0.75 and the reason names the measurement', ()
   assert.match(locked.reason, /74 of 100 is below the 0.75 threshold/);
   const unlocked = mcpUnlock({ exact: 0.75, cases: '3 of 4', hits: 3, total: 4 });
   assert.equal(unlocked.unlocked, true, 'exactly at the threshold unlocks');
+  assert.equal(unlocked.saturation, null, 'with no range measured there is nothing to warn about');
+});
+
+test('finding 80: the unlock carries the range, and the THRESHOLD is untouched', () => {
+  const caseRate = { exact: 1, cases: '25 of 25', hits: 25, total: 25 };
+
+  // A scrambled gold set that ALSO clears the bar: the decision carries no information.
+  const worthless = mcpUnlock(caseRate, {
+    resolution: { caseRate: { control: { exact: 0.76, cases: '19 of 25', hits: 19, total: 25 }, casesOfHeadroom: 6 } },
+  });
+  assert.equal(worthless.unlocked, true, 'the threshold stands; only what the reader is told changes');
+  assert.match(worthless.saturation, /also clears the 0.75 threshold/);
+  assert.match(worthless.saturation, /cannot tell this brain from a scrambled one/);
+
+  // The portfolio-mine shape: control at 18 of 25 = 0.72, one case short of the threshold.
+  const narrow = mcpUnlock(caseRate, {
+    resolution: { caseRate: { control: { exact: 0.72, cases: '18 of 25', hits: 18, total: 25 }, casesOfHeadroom: 7 } },
+  });
+  assert.equal(narrow.unlocked, true);
+  assert.match(narrow.saturation, /within one case of the 0.75 threshold/);
+  assert.match(narrow.saturation, /7 case\(s\) of discriminating room, not the distance from zero/);
+
+  // A gauge with real range says nothing extra: the warning is not decoration.
+  const healthy = mcpUnlock(caseRate, {
+    resolution: { caseRate: { control: { exact: 0.1, cases: '2 of 25', hits: 2, total: 25 }, casesOfHeadroom: 23 } },
+  });
+  assert.equal(healthy.saturation, null);
 });
 
 // --- content survival --------------------------------------------------------------

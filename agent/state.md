@@ -1,5 +1,30 @@
 # Daijin build state (authoritative)
 
+## 2026-08-17 10:45 - CORRECTION: CI has been red for nine runs; the leader's claim went stale
+
+DATED CORRECTION of this file's and the leader's repeated "CI green"
+statements: CI has been FAILING since b6ae714 (nine consecutive runs,
+tui job only), and the leader did not re-check after the last watched
+green - A CLAIM ACCURATE WHEN WRITTEN THAT NOBODY RE-VERIFIED, the
+exact staleness class this record spent the day naming in prose rows,
+now demonstrated in the status reporting itself. The owner learned of
+the failures from GitHub notifications before the leader did, which is
+the wrong order and is recorded as such.
+
+THE CAUSE, from the logs, not inferred: tui-builder's wire-conformance
+test - the instrument that caught the gates screen and the dead
+buttons - has two design bugs. (1) Its skip guard keys on node-absent,
+but CI has node for the daemon tests; the REAL precondition is a
+prepared live environment (indexed brain via Ollama, discovered
+gates.yaml), which CI lacks. (2) It conflates REFUSED with ABSENT:
+against the bare CI repo, retrievalScore and gatesGet refuse
+correctly, and the test counts the legitimate refusals as
+missing-field defects - its own message prints "refused" while
+asserting absence. The false-gate class from the morning's ruling, in
+the instrument of the lane that named it. Fix dispatched to
+tui-builder AHEAD of its three rulings: real-precondition skip (loud,
+stated), refusal-is-not-absence, non-vacuity kept; CI watched to green
+before anything else. The board does not close on a red pipeline.
 ## 2026-08-17 10:25 - tui-builder's closing sweep: two fixes became eight
 
 Both closing fixes landed plus six more the probe exposed (0bb4b53,

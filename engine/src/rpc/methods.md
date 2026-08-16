@@ -85,8 +85,16 @@ step names what happened: `finished` (the runner's, `level: "info"`, when the
 job completed without announcing its own ending), or the job's own terminal
 step (`written`, `kept-yours`), or `failed` (the work threw; `level: "error"`,
 detail carries the message), or `cancelled` (`level: "warn"`). CLIENTS KEY ON
-THE PHASE, NEVER ON THE STEP: the step is what happened, the phase is that it
-ended. Events emitted by a job after its own done event are DROPPED by the
+THE PHASE TO LEARN THAT IT ENDED, AND ON `level` TO LEARN HOW: the phase says
+a job stopped, and `level` says whether it stopped well (`info`), was stopped
+(`warn`), or broke (`error`). [Corrected 2026-08-17: the previous wording said
+to key on the phase and NEVER on the step, which is right for "has it ended"
+and a trap for "did it succeed". A client following it read a FAILED init as a
+completion, and then reported the brain missing afterwards without connecting
+the two. The failure was real, and the guidance had removed the only field
+that distinguished it. `level` is the discriminator because it is a small
+closed set that is the same for every job, where the step is job-specific and
+open.] Events emitted by a job after its own done event are DROPPED by the
 runner, so a client that has rendered the ending will not receive more. The
 single exception: a job that announces done and then throws produces two done
 events, `failed` second, because suppressing a failure to preserve the count

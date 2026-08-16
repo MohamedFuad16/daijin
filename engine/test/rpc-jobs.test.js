@@ -145,3 +145,35 @@ test('THE INVARIANT, over every ending: exactly one done event unless the job li
     assert.equal(steps.at(-1).phase, 'done', `${jobId}'s last event must be its ending`);
   }
 });
+
+test('the ending says HOW it ended, not only that it did', async () => {
+  // The correction a client earned the hard way. Told to key on the phase and never on the
+  // step, it read a FAILED init as a completion, then reported the brain missing afterwards
+  // without connecting the two: the failure was real and the guidance had removed the only
+  // field that distinguished it.
+  //
+  // `level` is the discriminator rather than the step, because it is a small closed set that
+  // is the same for every job, where the step is job-specific and open: a client cannot
+  // enumerate `written` and `kept-yours` and whatever the next job names its ending.
+  const kit = runner();
+  const quiet = kit.jobs.start('a', async ({ emit }) => { emit('work', 'x', 'x'); });
+  const announcing = kit.jobs.start('b', async ({ emit }) => { emit('done', 'written', 'x'); });
+  const failing = kit.jobs.start('c', async () => { throw new Error('the embedder is down'); });
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  const cancelling = kit.jobs.start('d', async ({ cancelled }) => { await gate; if (cancelled()) return; });
+  kit.jobs.cancel(cancelling);
+  release();
+  await kit.jobs.drain();
+
+  const levelOf = (jobId) => kit.done(jobId)[0].level;
+  assert.equal(levelOf(quiet), 'info', 'stopped well');
+  assert.equal(levelOf(announcing), 'info', 'a job announcing its own ending is still a good ending');
+  assert.equal(levelOf(failing), 'error', 'broke');
+  assert.equal(levelOf(cancelling), 'warn', 'was stopped');
+
+  // The closed set: three levels, and a client can branch on all of them without knowing
+  // which job it is watching.
+  const levels = new Set([quiet, announcing, failing, cancelling].map(levelOf));
+  assert.deepEqual([...levels].sort(), ['error', 'info', 'warn']);
+});

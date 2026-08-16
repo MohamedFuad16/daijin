@@ -383,3 +383,12 @@ SpendConfirmScreen, TextPromptScreen, AgentFileEditScreen {
     padding: 1;
     border: round $panel;
 }
+
+#attempt-table {
+    height: 9;
+}
+
+#exam-axes-note {
+    height: auto;
+    padding: 0 1;
+}

@@ -21,6 +21,15 @@ from .base import DaijinScreen
 from .dialogs import TextPromptScreen
 
 EXAM_COLUMNS = ("exam", "title", "tier", "status", "benchmark", "held out", "quarantine reason")
+ATTEMPT_COLUMNS = ("attempt", "tokens", "verdict", "why not graded")
+
+# What each ungraded code means for the reader. Branch on the CODE; display the
+# engine's sentence, which is written to be improved.
+UNGRADED_NOTE = {
+    "unsubmitted": "the student never answered, so it cannot have answered badly",
+    "apply-error": "the run produced no gradable diff",
+    "pending": "submitted, not yet graded",
+}
 
 STATUS_OPTIONS = [
     ("all statuses", "all"),
@@ -62,7 +71,10 @@ class ExamsScreen(DaijinScreen):
         yield SectionTitle("Bank and draft queue", "select a row with the mouse or the arrow keys")
         yield DataTable(id="exam-table", cursor_type="row")
         yield SectionTitle("Axes", "press r or click the chart to switch radar and bars")
+        yield Static("", id="exam-axes-note", markup=True)
         yield RadarChart([], id="exam-radar")
+        yield SectionTitle("Attempts")
+        yield DataTable(id="attempt-table", cursor_type="row")
         yield SectionTitle("Pass and fail history")
         yield PlotextLine(title="verdict by attempt, 1 pass and 0 fail", height=10, id="exam-history")
         yield SectionTitle("Tokens per attempt")
@@ -119,6 +131,27 @@ class ExamsScreen(DaijinScreen):
             self.exam_id = None
             self.query_one("#exam-provenance", Static).update("[dim]no exam matches those filters[/dim]")
 
+    def _render_attempts(self, attempts: list[dict[str, Any]]) -> None:
+        table = self.query_one("#attempt-table", DataTable)
+        if not table.columns:
+            table.add_columns(*ATTEMPT_COLUMNS)
+        table.clear()
+        for attempt in attempts:
+            code = attempt.get("ungradedCode")
+            if code:
+                note = UNGRADED_NOTE.get(code, "")
+                why = f"{code}: {attempt.get('ungradedReason', '')}"
+                if note:
+                    why = f"{why} ({note})"
+            else:
+                why = "-"
+            table.add_row(
+                str(attempt.get("n", "")),
+                f"{int(attempt.get('tokens') or 0):,}",
+                attempt.get("verdict") or "not graded",
+                why,
+            )
+
     async def _settings(self) -> dict[str, Any] | None:
         try:
             return await self.client.call("settingsGet", {})
@@ -138,21 +171,44 @@ class ExamsScreen(DaijinScreen):
             self.report_rpc_error(error)
             return
         self.exam_id = exam_id
-        self.query_one("#exam-radar", RadarChart).set_axes(detail.get("axes") or [])
+        axes = detail.get("axes")
+        radar = self.query_one("#exam-radar", RadarChart)
+        note = self.query_one("#exam-axes-note", Static)
+        if axes:
+            radar.display = True
+            radar.set_axes(axes)
+            note.update("")
+        else:
+            # axes null means NOBODY GRADED THIS. Drawing zeros would show a
+            # student who failed every axis, which is a different claim and a
+            # false one, so the chart is hidden rather than drawn empty.
+            radar.set_axes([])
+            radar.display = False
+            note.update(
+                "[dim]Not graded, so there are no axes to plot. This is not a score of "
+                "zero: a zeroed radar would read as a student who failed every axis.[/dim]"
+            )
         attempts = detail.get("attempts") or []
+        self._render_attempts(attempts)
         history = self.query_one("#exam-history", PlotextLine)
         tokens = self.query_one("#exam-tokens", PlotextBar)
-        if attempts:
+        # An ungraded attempt is not a fail, so it is left out of the pass and
+        # fail line rather than plotted as a zero. Tokens are real for every
+        # attempt, graded or not, so the token bars keep all of them.
+        graded = [a for a in attempts if a.get("verdict") in ("pass", "fail")]
+        if graded:
             history.set_data(
-                [attempt["n"] for attempt in attempts],
-                {"verdict": [1 if attempt["verdict"] == "pass" else 0 for attempt in attempts]},
-            )
-            tokens.set_data(
-                [str(attempt["n"]) for attempt in attempts],
-                [attempt["tokens"] for attempt in attempts],
+                [a["n"] for a in graded],
+                {"verdict": [1 if a["verdict"] == "pass" else 0 for a in graded]},
             )
         else:
             history.set_data([], {})
+        if attempts:
+            tokens.set_data(
+                [str(a["n"]) for a in attempts],
+                [a.get("tokens") or 0 for a in attempts],
+            )
+        else:
             tokens.set_data([], [])
         provenance = detail.get("provenance") or {}
         row = self._selected() or {}

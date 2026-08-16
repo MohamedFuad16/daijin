@@ -611,15 +611,15 @@ EXAM_DETAIL: dict[str, dict[str, Any]] = {
             {"name": "restraint", "score": 0.88, "max": 1.0},
         ],
         "attempts": [
-            {"n": 1, "tokens": 118_400, "verdict": "fail", "grades": {"correctness": 0.31, "integration": 0.22, "conventions": 0.55, "evidence": 0.18, "restraint": 0.40}},
-            {"n": 2, "tokens": 142_900, "verdict": "fail", "grades": {"correctness": 0.38, "integration": 0.30, "conventions": 0.60, "evidence": 0.25, "restraint": 0.48}},
-            {"n": 3, "tokens": 166_100, "verdict": "fail", "grades": {"correctness": 0.44, "integration": 0.35, "conventions": 0.66, "evidence": 0.31, "restraint": 0.52}},
-            {"n": 4, "tokens": 201_800, "verdict": "fail", "grades": {"correctness": 0.51, "integration": 0.41, "conventions": 0.71, "evidence": 0.36, "restraint": 0.59}},
-            {"n": 5, "tokens": 238_500, "verdict": "fail", "grades": {"correctness": 0.58, "integration": 0.47, "conventions": 0.74, "evidence": 0.42, "restraint": 0.63}},
-            {"n": 6, "tokens": 274_300, "verdict": "fail", "grades": {"correctness": 0.63, "integration": 0.52, "conventions": 0.79, "evidence": 0.47, "restraint": 0.70}},
-            {"n": 7, "tokens": 318_700, "verdict": "fail", "grades": {"correctness": 0.70, "integration": 0.61, "conventions": 0.83, "evidence": 0.51, "restraint": 0.76}},
-            {"n": 8, "tokens": 366_200, "verdict": "fail", "grades": {"correctness": 0.76, "integration": 0.68, "conventions": 0.87, "evidence": 0.57, "restraint": 0.81}},
-            {"n": 9, "tokens": 401_900, "verdict": "pass", "grades": {"correctness": 0.82, "integration": 0.74, "conventions": 0.91, "evidence": 0.63, "restraint": 0.88}},
+            {"n": 1, "tokens": 118_400, "verdict": "fail", "ungradedCode": None, "grades": {"correctness": 0.31, "integration": 0.22, "conventions": 0.55, "evidence": 0.18, "restraint": 0.40}},
+            {"n": 2, "tokens": 142_900, "verdict": "fail", "ungradedCode": None, "grades": {"correctness": 0.38, "integration": 0.30, "conventions": 0.60, "evidence": 0.25, "restraint": 0.48}},
+            {"n": 3, "tokens": 166_100, "verdict": "fail", "ungradedCode": None, "grades": {"correctness": 0.44, "integration": 0.35, "conventions": 0.66, "evidence": 0.31, "restraint": 0.52}},
+            {"n": 4, "tokens": 201_800, "verdict": "fail", "ungradedCode": None, "grades": {"correctness": 0.51, "integration": 0.41, "conventions": 0.71, "evidence": 0.36, "restraint": 0.59}},
+            {"n": 5, "tokens": 238_500, "verdict": "fail", "ungradedCode": None, "grades": {"correctness": 0.58, "integration": 0.47, "conventions": 0.74, "evidence": 0.42, "restraint": 0.63}},
+            {"n": 6, "tokens": 274_300, "verdict": "fail", "ungradedCode": None, "grades": {"correctness": 0.63, "integration": 0.52, "conventions": 0.79, "evidence": 0.47, "restraint": 0.70}},
+            {"n": 7, "tokens": 318_700, "verdict": "fail", "ungradedCode": None, "grades": {"correctness": 0.70, "integration": 0.61, "conventions": 0.83, "evidence": 0.51, "restraint": 0.76}},
+            {"n": 8, "tokens": 366_200, "verdict": "fail", "ungradedCode": None, "grades": {"correctness": 0.76, "integration": 0.68, "conventions": 0.87, "evidence": 0.57, "restraint": 0.81}},
+            {"n": 9, "tokens": 401_900, "verdict": "pass", "ungradedCode": None, "grades": {"correctness": 0.82, "integration": 0.74, "conventions": 0.91, "evidence": 0.63, "restraint": 0.88}},
         ],
         "provenance": EXAMS[0]["provenance"],
     },
@@ -632,43 +632,64 @@ EXAM_DETAIL: dict[str, dict[str, Any]] = {
             {"name": "restraint", "score": 0.66, "max": 1.0},
         ],
         "attempts": [
-            {"n": 1, "tokens": 74_200, "verdict": "fail", "grades": {"correctness": 0.28, "integration": 0.20, "conventions": 0.51, "evidence": 0.15, "restraint": 0.44}},
-            {"n": 2, "tokens": 96_800, "verdict": "fail", "grades": {"correctness": 0.35, "integration": 0.29, "conventions": 0.58, "evidence": 0.22, "restraint": 0.51}},
-            {"n": 3, "tokens": 121_500, "verdict": "fail", "grades": {"correctness": 0.47, "integration": 0.38, "conventions": 0.65, "evidence": 0.31, "restraint": 0.60}},
-            {"n": 4, "tokens": 149_300, "verdict": "fail", "grades": {"correctness": 0.55, "integration": 0.48, "conventions": 0.72, "evidence": 0.39, "restraint": 0.66}},
+            {"n": 1, "tokens": 74_200, "verdict": "fail", "ungradedCode": None, "grades": {"correctness": 0.28, "integration": 0.20, "conventions": 0.51, "evidence": 0.15, "restraint": 0.44}},
+            {"n": 2, "tokens": 96_800, "verdict": "fail", "ungradedCode": None, "grades": {"correctness": 0.35, "integration": 0.29, "conventions": 0.58, "evidence": 0.22, "restraint": 0.51}},
+            {"n": 3, "tokens": 121_500, "verdict": "fail", "ungradedCode": None, "grades": {"correctness": 0.47, "integration": 0.38, "conventions": 0.65, "evidence": 0.31, "restraint": 0.60}},
+            {"n": 4, "tokens": 149_300, "verdict": "fail", "ungradedCode": None, "grades": {"correctness": 0.55, "integration": 0.48, "conventions": 0.72, "evidence": 0.39, "restraint": 0.66}},
         ],
         "provenance": EXAMS[1]["provenance"],
     },
     "exam-0072": {
-        "axes": [
-            {"name": "correctness", "score": 0.0, "max": 1.0},
-            {"name": "integration", "score": 0.0, "max": 1.0},
-            {"name": "conventions", "score": 0.0, "max": 1.0},
-            {"name": "evidence", "score": 0.0, "max": 1.0},
-            {"name": "restraint", "score": 0.0, "max": 1.0},
-        ],
+        # null, NOT zeros. An empty or zeroed axis list plots on a radar
+        # exactly like a student who scored nothing on every axis, when the
+        # truth is that nobody graded it.
+        "axes": None,
         "attempts": [],
         "provenance": EXAMS[2]["provenance"],
     },
     "exam-0074": {
-        "axes": [
-            {"name": "correctness", "score": 0.0, "max": 1.0},
-            {"name": "integration", "score": 0.0, "max": 1.0},
-            {"name": "conventions", "score": 0.0, "max": 1.0},
-            {"name": "evidence", "score": 0.0, "max": 1.0},
-            {"name": "restraint", "score": 0.0, "max": 1.0},
+        # null, NOT zeros. An empty or zeroed axis list plots on a radar
+        # exactly like a student who scored nothing on every axis, when the
+        # truth is that nobody graded it.
+        "axes": None,
+        # The only path visible today: rubric persistence does not exist yet,
+        # so axes is null on every attempt in every real database.
+        "attempts": [
+            {
+                "n": 1,
+                "tokens": 12_400,
+                "verdict": None,
+                "axes": None,
+                "ungradedCode": "unsubmitted",
+                "ungradedReason": "The student stopped before submitting; there is no answer to grade.",
+                "grades": None,
+            },
+            {
+                "n": 2,
+                "tokens": 31_900,
+                "verdict": None,
+                "axes": None,
+                "ungradedCode": "apply-error",
+                "ungradedReason": "The patch did not apply to the base worktree, so the run produced no gradable diff.",
+                "grades": None,
+            },
+            {
+                "n": 3,
+                "tokens": 8_100,
+                "verdict": None,
+                "axes": None,
+                "ungradedCode": "pending",
+                "ungradedReason": "Submitted, waiting for the teacher.",
+                "grades": None,
+            },
         ],
-        "attempts": [],
         "provenance": EXAMS[3]["provenance"],
     },
     "exam-0069": {
-        "axes": [
-            {"name": "correctness", "score": 0.0, "max": 1.0},
-            {"name": "integration", "score": 0.0, "max": 1.0},
-            {"name": "conventions", "score": 0.0, "max": 1.0},
-            {"name": "evidence", "score": 0.0, "max": 1.0},
-            {"name": "restraint", "score": 0.0, "max": 1.0},
-        ],
+        # null, NOT zeros. An empty or zeroed axis list plots on a radar
+        # exactly like a student who scored nothing on every axis, when the
+        # truth is that nobody graded it.
+        "axes": None,
         "attempts": [],
         "provenance": EXAMS[4]["provenance"],
     },

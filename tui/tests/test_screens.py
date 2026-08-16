@@ -18,6 +18,7 @@ from daijin_tui.widgets import (
     EventLog,
     PhaseChecklist,
     PlotextBar,
+    PlotextLine,
     RadarChart,
     RepoCard,
     Sparkline,
@@ -929,3 +930,74 @@ async def test_every_view_is_reachable_by_mouse(mode):
         await pilot.click(f"#nav-{mode}")
         await settle(pilot)
         assert app.current_mode == mode
+
+
+# Ungraded work is not a bad grade ------------------------------------------
+
+
+@run_async
+async def test_an_ungraded_exam_draws_no_radar_at_all():
+    """axes null means nobody graded it, which is not a score of zero.
+
+    A zeroed radar is a specific and false claim: that the student was measured
+    on five axes and scored nothing on all of them.
+    """
+    async with running_app() as (app, pilot):
+        await goto(pilot, "6")
+        await app.screen.show_exam("exam-0072")
+        await settle(pilot)
+        radar = app.screen.query_one("#exam-radar", RadarChart)
+        assert radar.display is False, "a radar was drawn for work nobody graded"
+        note = text_of(app.screen.query_one("#exam-axes-note", Static))
+        assert "Not graded" in note
+        assert "not a score of zero" in note
+
+
+@run_async
+async def test_a_graded_exam_still_draws_its_radar():
+    async with running_app() as (app, pilot):
+        await goto(pilot, "6")
+        await app.screen.show_exam("exam-0058")
+        await settle(pilot)
+        radar = app.screen.query_one("#exam-radar", RadarChart)
+        assert radar.display is True
+        assert len(radar._axes) == 5
+        assert text_of(app.screen.query_one("#exam-axes-note", Static)).strip() == ""
+
+
+@run_async
+async def test_ungraded_attempts_explain_themselves_by_code():
+    from textual.widgets import DataTable as DT
+
+    async with running_app() as (app, pilot):
+        await goto(pilot, "6")
+        await app.screen.show_exam("exam-0074")
+        await settle(pilot)
+        table = app.screen.query_one("#attempt-table", DT)
+        assert table.row_count == 3
+        reasons = [str(table.get_row_at(i)[-1]) for i in range(table.row_count)]
+        assert any("unsubmitted" in r for r in reasons)
+        assert any("apply-error" in r for r in reasons)
+        assert any("pending" in r for r in reasons)
+        # The code drives the branch; the engine's sentence is displayed.
+        unsubmitted = next(r for r in reasons if "unsubmitted" in r)
+        assert "never answered" in unsubmitted, "the code was not branched on"
+        assert "cannot have answered badly" in unsubmitted
+        verdicts = [str(table.get_row_at(i)[2]) for i in range(table.row_count)]
+        assert all(v == "not graded" for v in verdicts)
+
+
+@run_async
+async def test_an_ungraded_attempt_is_not_plotted_as_a_failure():
+    """The pass and fail line must not read three ungraded runs as three fails."""
+    async with running_app() as (app, pilot):
+        await goto(pilot, "6")
+        await app.screen.show_exam("exam-0074")
+        await settle(pilot)
+        history = app.screen.query_one("#exam-history", PlotextLine)
+        assert history.series.get("verdict", []) == [], (
+            "ungraded attempts were plotted, which reads as failures"
+        )
+        # Tokens are real for every attempt, graded or not.
+        tokens = app.screen.query_one("#exam-tokens", PlotextBar)
+        assert len(tokens.values) == 3

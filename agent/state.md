@@ -42,6 +42,21 @@ percent is a property of the fixture, not of the build.
 
 WAITING ON: tui-builder's five runs at the pin, then the joint claim,
 then the verifier's attack.
+
+[Addendum 01:00] kept-yours styling landed (af4e19b, cyan by step
+name, level untouched, a [keep] text marker for colorless readers) -
+POST-PIN, and ruled to stay post-pin: styling is not clause material,
+and a pin that chases every polish commit is not a pin. tui-builder's
+acceptance five-run set happens at 85cc576, where all live-half fixes
+are present. Its FOURTH dead-coverage catch is kept as the named form:
+A TEST THAT ASSERTS A LOOKUP TABLE'S CONTENTS PASSES WHEN NOTHING
+READS THE TABLE - the cap test, the stub gate, the contract parser,
+and now the style table, four costumes on one root: asserting the
+artifact rather than the behavior that consumes it. The test now
+calls EventLog.style_for (what the renderer calls), and the mutation
+that survived the first version fails the second. Its kept-yours
+assumption verified in engine bytes: the step emits through the job's
+own emitter inside gatesDiscover, same stream, same jobId.
 ## 2026-08-17 00:30 - The live half lands: seven clauses demonstrated, four live-only defects
 
 TUI-BUILDER'S LIVE HALF IS DONE (its pin 468f6fb, suite green four

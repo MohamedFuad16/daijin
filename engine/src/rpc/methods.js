@@ -617,11 +617,15 @@ export function createMethods({
       // the one the measurement wrote rather than a paraphrase of it.
       const decision = mcpUnlock(caseRate);
       if (!decision.unlocked) return { unlocked: false, threshold: decision.threshold, snippet: null, reason: decision.reason };
+      // Points at serve-repo.js, the per-repo entry, NOT at brain-mcp.js. The latter is the
+      // P1-era entry that takes a corpus descriptor and opens Postgres; pointed at a user's
+      // repo it exits immediately with "brain-mcp requires --corpus-file", so the snippet
+      // used to be a paste-ready config that pasted a failure.
       const snippet = JSON.stringify({
         mcpServers: {
           daijin: {
             command: process.execPath,
-            args: [path.resolve(path.dirname(new URL(import.meta.url).pathname), '../mcp/brain-mcp.js'), `--brain-root=${path.join(repoPath, '.daijin', 'brain')}`],
+            args: [path.resolve(path.dirname(new URL(import.meta.url).pathname), '..', 'mcp', 'serve-repo.js'), repoPath],
           },
         },
       }, null, 2);
@@ -970,11 +974,25 @@ export function createMethods({
 
       const jobId = jobs.start('init', async ({ emit, cancelled }) => {
         const client = makeEmbedderClient({ model, dimension, baseUrl });
+
+        // THE DIGEST IS LEARNED ON FIRST INDEX, then pinned by the index itself.
+        //
+        // embeddingIdentity() requires a digest and a first-boot user has none: asking
+        // someone to run `ollama list` and paste a hash before they can build a brain is a
+        // setup step nobody would forgive. So an unconfigured digest is discovered from the
+        // SERVED model here. That is not a weakening of the identity assert, because the
+        // assert compares the INDEX's recorded digest against the served one on every later
+        // query; learning it once at build time is exactly how the index gets something to
+        // pin. A configured digest still wins, which is how a user pins it deliberately.
+        const configuredDigest = retrieval.embeddingDigest?.trim();
+        const digest = configuredDigest || (await ollama({
+          environment: { EMBEDDING_MODEL: model, ...(baseUrl ? { OLLAMA_BASE_URL: baseUrl } : {}) },
+        })).digest;
         const pipelineEnvironment = {
           EMBEDDING_PROVIDER: 'ollama',
           EMBEDDING_MODEL: model,
           EMBEDDING_DIM: String(dimension),
-          EMBEDDING_MODEL_DIGEST: retrieval.embeddingDigest || '',
+          EMBEDDING_MODEL_DIGEST: digest,
           ...(baseUrl ? { OLLAMA_BASE_URL: baseUrl } : {}),
         };
         // Resolved through the SAME function retrieve uses, so the index identity and the

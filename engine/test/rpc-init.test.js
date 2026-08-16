@@ -46,7 +46,11 @@ async function harness({ pipeline, repoPath } = {}) {
         return pipeline ? pipeline(options) : { floor: null };
       },
       readSpendGate: async () => ({ open: false, file: '/nowhere/GATE', hint: 'blocked' }),
-      checkOllama: async () => { throw new Error('probe skipped'); },
+      // Answers, rather than throwing, because initBrain now DISCOVERS an unconfigured
+      // digest from the served model: a first-boot user has none, and requiring them to run
+      // `ollama list` and paste a hash before building a brain is a setup step nobody would
+      // forgive. serveStatus still gets its probe refusal from the daemon's --no-probe flag.
+      checkOllama: async () => ({ version: '0.0.0-test', model: 'bge-m3', digest: 'sha256:test' }),
     },
   });
   if (repoPath) await server.methods.repoAttach({ repoPath });

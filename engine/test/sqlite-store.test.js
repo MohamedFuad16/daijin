@@ -8,9 +8,9 @@
 // happy path.
 
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, renameSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import test from 'node:test';
 import Database from 'better-sqlite3';
 import { cosineSimilarity } from '../../adapters/sqlite/vec.js';
@@ -19,10 +19,10 @@ import {
   MIGRATIONS,
   SqliteStore,
   STANDING_ID_PREFIX,
-  brainDatabasePath,
   chunkIdFor,
   createSqliteStore,
 } from '../src/store/sqlite.js';
+import { indexPathFor, repoLayout } from '../src/state/layout.js';
 
 const DIMENSION = 8;
 const roots = [];
@@ -33,6 +33,13 @@ process.on('exit', () => {
 
 function repoRoot() {
   const root = mkdtempSync(join(tmpdir(), 'daijin-repo-'));
+  roots.push(root);
+  return root;
+}
+
+// The index left the repo (D-0031), so a fixture needs a state root as well as a repo.
+function stateRoot() {
+  const root = mkdtempSync(join(tmpdir(), 'daijin-state-'));
   roots.push(root);
   return root;
 }
@@ -51,6 +58,7 @@ function unitVector(index) {
 async function freshStore(options = {}) {
   return createSqliteStore({
     repoPath: repoRoot(),
+    stateRoot: stateRoot(),
     dimension: DIMENSION,
     embedderId: 'ollama:mxbai-embed-large@sha256-fixture',
     ...options,
@@ -73,19 +81,23 @@ async function writeDocument(store, id, content, vector, extra = {}) {
   await store.replaceChunks(id, [{ ordinal: 0, content, vector }]);
 }
 
-test('one SQLite file per repo, at the documented path, surviving a reopen', async () => {
+test('one index per repo, in the state root, surviving a reopen', async () => {
   const root = repoRoot();
-  const expected = brainDatabasePath(root);
-  assert.equal(expected, join(root, '.daijin', 'brain.sqlite'));
+  const state = stateRoot();
+  const expected = await indexPathFor(root, { stateRoot: state });
+  // Under the state root, keyed by repo identity, and NOT in the working tree.
+  assert.ok(expected.startsWith(join(state, 'repos')), `${expected} should live under the state root`);
+  assert.equal(basename(expected), 'brain.sqlite');
+  assert.ok(!expected.startsWith(root), 'the index must not sit inside the repo any more');
 
-  const store = await createSqliteStore({ repoPath: root, dimension: DIMENSION, embedderId: 'fixture:v1' });
+  const store = await createSqliteStore({ repoPath: root, stateRoot: state, dimension: DIMENSION, embedderId: 'fixture:v1' });
   await writeDocument(store, 'a', 'the ranking arm caps any one candidate', unitVector(0));
   const digest = await store.getMeta(META_KEYS.indexDigest);
   await store.close();
 
   assert.ok(existsSync(expected), 'the brain file is written where brainDatabasePath says');
 
-  const reopened = await createSqliteStore({ repoPath: root, dimension: DIMENSION, embedderId: 'fixture:v1' });
+  const reopened = await createSqliteStore({ repoPath: root, stateRoot: state, dimension: DIMENSION, embedderId: 'fixture:v1' });
   try {
     assert.equal(await reopened.getMeta(META_KEYS.indexDigest), digest, 'the digest survives a reopen');
     assert.equal((await reopened.allDocuments({ project: null })).length, 1);
@@ -99,7 +111,8 @@ test('one SQLite file per repo, at the documented path, surviving a reopen', asy
 
 test('the migration ledger records what it applied and refuses an edited migration', async () => {
   const root = repoRoot();
-  const store = await createSqliteStore({ repoPath: root, dimension: DIMENSION, embedderId: 'fixture:v1' });
+  const state = stateRoot();
+  const store = await createSqliteStore({ repoPath: root, stateRoot: state, dimension: DIMENSION, embedderId: 'fixture:v1' });
   const identity = await store.identity();
   assert.deepEqual(identity.migrations.map((row) => row.id), MIGRATIONS.map((row) => row.id));
   assert.match(identity.migrations[0].checksum, /^[0-9a-f]{64}$/);
@@ -109,12 +122,12 @@ test('the migration ledger records what it applied and refuses an edited migrati
 
   // Rewrite the recorded checksum: that is what an edited migration looks like on the
   // next open. Applying silently would leave two schemas behind one version number.
-  const raw = new Database(brainDatabasePath(root));
+  const raw = new Database(await indexPathFor(root, { stateRoot: state }));
   raw.prepare('UPDATE schema_migration SET checksum = ? WHERE id = ?').run('0'.repeat(64), MIGRATIONS[0].id);
   raw.close();
 
   await assert.rejects(
-    () => createSqliteStore({ repoPath: root, dimension: DIMENSION, embedderId: 'fixture:v1' }),
+    () => createSqliteStore({ repoPath: root, stateRoot: state, dimension: DIMENSION, embedderId: 'fixture:v1' }),
     /must not be edited/,
   );
 });
@@ -138,21 +151,22 @@ test('meta carries the embedder identity and dimension the health gate reads', a
 
 test('the identity assert fires when a brain is reopened with a different embedder', async () => {
   const root = repoRoot();
-  const first = await createSqliteStore({ repoPath: root, dimension: DIMENSION, embedderId: 'ollama:model-a@digest-1' });
+  const state = stateRoot();
+  const first = await createSqliteStore({ repoPath: root, stateRoot: state, dimension: DIMENSION, embedderId: 'ollama:model-a@digest-1' });
   await writeDocument(first, 'a', 'first embedder wrote this', unitVector(1));
   await first.close();
 
   await assert.rejects(
-    () => createSqliteStore({ repoPath: root, dimension: DIMENSION, embedderId: 'ollama:model-b@digest-2' }),
+    () => createSqliteStore({ repoPath: root, stateRoot: state, dimension: DIMENSION, embedderId: 'ollama:model-b@digest-2' }),
     /built by embedder ollama:model-a@digest-1/,
     'a swapped embedder must not silently extend an existing index',
   );
   await assert.rejects(
-    () => createSqliteStore({ repoPath: root, dimension: DIMENSION * 2, embedderId: 'ollama:model-a@digest-1' }),
+    () => createSqliteStore({ repoPath: root, stateRoot: state, dimension: DIMENSION * 2, embedderId: 'ollama:model-a@digest-1' }),
     /dimension 8 does not match the configured dimension 16/,
   );
 
-  const same = await createSqliteStore({ repoPath: root, dimension: DIMENSION, embedderId: 'ollama:model-a@digest-1' });
+  const same = await createSqliteStore({ repoPath: root, stateRoot: state, dimension: DIMENSION, embedderId: 'ollama:model-a@digest-1' });
   const identity = await same.indexedEmbeddingIdentity();
   assert.equal(identity.embedderId, 'ollama:model-a@digest-1');
   assert.equal(identity.dimension, DIMENSION);
@@ -238,7 +252,8 @@ test('mutation: the same corpus under a different embedder yields a different di
 
 test('the digest is lazy but never stale, even when a writer dies without closing', async () => {
   const root = repoRoot();
-  const writer = await createSqliteStore({ repoPath: root, dimension: DIMENSION, embedderId: 'fixture:v1' });
+  const state = stateRoot();
+  const writer = await createSqliteStore({ repoPath: root, stateRoot: state, dimension: DIMENSION, embedderId: 'fixture:v1' });
   await writeDocument(writer, 'a', 'the ranking arm caps any one candidate', unitVector(0));
   await writeDocument(writer, 'b', 'fuseRankings merges the two arms', unitVector(1));
   const fresh = await writer.getMeta(META_KEYS.indexDigest);
@@ -246,7 +261,7 @@ test('the digest is lazy but never stale, even when a writer dies without closin
 
   // No close: this is the process that died mid ingest. A second opener recomputes at
   // init rather than trusting whatever value happened to be on disk.
-  const reader = await createSqliteStore({ repoPath: root, dimension: DIMENSION, embedderId: 'fixture:v1' });
+  const reader = await createSqliteStore({ repoPath: root, stateRoot: state, dimension: DIMENSION, embedderId: 'fixture:v1' });
   try {
     assert.equal(await reader.getMeta(META_KEYS.indexDigest), fresh);
   } finally {
@@ -303,6 +318,64 @@ test('semantic scores equal a hand computed cosine, and filtered results stay ex
 });
 
 test('a store used before init refuses to answer', async () => {
-  const store = new SqliteStore({ repoPath: repoRoot(), dimension: DIMENSION });
+  const store = new SqliteStore({ repoPath: repoRoot(), stateRoot: stateRoot(), dimension: DIMENSION });
   await assert.rejects(() => store.getMeta('anything'), /not initialized/);
+});
+
+test('a repoPath without a state root is refused, not quietly resolved to the old location', async () => {
+  // The dangerous version of this constructor is one that rebuilds the pre-D-0031 in-repo
+  // path when a caller forgets the state root: nothing fails, and the daemon and the store
+  // then read different files for the same repo. layout.js refuses the same way.
+  const root = repoRoot();
+  assert.throws(
+    () => new SqliteStore({ repoPath: root, dimension: DIMENSION }),
+    /requires a stateRoot alongside repoPath/,
+  );
+  assert.throws(() => new SqliteStore({ dimension: DIMENSION }), /requires a path, or a repoPath with a stateRoot/);
+  // An explicit path still needs no state root: it is already the answer the resolver gives.
+  const explicit = new SqliteStore({ path: join(stateRoot(), 'explicit.sqlite'), dimension: DIMENSION });
+  await explicit.init();
+  await explicit.close();
+});
+
+test('an initialised repo keeps its index across a move; an uninitialised one cannot', async () => {
+  // The property the resolver exists for, asserted from the store's side: the store and
+  // anything else resolving the same repo must agree, INCLUDING after a move, or the index
+  // goes missing in the one situation nobody tests.
+  const root = repoRoot();
+  const state = stateRoot();
+  // ensure mints the manifest, which is what init does. Without it the resolver falls back
+  // to a path hash, and the second half of this test is what that fallback costs.
+  const before = await repoLayout(root, { stateRoot: state, ensure: true });
+  const store = await createSqliteStore({ repoPath: root, stateRoot: state, dimension: DIMENSION, embedderId: 'fixture:v1' });
+  await writeDocument(store, 'a', 'written before the move', unitVector(0));
+  await store.close();
+
+  const moved = join(dirname(root), `${basename(root)}-moved`);
+  renameSync(root, moved);
+  roots.push(moved);
+
+  const after = await repoLayout(moved, { stateRoot: state });
+  assert.equal(after.repoId, before.repoId, 'the manifest id travelled with the checkout');
+  assert.equal(after.databasePath, before.databasePath, 'so the index is the same file');
+
+  const reopened = await createSqliteStore({ repoPath: moved, stateRoot: state, dimension: DIMENSION, embedderId: 'fixture:v1' });
+  try {
+    assert.equal((await reopened.allDocuments({ project: null })).length, 1, 'and the corpus is still there');
+  } finally {
+    await reopened.close();
+  }
+
+  // The documented fallback, stated as a cost rather than left to be discovered: a repo
+  // with no manifest is keyed by its path, so moving it orphans the index. That is the
+  // pre-init case only, and it is exactly as good as the old in-repo behaviour, but a
+  // reader should not have to infer it.
+  const bare = repoRoot();
+  const bareBefore = await repoLayout(bare, { stateRoot: state });
+  assert.match(bareBefore.repoId, /^path-/, 'no manifest means a path key');
+  const bareMoved = join(dirname(bare), `${basename(bare)}-moved`);
+  renameSync(bare, bareMoved);
+  roots.push(bareMoved);
+  const bareAfter = await repoLayout(bareMoved, { stateRoot: state });
+  assert.notEqual(bareAfter.repoId, bareBefore.repoId, 'and a moved path is a different key');
 });

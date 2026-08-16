@@ -106,8 +106,11 @@ process.on('exit', () => {
 
 async function storeWith(documents = DOCUMENTS, embedder = EMBEDDER) {
   const root = mkdtempSync(join(tmpdir(), 'daijin-retrieval-'));
-  roots.push(root);
-  const store = await createSqliteStore({ repoPath: root, project: PROJECT, embedder });
+  // The index lives in the state root now (D-0031), so a fixture needs both: a repo to be
+  // identified by and a state root to be indexed into.
+  const state = mkdtempSync(join(tmpdir(), 'daijin-retrieval-state-'));
+  roots.push(root, state);
+  const store = await createSqliteStore({ repoPath: root, stateRoot: state, project: PROJECT, embedder });
   // One transaction around upserts plus the prune: the atomic full mirror replace.
   await store.transaction(async () => {
     for (const document of documents) {

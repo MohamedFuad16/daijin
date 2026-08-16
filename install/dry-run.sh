@@ -419,22 +419,43 @@ step "(e) uninstall removes the program and none of the data"
 # is the user's work. The state root is what remembers which repositories they attached
 # and how their roles are configured; losing it turns a reinstall into a re-setup, and the
 # uninstaller runs with a HOME it could plausibly reach into.
-mkdir -p "$WORK/pretend-repo/.daijin"
-: >"$WORK/pretend-repo/.daijin/brain.sqlite"
+# The repo side is authored work now, not a derived file: brain markdown, the agent
+# contract, the gauge and the spend gate all live in the working tree and are committed.
+mkdir -p "$WORK/pretend-repo/.daijin/brain" "$WORK/pretend-repo/.daijin/agents"
+printf '# Architecture\n\nPlanted.\n' >"$WORK/pretend-repo/.daijin/brain/architecture.md"
+printf '{"schema":1,"id":"planted-repo-id"}\n' >"$WORK/pretend-repo/.daijin/manifest.json"
+printf 'cases: []\n' >"$WORK/pretend-repo/.daijin/goldset.yaml"
+printf 'BLOCKED\n' >"$WORK/pretend-repo/.daijin/GATE"
 FAKE_HOME="$WORK/fake-home"
 mkdir -p "$FAKE_HOME/.daijin"
 printf '{"pid":4242,"startedAt":"planted"}\n' >"$FAKE_HOME/.daijin/daemon.lock"
 printf '{"roles":{"engineer":{"model":"planted"}}}\n' >"$FAKE_HOME/.daijin/settings.json"
 printf '{"repos":["/planted/repo"]}\n' >"$FAKE_HOME/.daijin/repos.json"
+# The per-repo shape the index relocation introduced (D-0031). Both halves are planted
+# because they fail differently: index/ is regenerable, records/ is measured history that
+# nothing can recompute, and an uninstaller that cleared both would be destroying evidence
+# to free disk. Planting only one would leave the more expensive mistake untested.
+PLANTED_REPO_STATE="$FAKE_HOME/.daijin/repos/planted-repo-id"
+mkdir -p "$PLANTED_REPO_STATE/index" "$PLANTED_REPO_STATE/records"
+printf 'planted index\n' >"$PLANTED_REPO_STATE/index/brain.sqlite"
+printf '{"path":"/planted/repo"}\n' >"$PLANTED_REPO_STATE/origin.json"
+printf '[{"at":"2026-08-16","caseRate":0.9117647058823529}]\n' >"$PLANTED_REPO_STATE/records/score-history.json"
 
 check "uninstaller exits 0" \
   env HOME="$FAKE_HOME" DAIJIN_PREFIX="$PREFIX" DAIJIN_BIN_DIR="$BIN_DIR" DAIJIN_YES=1 bash "$HERE/uninstall.sh"
 check_fails "the prefix is gone" test -d "$PREFIX"
 check_fails "the PATH entry is gone" test -e "$BIN_DIR/daijin"
-check "a repository brain outside the prefix was left alone" test -f "$WORK/pretend-repo/.daijin/brain.sqlite"
+check "the repository's brain markdown was left alone" test -f "$WORK/pretend-repo/.daijin/brain/architecture.md"
+check "so was its manifest, the identity everything else keys off" test -f "$WORK/pretend-repo/.daijin/manifest.json"
+check "so was its gold set, which is the gauge" test -f "$WORK/pretend-repo/.daijin/goldset.yaml"
+check "so was its spend GATE, which is a committed authorization" test -f "$WORK/pretend-repo/.daijin/GATE"
 check "the state root survived: the daemon lock" test -f "$FAKE_HOME/.daijin/daemon.lock"
 check "the state root survived: settings" test -f "$FAKE_HOME/.daijin/settings.json"
 check "the state root survived: which repositories were attached" test -f "$FAKE_HOME/.daijin/repos.json"
+check "the per repo index survived" test -f "$PLANTED_REPO_STATE/index/brain.sqlite"
+check "the per repo MEASURED HISTORY survived" test -f "$PLANTED_REPO_STATE/records/score-history.json"
+check "and the history still holds its numbers" grep -q '0.9117647058823529' "$PLANTED_REPO_STATE/records/score-history.json"
+check "the origin record survived" test -f "$PLANTED_REPO_STATE/origin.json"
 check "settings were not merely emptied" grep -q 'planted' "$FAKE_HOME/.daijin/settings.json"
 check "and the uninstaller says where the data it kept lives" \
   bash -c "env HOME='$FAKE_HOME' DAIJIN_PREFIX='$PREFIX' DAIJIN_BIN_DIR='$BIN_DIR' DAIJIN_YES=1 bash '$HERE/uninstall.sh' | grep -q 'Nothing to remove'"

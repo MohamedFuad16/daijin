@@ -9,10 +9,21 @@
 # What it removes: the prefix directory (the PROGRAM) and the single PATH symlink, and the
 # symlink only when it actually points into that prefix.
 #
-# What it never touches, because none of it is the program:
-#   ~/.daijin                        the engine's per-user STATE: which repos are attached
-#                                    and what your settings are (engine/src/rpc/daemon.js)
-#   <repo>/.daijin/brain.sqlite      a repository's brain, which is your data
+# What it never touches, because none of it is the program. Three layers, and the middle
+# one has two halves that fail differently (D-0031):
+#
+#   <repo>/.daijin/          THE REPO'S OWN. brain/ markdown, agents/, manifest.json,
+#                            goldset.yaml, GATE. Canonical, human readable, committed.
+#                            An uninstaller touching this would delete authored work.
+#   ~/.daijin/repos/<id>/
+#       index/               DISPOSABLE. Regenerable from the brain markdown at any time.
+#                            The only thing here a cleanup could honestly offer to remove.
+#       records/             KEPT. score-history.json was measured by a particular embedder
+#                            on a date, and nothing can recompute the past. Clearing it
+#                            alongside the index would destroy evidence to free a few
+#                            megabytes, which is the trade nobody wants and everybody
+#                            makes when the two sit in one directory.
+#   ~/.daijin/settings.json, repos.json, daemon.lock   machine state: roles, attachments.
 #   your shell profile, node, python
 #
 # Deleting someone's data is not an uninstaller's business. This prints where those live
@@ -39,8 +50,9 @@ if [ -L "$LINK" ]; then
   esac
 fi
 printf '\nIt will NOT remove:\n'
-printf '  %s/.daijin  the engine state: attached repos and settings\n' "$HOME"
-printf '  any repository brain (.daijin/brain.sqlite inside your repos)\n'
+printf '  %s/.daijin           machine state: settings, attachments, and per repo\n' "$HOME"
+printf '                       index/ (disposable) and records/ (measured history)\n'
+printf '  <repo>/.daijin       each repository'"'"'s own brain, contract, gold set and GATE\n'
 
 if [ "${DAIJIN_YES:-0}" != "1" ]; then
   printf '\nProceed? [y/N] '
@@ -61,6 +73,9 @@ fi
 rm -rf "$PREFIX"
 printf 'removed %s\n' "$PREFIX"
 printf '\nDaijin is uninstalled. Your data was left in place.\n'
-printf '  engine state:      %s/.daijin\n' "$HOME"
-printf '  repository brains: find ~ -name brain.sqlite -path "*/.daijin/*" 2>/dev/null\n'
-printf '\nTo remove those too, delete them by hand; this script will not do it for you.\n'
+printf '  machine state:      %s/.daijin\n' "$HOME"
+printf '  repository brains:  the .daijin folder inside each repository you attached\n'
+printf '\nIf you want the disk back, the only part that regenerates is the index:\n'
+printf '  rm -rf %s/.daijin/repos/*/index\n' "$HOME"
+printf 'Leave records/ alone unless you mean to discard measured history; nothing\n'
+printf 'recomputes a score that was taken on a date by an embedder you no longer run.\n'

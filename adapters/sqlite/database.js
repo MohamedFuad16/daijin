@@ -1,4 +1,9 @@
-// Connection factory: one SQLite file per repo, sqlite-vec loaded, pragmas set.
+// Connection factory: opens a SQLite file with sqlite-vec loaded and pragmas set.
+//
+// WHERE the file lives is deliberately not here. It used to be, as brainDatabasePath, back
+// when the index sat inside the repo; D-0031 moved the index to the state root keyed by a
+// manifest id, and that derivation belongs to engine/src/state/layout.js so there is one
+// implementation of the key rather than two that can disagree about the same repo.
 //
 // The driver is injected rather than imported. adapters/ sits outside engine/, so a bare
 // `import Database from 'better-sqlite3'` here would resolve from daijin/node_modules,
@@ -13,12 +18,7 @@
 // serializes writers inside the process.
 
 import { mkdirSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
-
-/** Where a repo's brain lives. One file, inside the repo's own daijin folder. */
-export function brainDatabasePath(repoPath) {
-  return join(resolve(repoPath), '.daijin', 'brain.sqlite');
-}
+import { dirname, resolve } from 'node:path';
 
 function isInMemory(path) {
   return path === ':memory:' || String(path).startsWith('file::memory:');

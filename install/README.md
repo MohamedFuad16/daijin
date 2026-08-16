@@ -58,10 +58,22 @@ $PREFIX/install.log every step of the last run
 
 Two layout decisions worth knowing:
 
-**The prefix is not `~/.daijin`.** That path belongs to the engine daemon, which keeps
-per-user state there: which repositories are attached, what your settings are. The program
-and the state have different lifetimes, so they get different directories. An uninstall can
-then remove the program without touching anything you would miss.
+**The prefix is not `~/.daijin`.** That path belongs to the engine, and there are three
+layers here, not two, each with a different lifetime (D-0031):
+
+| layer | where | lifetime |
+| --- | --- | --- |
+| the program | `~/.local/share/daijin` | replaceable; this is what an uninstall removes |
+| machine state | `~/.daijin` | yours; settings, attachments, and per repo `index/` (regenerable) beside `records/` (measured, not recomputable) |
+| repo artifacts | `<repo>/.daijin` | authored and committed; brain markdown, the agent contract, the gold set, the GATE |
+
+The index used to live in the repository and moved out because it is a derivation: delete
+it and nothing is lost, because ingest rebuilds it from the brain markdown. `records/` sits
+beside it and is the opposite: a score measured on a date by a particular embedder, which
+nothing can recompute. They are separate directories so that a cleanup can take the first
+without taking the second.
+
+An uninstall removes only the first layer, and prints where the other two live.
 
 **The client lives in a private virtualenv.** pip's own console script would sit inside
 that venv where PATH cannot reach it, and installing the client globally would argue with
@@ -153,9 +165,18 @@ DAIJIN_YES=1 bash $PREFIX/install/uninstall.sh
 ```
 
 It removes the prefix and the PATH symlink, and the symlink only when it points into that
-prefix. It leaves `~/.daijin` (the engine's state: attached repositories and settings) and
-every repository brain in place, and prints where they are. Deleting someone's data is not
-an uninstaller's business.
+prefix. It leaves both other layers in place and prints where they are: `~/.daijin` with
+your settings, attachments and per repo state, and each repository's own `.daijin` folder
+with its brain, contract, gold set and GATE. Deleting someone's data is not an
+uninstaller's business.
+
+If you want disk back, the only part that regenerates is the index:
+
+```
+rm -rf ~/.daijin/repos/*/index
+```
+
+Leave `records/` alone unless you mean to discard measured history.
 
 ## What this does not do yet
 

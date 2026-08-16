@@ -1,6 +1,8 @@
 // SQLite Store: the shipped default backend (P2), against Store v3.
 //
-// One file per repo (.daijin/brain.sqlite), vectors in sqlite-vec, lexical text in FTS5
+// One index file per repo, in the daijin state root and keyed by the repo's manifest id
+// (D-0031: the index is a disposable derivation and does not belong in the working tree).
+// Vectors in sqlite-vec, lexical text in FTS5
 // under the measured recipe (adapters/sqlite/fts5.js), and a meta table carrying the
 // index digest and the embedder identity the health gate asserts against the served
 // embedder. Every method here is store.d.ts v3; nothing from the superseded v1 CRUD
@@ -33,7 +35,6 @@ import { createHash } from 'node:crypto';
 import Database from 'better-sqlite3';
 import * as sqliteVec from 'sqlite-vec';
 import {
-  brainDatabasePath,
   openDatabase,
   engineVersions,
 } from '../../../adapters/sqlite/database.js';
@@ -51,6 +52,7 @@ import {
   toFloat32,
 } from '../../../adapters/sqlite/vec.js';
 import { STANDING_ID_PREFIX } from '../rag/standing.js';
+import { indexPathFor } from '../state/layout.js';
 
 const DOCUMENTS = 'document';
 const CHUNKS = 'chunks';
@@ -285,6 +287,8 @@ function normalizeChunkWrite(row, index, documentId) {
 export class SqliteStore {
   #database = null;
   #path;
+  #repoPath;
+  #stateRoot;
   #project;
   #dimension;
   #embedder;
@@ -306,13 +310,28 @@ export class SqliteStore {
    * @param {string} [options.embedderId]  Flat identity, when the structured one is unavailable.
    */
   constructor({
-    path, repoPath, project = DEFAULT_PROJECT, dimension, embedder, embedderId,
+    path, repoPath, stateRoot, project = DEFAULT_PROJECT, dimension, embedder, embedderId,
     standingPrefix = STANDING_ID_PREFIX,
   } = {}) {
-    if (!path && !repoPath) throw new Error('SqliteStore requires a path or a repoPath.');
+    if (!path && !repoPath) throw new Error('SqliteStore requires a path, or a repoPath with a stateRoot.');
+    // A repoPath alone used to be enough, because the index lived inside the repo. Under
+    // D-0031 it does not, and the dangerous version of this constructor is one that
+    // quietly rebuilds the old in-repo location when a caller forgets the state root:
+    // nothing fails, and the daemon and the store end up looking at different files.
+    // layout.js refuses the same way and for the same reason.
+    if (!path && !stateRoot) {
+      throw new Error(
+        'SqliteStore requires a stateRoot alongside repoPath; the index no longer lives in the repo (D-0031). '
+        + 'Pass an explicit path, or a stateRoot so the manifest id can resolve it.',
+      );
+    }
     const width = dimension ?? embedder?.dimension ?? null;
     if (width !== null) assertDimension(width);
-    this.#path = path ?? brainDatabasePath(repoPath);
+    // Resolved in init(), because resolving means reading the repo's manifest and this
+    // constructor is not async. Until then the store knows only what it was told.
+    this.#path = path ?? null;
+    this.#repoPath = repoPath ?? null;
+    this.#stateRoot = stateRoot ?? null;
     this.#project = project;
     this.#dimension = width;
     this.#embedder = embedder ? { ...embedder, dimension: width } : null;
@@ -341,6 +360,10 @@ export class SqliteStore {
 
   async init() {
     if (this.#database) return;
+    // THE resolver, called rather than reimplemented: one derivation of the repo key, so a
+    // repo reached by a different spelling, a symlink, or a moved checkout still finds the
+    // index the daemon built.
+    if (!this.#path) this.#path = await indexPathFor(this.#repoPath, { stateRoot: this.#stateRoot });
     const database = openDatabase(this.#path, { Database, sqliteVec });
     this.#database = database;
     this.#applyMigrations();
@@ -998,4 +1021,4 @@ export async function createSqliteStore(options) {
   return store;
 }
 
-export { brainDatabasePath, STANDING_ID_PREFIX };
+export { STANDING_ID_PREFIX };

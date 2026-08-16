@@ -1,6 +1,6 @@
 // Adapter barrel. The engine imports from here so a backend swap is one file.
 
-export { brainDatabasePath, openDatabase, engineVersions } from './sqlite/database.js';
+export { openDatabase, engineVersions } from './sqlite/database.js';
 export {
   FTS5_TOKENIZE,
   LEXICAL_TOP_K,

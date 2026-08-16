@@ -1,5 +1,25 @@
 # Daijin build state (authoritative)
 
+## 2026-08-16 13:03 - THE PRODUCT LOOP IS CLOSED: init builds, the floor gates, MCP serves
+
+The extractor's MCP serve entry (a6b8764) closed the loop and proved it
+live: a real brain built with the real embedder, served over MCP stdio,
+searched by an agent-shaped client, returning web.decision.adr-0040
+first for a why-question. Two finds on the way: the SNIPPET WAS BROKEN
+(mcpSnippet pointed at the P1-era corpus-descriptor entry, so the 75%
+unlock handed users a paste-ready failure, worse than a locked snippet
+because the user believes it), found by running the command the snippet
+prints; and a FIRST-BOOT defect (embeddingIdentity required a digest no
+fresh machine has; now discovered from the served model at index time,
+which gives the index something to pin without weakening the assert,
+since the assert compares the RECORDED digest on later queries and a
+configured digest still wins). New standing test class from the first
+find: anything we hand a user to paste is executed by a test. serve-repo
+fails early and by name (no brain: "Run init first; there is nothing to
+serve"), because a server that starts against a brainless repo answers
+every search with an error from three layers down. The lane map gained
+the extractor's test-file entries; the reranker server is down.
+
 ## 2026-08-16 13:01 - P3 ACCEPTED; finding 80 ruled; D-0025 closed both arms
 
 Verifier report 12: P3 PASSES with the control surviving all five

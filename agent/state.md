@@ -1,5 +1,44 @@
 # Daijin build state (authoritative)
 
+## 2026-08-17 10:55 - A fourth defect class: correct mechanism, wrong reading guidance
+
+The extractor answered tui-builder's two open observations by
+measurement (9106794, 621/621) and the undiagnosed one WAS ITS OWN -
+in the guidance, not the mechanism. (1) A stale floor survives
+critical, correctly: floorScore comes from records/ (measured on a
+date by an embedder), so breaking the index cannot and should not
+clear it; the mock clearing it is the wrong half. (2) The
+no-brain-after-done observation: the init had FAILED (done/failed
+under --no-probe); health was right, and the client read a failed init
+as finished BECAUSE THE CONTRACT TOLD IT TO - "key on the phase, NEVER
+on the step" is right for has-it-ended and a trap for did-it-succeed.
+Corrected: phase for that it ended, LEVEL for how (info/warn/error) -
+level deliberately, being a small closed set identical across jobs,
+where the step is job-specific and open: telling a client to read the
+step is telling it to keep a list it cannot complete.
+
+THE FOURTH CLASS, named and kept: A CORRECT MECHANISM WITH WRONG
+GUIDANCE PRODUCES THE SAME OUTCOME AS A WRONG MECHANISM AND IS HARDER
+TO FIND, because every mechanism test passes - the invariant was
+tested seven ways and mutation-checked four, and none of it could
+catch a sentence telling clients to read it wrongly; the failure
+surfaced two removes from its cause as a health defect that did not
+exist. Distinct from all three row modes (wrong shape, stale claim,
+unnamed values): the contract accurate, its READING INSTRUCTIONS
+wrong - untouchable by shape gate, claim audit or enum sweep, which
+all compare document to code, and this is a defect in neither. No
+gate proposed; the honest counter recorded: guidance telling a client
+to IGNORE a field must say what that field is for, since "never read
+the step" was only safe if nothing needed the step, and something did.
+
+Companion finding, tui-builder's, same family better named: "absence
+passes for reasons you did not intend" - a string asserted absent
+from a render that returns before drawing; a word asserted absent
+from prose. Both pass while measuring nothing.
+
+STILL OPEN: the CI conformance-test fix (tui-builder, urgent, ahead of
+its three rulings) - the pipeline stays red until it lands and a run
+is WATCHED to green.
 ## 2026-08-17 10:45 - CORRECTION: CI has been red for nine runs; the leader's claim went stale
 
 DATED CORRECTION of this file's and the leader's repeated "CI green"

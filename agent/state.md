@@ -1,5 +1,34 @@
 # Daijin build state (authoritative)
 
+## 2026-08-16 12:23 - P5 ACCEPTED: PASS on all six clauses, zero findings
+
+Verifier report 10, the first attack run inside a real hold window and the
+first with nothing to report: tui tree-sha IDENTICAL across the whole
+battery (db7e9947... at start and end) while repo HEAD moved twice under
+it, which is exactly why the tree pin beats HEAD, and tui/ is identical
+between b1844a0 and current HEAD so either commit pins it. All clauses
+met: 232/232 reproduced exactly; 30 of 30 methods CALLED through the
+client with no stale stub text (the one lookalike string checked rather
+than counted: it is the honest inverse of finding 68, affirming the
+surface and naming the phase, inert by default); both spend directions per
+method with the gate default pinned by test; seven keyboard targets and
+50 real mouse clicks; the copy gate re-proven LIVE on the frozen tree
+with a planted dash firing from composited render; finding 71 confirmed
+closed in passing. The verifier's verdict on the suite-composition answer
+is the epistemics the project wants: named growth checks out, the moved
+assertion strengthened coverage in the place the fidelity ruling
+demanded, and the 160 stays a labeled hypothesis, taken as explained
+rather than verified. Process note in the verifier's words: every earlier
+attack carried a moving-tree caveat, this one carries none, and the
+difference is entirely the hold window, which cost one freeze
+declaration.
+
+SCOREBOARD: P0, P1, P2, P4, P5 ACCEPTED. P3 pipeline built, live
+portfolio-mine measurement pending. P6 open on clauses (g) and (h),
+adapter building, delta attack pre-registered. tui-builder unfrozen into
+the polish queue: concurrency, workers plus skeletons, SocketRpcClient,
+motion.
+
 ## 2026-08-16 12:20 - P6 verdict: (a)-(f) PASS; the phase STAYS OPEN on (g) and (h)
 
 Verifier report 9, pinned to commit 5c3ac8f with per-file sha256: the dry

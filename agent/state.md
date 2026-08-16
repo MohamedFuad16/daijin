@@ -1,5 +1,42 @@
 # Daijin build state (authoritative)
 
+## 2026-08-16 13:22 - Owner design correction ruled (D-0031); team paused to 17:10
+
+The whole team hit the session limit (resets 17:10 JST). The leader used
+the window to reason, verify, and rule the owner's three-layer directive:
+CONTRACT (never ingested; verified already true in bytes, now guarded),
+BRAIN (durable markdown, canonical, evidence-cited), INDEX (disposable,
+OUT of the repo). Full ruling in D-0031 and a structural plan section;
+corpus expansion to raw source deferred to a registered experiment
+because corpus composition is part of the measured gauge.
+
+RESUME WORK ORDERS (dispatch on wake, in this order per lane):
+- init-miner: FIRST finish P3.5 in flight (the adopt-path test was
+  mid-work at the pause). THEN the D-0031 brain-artifacts change:
+  scaffold writes .daijin/brain/ markdown as canonical, ingest reads
+  from those files, plus the contract-refusal test (agents/ and
+  manifest.json can never enter the store).
+- extractor: the index relocation (brain.sqlite and machine state to
+  the daijin state root keyed by repo identity; serve-repo, daemon,
+  and snippet follow), the manifest.json lifecycle in initBrain, and
+  the one-line attemptsForExam change (queued pre-pause). Then role
+  config: student and watcher from the platform's existing key BY
+  POINTER (no value enters this repo); teacher and auditor await the
+  owner's keys.
+- adapter (on call): install smoke and dry run follow the index
+  relocation (the state-root layout changes).
+- gym-porter: answer the certify {} question (queued pre-pause); then
+  hold for the verifier's persistence check.
+- tui-builder: SocketRpcClient, then motion; the repo-home cards
+  follow the manifest/brain split when it lands (brain browser reads
+  canonical markdown, not only search).
+- verifier: the persistence-round check (queued), then P3.5's report,
+  then D-0031's invariants join the attack surface (the
+  contract-refusal test and the delete-the-index-lose-nothing property
+  are both falsifiable and should be attacked as such).
+- Owner items pending owner: teacher/auditor keys; the claude-code
+  provider sub-agent spec; the live gym cycle authorization.
+
 ## 2026-08-16 13:14 - Polish strands 1-2 landed; finding 79 verified closed everywhere
 
 tui-builder's concurrency strand: boot screen blocking cost 635ms to

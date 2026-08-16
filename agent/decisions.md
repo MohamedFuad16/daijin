@@ -588,3 +588,64 @@ the range rides with the floor wherever the floor is quoted; the
 rendering lands with tui-builder after the motion strand, and the
 control checkbox governs only whether the EXPENSIVE arm runs, never
 whether an already-measured range is shown.]
+
+## D-0031 (2026-08-16) The three-layer correction: contract, brain, index
+
+Owner directive, reasoned against the build's actual bytes before ruling.
+The confusion being corrected: "agent folder" and "RAG" read as two
+competing memories. The corrected model, now the architecture:
+
+  CONTRACT  .daijin/manifest.json + .daijin/agents/   how agents behave
+  BRAIN     .daijin/brain/ markdown                    what the project knows
+  INDEX     machine state OUTSIDE the repo             how it is found now
+
+Verified before ruling: the contract separation ALREADY HOLDS in bytes
+(agent instruction files are never ingested; zero references in the init
+pipeline) but was never stated, so nothing guarded it. Now invariant 1:
+THE CONTRACT IS NEVER INGESTED, NEVER CHUNKED, NEVER RETRIEVED. It loads
+whole, first, and retrieval can never outrank it; a chunk scoring higher
+than a rule is not a reason to break the rule. Ingest gains a refusal
+test proving agents/ and manifest.json cannot enter the store.
+
+Invariant 2: THE INDEX IS DISPOSABLE AND LIVES OUTSIDE THE REPO. Today
+brain.sqlite defaults to <repo>/.daijin/brain.sqlite, machine state in
+the working tree. It moves to the daijin state root, keyed by repo
+identity; delete the index and the project keeps its memory, because:
+
+Invariant 3: THE BRAIN IS DURABLE MARKDOWN, THE DB IS DERIVED. Layer 1
+currently writes units straight into the store. Corrected: scaffold
+writes .daijin/brain/ as canonical human-readable artifacts
+(architecture.md, decisions/, lessons/, conventions.md, errors.md), each
+carrying its evidence citations; ingest READS FROM those files; the
+index is regenerable from them at any time. The repo remains the source
+of truth, the brain is curated knowledge over it, the index owns nothing.
+
+Invariant 4: daijin init IS A LIFECYCLE CONTRACT, not a folder check.
+manifest.json declares the schema; init guarantees identity, contract,
+brain, index, gold set, floor, in order, idempotently. An existing brain
+is read-validate-diff-update; a corrupted one has invalid claims
+rejected and affected artifacts rebuilt; a missing one is generated. The
+adopt path (P3.5) reads an existing curated folder INTO this shape.
+
+Invariant 5: CONTRACT MUTATIONS ARE GOVERNED, never retrieval-driven.
+The watcher detects, the auditor recommends, promotion is explicit; RAG
+surfaces evidence and decides nothing. (Already the plan's separation;
+now bound to this boundary.)
+
+DEFERRED AS A MEASURED EXPERIMENT, deliberately not adopted silently:
+expanding the retrieval corpus to raw code, docs, tests, and history.
+The 91.2 floor and every gold set are measured over brain units; corpus
+composition is part of the gauge, and the platform-proven design is
+unit-centric with citations POINTING INTO source, the agent's own file
+tools covering raw code. Indexing raw source duplicates what grep-class
+tools already do well and changes every measured number. It ships, if
+ever, through its own registered experiment with its own gold set.
+
+Owner operational items recorded with the directive: student and watcher
+roles configure from the previous project's existing key (POINTER ONLY,
+the platform's env source; no key value enters this repo, per the
+standing secrets rule); teacher and auditor keys arrive from the owner
+later; and a claude-code provider preset is planned, a custom Claude
+Code sub-agent with proper instructions invoked by daijin for designated
+roles, using the owner's local authentication instead of an API key,
+spec'd when the owner returns.

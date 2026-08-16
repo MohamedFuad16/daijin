@@ -253,6 +253,27 @@ sparklines on cards, radar drawn on a unicode canvas with a five-axis horizontal
 fallback (user-switchable). Exams section: enter an exam, see its axis radar, pass and
 fail history line, and per-attempt token bars.
 
+## The three-layer boundary (owner design correction, 2026-08-16 13:20, D-0031;
+## supersedes any earlier reading where "agent folder" and "brain" overlap)
+
+CONTRACT, BRAIN, and INDEX are three different classes of knowledge, not two
+ways of remembering the same thing. The contract (.daijin/manifest.json plus
+.daijin/agents/) says how agents behave: loaded whole, always available,
+NEVER ingested or retrieved, and retrieval can never outrank it. The brain
+(.daijin/brain/ markdown: architecture.md, decisions/, lessons/,
+conventions.md, errors.md) is the durable, evidence-cited project memory and
+the CANONICAL artifact; humans and agents read it directly. The index is a
+disposable machine derivation of the brain living OUTSIDE the repo in the
+daijin state root; deleting it loses nothing because ingest regenerates it
+from the brain files. daijin init is a lifecycle contract guaranteeing
+identity, contract, brain, index, gold set, and floor in order; manifest.json
+is the API boundary declaring the schema. Contract mutations are governed
+(watcher detects, auditor recommends, promotion explicit), never
+retrieval-driven. Expanding the retrieval corpus to raw source/docs/history
+is DEFERRED to its own registered experiment: corpus composition is part of
+the measured gauge, and the unit-centric design with citations pointing into
+source is the platform-proven configuration.
+
 ## Init pipeline v2 (owner refinements, 2026-08-16, supersedes the generation bullets above where they differ)
 
 Generation is a MIX by design: deterministic extraction produces evidence tables (script

@@ -1,6 +1,64 @@
 # Daijin build state (authoritative)
 
-## 2026-08-16 17:58 - Relocation complete; roles wired; a flake blocks P8
+## 2026-08-16 17:54 - The flake is pinned (D-0032); reports 18 and 19; CI green
+
+(Stamp note: this entry is newer than the 17:58 entry below despite the
+earlier stamp; that stamp ran a few minutes fast. Insertion order, newest
+first, is authoritative. Also correcting a record gap: report 18 and D-0032
+were recorded in decisions.md and the plan but never here; this entry
+covers both reports.)
+
+VERIFIER REPORT 18 pinned the 1-in-5 suite flake: mutation batteries
+mutate the SHARED WORKING TREE in place (copy aside, break, test,
+restore), and every mutation is a window where any concurrent process
+reads deliberately broken source. Two-arm experiment, 38 runs, 18-for-18
+separation by starting source hash; an immutable snapshot ran 10-for-10
+clean at the same code; a battery was caught mutating live. Ruling
+D-0032: batteries run against PRIVATE COPIES and refuse when the target
+resolves to the shared tree absent explicit override. The gravest
+consequence, now in the record: every retry-until-green during the
+battery era was indistinguishable, from the record, from a real
+regression retried away. init-miner's ordering-bug hunt stood down (the
+tree under its tests was lying, not its code); its regeneration test's
+authority restored. P8 clause (i) sharpened a second time: each of the
+five runs asserts the source hash is stable across the run, captured
+before and after.
+
+VERIFIER REPORT 19 closed gym-porter's two "unexplainable" pure-function
+cases and CORRECTED one part of the report-18 relay. The cases: purity
+is a property of execution, not of load; a pure function imported from a
+mutated file is a mutated pure function. Demonstrated, not argued: one
+battery-style mutation to src/gym/exams.js failed exactly the two named
+cases together (finding 77 + P7 clause 4, same module), hash-verified
+and restored. The loop closes on itself: gym-porter's own battery
+(p4-mutations/mutate.sh, defaulting to the live engine) is what made
+gym-porter's pure-function tests flake. Resource pressure is NOT needed
+and that hunt is stood down. THE CORRECTION [2026-08-16]: report 18's
+dissolution of the chunk-count drift was overbroad and I relayed it as
+total; report 19 establishes TWO mechanisms, neither subsuming the
+other. The extractor's init-lane nondeterminism (chunk count 44 to 45 on
+an ISOLATED fixed-content fixture, timing lever moving it 1-in-3 to
+5-in-6) cannot be produced by tree mutation: a mutated source fails a
+test, it does not drift a count on an isolated fixture. Consequence:
+fixing either mechanism alone leaves the npm-test gate unsound; a clean
+run after one fix only establishes that no battery was running. The
+verifier also reported its own process error (a String.replace no-op
+producing evidence from a mutation that never happened, the exact F81
+lie class, caught because a PASSING test was the wrong answer for its
+hypothesis) - the argument for counters over conventions, from the
+person who knew better and still walked into it.
+
+Ownership settled: mutate.sh conversion is gym-porter's (assigned in the
+report-18 dispatch; verifier is report-only and rightly did not touch
+it). The isolated-fixture chunk drift needs a pinned cause: assigned to
+the extractor (its instrumentation, its lever); the fix, if in init-lane
+code, lands via init-miner after its D-0031 round.
+
+CI: the full pipeline is GREEN on the evidence-exemption commit (tui,
+engine, install-dry-run, hygiene; run watched to completion, GH_EXIT=0).
+Honest bound: one green tui run does not close the "Event loop is
+closed" defect; by this project's own lesson it may only mean this run
+overlapped no bad interleaving. tui-builder's Python 3.12 chase stands.
 
 The extractor completed all four items. The relocation's design call is
 the regeneration test applied independently: the state root splits into

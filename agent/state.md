@@ -1,5 +1,26 @@
 # Daijin build state (authoritative)
 
+## 2026-08-16 17:16 - Persistence check PASS; certify resolved by elimination
+
+Verifier report 15, all five probes: the structural claim held at three
+levels including the check that would have made the FK decorative
+(foreign_keys = ON at the single connection path, immediately after
+open); clause 9 held including the batch row (a surviving grade_batch
+with zero rubrics reads as a graded cohort in a count query; nothing
+survives); one-rubric-per-run blocked by unique index, not a forgettable
+check; the quarantine reaches the rubric table. The certify {} question
+resolved WITHOUT the owed answer: certify() has no axes parameter at
+all, deriving axes from the stored rubric it already requires;
+elimination beats refusal and was checkable directly. The
+declared-versus-executed comparison FIRES on its lie class, with one
+latent evasion (finding 81, INFO: the column-0 anchor misses indented
+mutations both ways; zero instances today; one character class; folded
+into gym-porter's in-flight round). Layer boundary documented: storage
+can hold an empty axes object from a grading.js bypass, the wire cannot
+emit it, validation is grading.js's job by design. The verifier holds
+the corpus-expansion deferral as its own enforcement: any widening
+invalidates every measured number until re-measured.
+
 ## 2026-08-16 13:22 - Owner design correction ruled (D-0031); team paused to 17:10
 
 The whole team hit the session limit (resets 17:10 JST). The leader used

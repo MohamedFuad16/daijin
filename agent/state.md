@@ -1,5 +1,41 @@
 # Daijin build state (authoritative)
 
+## 2026-08-17 04:20 - The live tier pays on run one; a method fell between two tiers
+
+mode is back (3492669; the removal rule WORKED rather than being
+overturned - off for want of a reader with a comeback path in its own
+removal reason, path fired same day, and one of the three tests that
+bites is the contract-shape gate itself). THE ACCEPTANCE SCRIPT RUNS
+(af8f029): 18 checks at the pin, zero spend, real init 25.6s over ten
+phases, the terminal-event invariant asserted on a REAL job, floor
+25/25 with the 12-case range beside it, both spend refusals with the
+real gate path. Placement ruled as assumed: test-live/, outside npm
+test - a zero-dependency suite must not depend on a service, and the
+unit gate printing the live tier's names every run is the reminder.
+
+THE LIVE TIER'S FIRST RUN FOUND THREE THINGS, and the third is
+structural: diagnose was in LIVE because it embeds, its row was PROSE
+declaring no shape - so the unit gate excused it as live, the live
+tier had nothing to compare against, and NO TIER WAS EVER GOING TO
+CHECK IT. "A method can be uncovered by falling between two
+descriptions of why it is covered elsewhere," and the printed
+remainder said it was checked, which was not true. Fixed structurally:
+a live method with no declared shape fails outright, a silent skip
+being exactly how a tier covers nothing while appearing to cover its
+list, and the two tiers now assert AGREEMENT (every method the unit
+gate prints as live is checked in the script, or the script fails).
+
+RULINGS, all three amend: search.context (the assembled block is the
+thing an agent actually pastes - it is the product, not a leak);
+retrievalScore.at (the history row documents the same stamp; symmetry
+is the argument); diagnose GETS A DECLARED SHAPE - it returns clusters,
+a case rate, violations and a discriminating range, and prose is the
+right level for file-plus-classification, not for a structured result
+this central. Delegated as before: one commit, rows plus ratchet
+shrink plus live-tier assertions, gate keeps both sides honest.
+
+After that commit the engine queue is TRULY empty. Remaining anywhere:
+tui-builder's mode grey-out and removal double-check; then ultrareview.
 ## 2026-08-17 04:05 - The batch lands; the ratchet is EMPTY; the gate caught the leader's text
 
 The amendment batch landed in one commit as delegated (21990b8),

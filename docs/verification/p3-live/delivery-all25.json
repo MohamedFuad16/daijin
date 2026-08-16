@@ -1,0 +1,158 @@
+{
+  "documents": 11,
+  "queries": 25,
+  "meanReturned": 6.96,
+  "fraction": 0.6327272727272727,
+  "rows": [
+    {
+      "id": "g001",
+      "returned": 6,
+      "ranked": 6,
+      "standing": 0
+    },
+    {
+      "id": "g002",
+      "returned": 8,
+      "ranked": 8,
+      "standing": 0
+    },
+    {
+      "id": "g003",
+      "returned": 8,
+      "ranked": 8,
+      "standing": 0
+    },
+    {
+      "id": "g004",
+      "returned": 8,
+      "ranked": 8,
+      "standing": 0
+    },
+    {
+      "id": "g005",
+      "returned": 8,
+      "ranked": 8,
+      "standing": 0
+    },
+    {
+      "id": "g006",
+      "returned": 8,
+      "ranked": 8,
+      "standing": 0
+    },
+    {
+      "id": "g007",
+      "returned": 8,
+      "ranked": 8,
+      "standing": 0
+    },
+    {
+      "id": "g008",
+      "returned": 8,
+      "ranked": 8,
+      "standing": 0
+    },
+    {
+      "id": "g009",
+      "returned": 8,
+      "ranked": 8,
+      "standing": 0
+    },
+    {
+      "id": "g010",
+      "returned": 6,
+      "ranked": 6,
+      "standing": 0
+    },
+    {
+      "id": "g011",
+      "returned": 8,
+      "ranked": 8,
+      "standing": 0
+    },
+    {
+      "id": "g012",
+      "returned": 6,
+      "ranked": 6,
+      "standing": 0
+    },
+    {
+      "id": "g013",
+      "returned": 3,
+      "ranked": 3,
+      "standing": 0
+    },
+    {
+      "id": "g014",
+      "returned": 6,
+      "ranked": 6,
+      "standing": 0
+    },
+    {
+      "id": "g015",
+      "returned": 8,
+      "ranked": 8,
+      "standing": 0
+    },
+    {
+      "id": "g016",
+      "returned": 8,
+      "ranked": 8,
+      "standing": 0
+    },
+    {
+      "id": "g017",
+      "returned": 8,
+      "ranked": 8,
+      "standing": 0
+    },
+    {
+      "id": "g018",
+      "returned": 8,
+      "ranked": 8,
+      "standing": 0
+    },
+    {
+      "id": "g019",
+      "returned": 6,
+      "ranked": 6,
+      "standing": 0
+    },
+    {
+      "id": "g020",
+      "returned": 6,
+      "ranked": 6,
+      "standing": 0
+    },
+    {
+      "id": "g021",
+      "returned": 8,
+      "ranked": 8,
+      "standing": 0
+    },
+    {
+      "id": "g022",
+      "returned": 6,
+      "ranked": 6,
+      "standing": 0
+    },
+    {
+      "id": "g023",
+      "returned": 8,
+      "ranked": 8,
+      "standing": 0
+    },
+    {
+      "id": "g024",
+      "returned": 4,
+      "ranked": 4,
+      "standing": 0
+    },
+    {
+      "id": "g025",
+      "returned": 5,
+      "ranked": 5,
+      "standing": 0
+    }
+  ]
+}

@@ -16,9 +16,24 @@ FLOOR: **25 of 25, exact 1**. MRR 0.96. Violations 0. Chosen budget 3000 tokens 
 ## The qualifier that belongs with the number wherever it is quoted
 
 A permuted control (same 25 queries, every answer deliberately reassigned to a different
-unit) scores **18 of 25 = 0.72**, because at 11 documents k=8 delivers a mean of 7.6 of them
-per query. Case rate retains 0.28 of discriminating range on this corpus; MRR retains
+unit) scores **18 of 25 = 0.72**, because at 11 documents k=8 delivers most of the corpus on
+every query. Case rate retains 0.28 of discriminating range on this corpus; MRR retains
 0.8235.
+
+> **CORRECTION 2026-08-16.** The delivery figure first published here was "a mean of 7.6 of
+> 11 documents per query", measured over 5 of the 25 queries. Re-measured over ALL 25
+> (`delivery-all25.json`): the mean is **6.96 of 11, a fraction of 0.6327**, with a range of
+> 3 to 8 and a median of 8. The original number overstated delivery by about 6 points
+> because the 5-query sample happened to contain four queries that returned the full 8.
+>
+> This slightly WEAKENS the numeric agreement the mechanism was checked against, and that is
+> stated rather than smoothed: if a query returns 6.96 of 11 documents, a deliberately wrong
+> answer lands in the returned set about 63 percent of the time, against 72 percent
+> observed. The prediction was 0.69 against 0.72 observed on the 5-query figure and is 0.63
+> against 0.72 on the full one. The mechanism still explains the observation and now
+> under-predicts it, which is the expected direction: retrieval is not random, and the
+> permuted answers are still real documents in a corpus small enough that many of them are
+> broadly relevant to any query.
 
 Read that as: the ENFORCED metric saturates on a small corpus, and the metric this project
 deliberately does not floor (MRR) is the one still carrying signal there. 25 of 25 is
@@ -36,7 +51,8 @@ same conclusion, which is what makes the ceiling a fact rather than a reading.
 | file | what it is |
 | --- | --- |
 | `init-report.json` | the full run record: analysis, evidence counts, scaffold, ingest, gates, gold-set gates, floor, budget curve, content survival, MCP decision, and the pin |
-| `control-report.json` | the permuted-answer control: corpus size, mean documents delivered per query, candidate and control metrics |
+| `control-report.json` | the permuted-answer control: corpus size, mean documents delivered per query, candidate and control metrics. Its `meanReturnedPerQuery` is the superseded 5-query figure; see the correction above |
+| `delivery-all25.json` | the delivery re-measurement over all 25 queries, per-query and aggregate |
 | `goldset.yaml` | the 25 mined cases, each with provenance, stable key, and the reason it exists |
 | `gates.yaml` | the discovered gate, classified with its liveness evidence |
 | `run-init.mjs` | the script that produced `init-report.json` |
@@ -83,3 +99,11 @@ low result that LOOKED like an honest negative finding: "this repo cannot supply
 mechanically mined cases, the floor binds, the gauge refuses." That conclusion was wrong,
 and the cause was a bug in the miner rather than a property of the repo. Once repaired the
 miner had 29 candidates for 25 slots.
+
+## The rerank A/B on this brain
+
+`docs/verification/rerank-ab/` holds the D-0025 falsification arm measured against this same
+pinned brain: neutral on all four pairs, with the cost and the withheld cache-flattered
+latency documented there. Its plumbing proof also measures this corpus's ceiling from a
+second direction, and the platform half of that evidence is at
+`engine/src/rag/RERANK-MEASUREMENT.md`.

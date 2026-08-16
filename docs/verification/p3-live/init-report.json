@@ -1,0 +1,3069 @@
+{
+  "jobId": "init",
+  "repoPath": "/Users/mfuad16/Documents/GitHub/portfolio-mine",
+  "artifactRoot": "/private/tmp/claude-501/-Users-mfuad16-Documents-Codex-2026-07-21-hand-ai-brain-build-instructions-md-ai-brain-platform/e95b2f5e-687e-47b1-a3be-17bfadbc8b2e/scratchpad/p3-live/artifacts",
+  "mode": "layer1",
+  "project": "default",
+  "startedAt": 1786850665958,
+  "phases": {
+    "evidence": {
+      "sourceFiles": 6,
+      "edges": 2,
+      "externalPackages": 14,
+      "uniqueSymbols": 6,
+      "history": {
+        "available": true,
+        "commits": 67,
+        "capped": false,
+        "cap": 2000
+      }
+    },
+    "scaffold": {
+      "generated": 11,
+      "accepted": 11,
+      "dropped": [],
+      "notes": [
+        "No test-layout card: no test files found by path."
+      ],
+      "errors": {
+        "units": 0,
+        "reason": "Layer 1 writes no error records. Fix and revert commits are candidate evidence only; a lesson enters the brain after narration validates it against the real commit, or after the gym earns it.",
+        "candidates": {
+          "fixCommits": 9,
+          "revertCommits": 0
+        }
+      }
+    },
+    "ingest": {
+      "documents": 11,
+      "chunks": 49,
+      "identityChunks": 6,
+      "relationships": 2,
+      "indexedIdentity": {
+        "indexed": true,
+        "provider": "ollama",
+        "model": "bge-m3",
+        "digest": "7907646426070047a77226ac3e684fbbe8410524f7b4a74d02837e43f2146bab",
+        "dimension": 1024,
+        "embedderId": "ollama:bge-m3@7907646426070047a77226ac3e684fbbe8410524f7b4a74d02837e43f2146bab",
+        "indexDigest": "e389cafe08e30c94c50e75d0449ebeec32ae40bee66671bdedaa00e7c2f40c7d"
+      }
+    },
+    "gates": {
+      "total": 1,
+      "live": 0,
+      "measured": 0,
+      "preBroken": 0,
+      "unavailable": 1,
+      "carryingSignal": 0,
+      "file": "/private/tmp/claude-501/-Users-mfuad16-Documents-Codex-2026-07-21-hand-ai-brain-build-instructions-md-ai-brain-platform/e95b2f5e-687e-47b1-a3be-17bfadbc8b2e/scratchpad/p3-live/artifacts/.daijin/gates.yaml",
+      "ranIn": "/private/tmp/claude-501/-Users-mfuad16-Documents-Codex-2026-07-21-hand-ai-brain-build-instructions-md-ai-brain-platform/e95b2f5e-687e-47b1-a3be-17bfadbc8b2e/scratchpad/p3-live/export",
+      "sandboxed": true
+    },
+    "goldset": {
+      "mined": 25,
+      "carried": 0,
+      "target": {
+        "target": 25,
+        "chunkCount": 49,
+        "formula": "max(25, ceil(49 chunks / 22)) capped at 150 = 25",
+        "scaled": 3,
+        "minimum": 25,
+        "maximum": 150
+      },
+      "pool": {
+        "commit-archaeology": 1,
+        "structural": 22,
+        "identifier": 6,
+        "afterDedupe": 29
+      },
+      "notes": [],
+      "active": 25,
+      "retired": 0,
+      "constraintsPruned": [],
+      "passed": true,
+      "gates": [
+        {
+          "id": "existence",
+          "status": "pass",
+          "detail": "all 11 referenced document ids resolve in the live index",
+          "failures": []
+        },
+        {
+          "id": "leakage",
+          "status": "pass",
+          "detail": "no case quotes its answer (threshold: 6 contiguous tokens)",
+          "failures": []
+        },
+        {
+          "id": "staleness",
+          "status": "pass",
+          "detail": "no active case points at a target that is gone",
+          "failures": []
+        },
+        {
+          "id": "provenance",
+          "status": "pass",
+          "detail": "all 25 cases record an origin that resolves",
+          "failures": []
+        },
+        {
+          "id": "diversity",
+          "status": "pass",
+          "detail": "25 active cases, 5 identifier, 3 types, 7 areas",
+          "failures": []
+        }
+      ],
+      "files": {
+        "active": "/private/tmp/claude-501/-Users-mfuad16-Documents-Codex-2026-07-21-hand-ai-brain-build-instructions-md-ai-brain-platform/e95b2f5e-687e-47b1-a3be-17bfadbc8b2e/scratchpad/p3-live/artifacts/.daijin/goldset.yaml",
+        "retired": null
+      }
+    }
+  },
+  "analysis": {
+    "repoPath": "/Users/mfuad16/Documents/GitHub/portfolio-mine",
+    "name": "portfolio-mine",
+    "languages": [
+      {
+        "language": "webp",
+        "files": 18,
+        "bytes": 12864414
+      },
+      {
+        "language": "Markdown",
+        "files": 14,
+        "bytes": 198911
+      },
+      {
+        "language": "png",
+        "files": 11,
+        "bytes": 315567
+      },
+      {
+        "language": "JavaScript",
+        "files": 6,
+        "bytes": 154812
+      },
+      {
+        "language": "svg",
+        "files": 4,
+        "bytes": 43187
+      },
+      {
+        "language": "JSON",
+        "files": 3,
+        "bytes": 28633
+      },
+      {
+        "language": "jpg",
+        "files": 3,
+        "bytes": 280370
+      },
+      {
+        "language": "YAML",
+        "files": 2,
+        "bytes": 20590
+      },
+      {
+        "language": "no-extension",
+        "files": 2,
+        "bytes": 61
+      },
+      {
+        "language": "pdf",
+        "files": 2,
+        "bytes": 134453
+      },
+      {
+        "language": "CSS",
+        "files": 1,
+        "bytes": 47758
+      },
+      {
+        "language": "HTML",
+        "files": 1,
+        "bytes": 1030
+      },
+      {
+        "language": "d2",
+        "files": 1,
+        "bytes": 1126
+      },
+      {
+        "language": "dot",
+        "files": 1,
+        "bytes": 29460
+      },
+      {
+        "language": "ico",
+        "files": 1,
+        "bytes": 22446
+      },
+      {
+        "language": "mdc",
+        "files": 1,
+        "bytes": 179
+      },
+      {
+        "language": "wav",
+        "files": 1,
+        "bytes": 635770
+      },
+      {
+        "language": "woff2",
+        "files": 1,
+        "bytes": 24956
+      }
+    ],
+    "commitCount": 67,
+    "structure": {
+      "totalFiles": 73,
+      "sourceFiles": 6,
+      "totalBytes": 14803723,
+      "maxDepth": 4,
+      "topLevel": [
+        {
+          "name": "public",
+          "files": 41,
+          "bytes": 14310821,
+          "directory": true
+        },
+        {
+          "name": "agent",
+          "files": 14,
+          "bytes": 261020,
+          "directory": true
+        },
+        {
+          "name": "(root files)",
+          "files": 9,
+          "bytes": 28991,
+          "directory": false
+        },
+        {
+          "name": "src",
+          "files": 4,
+          "bytes": 191729,
+          "directory": true
+        },
+        {
+          "name": ".claude",
+          "files": 1,
+          "bytes": 266,
+          "directory": true
+        },
+        {
+          "name": ".cursor",
+          "files": 1,
+          "bytes": 179,
+          "directory": true
+        },
+        {
+          "name": ".github",
+          "files": 1,
+          "bytes": 1361,
+          "directory": true
+        },
+        {
+          "name": "api",
+          "files": 1,
+          "bytes": 3855,
+          "directory": true
+        },
+        {
+          "name": "scripts",
+          "files": 1,
+          "bytes": 5501,
+          "directory": true
+        }
+      ],
+      "manifests": [
+        "package.json"
+      ],
+      "areas": [
+        {
+          "area": "src",
+          "fileCount": 3
+        },
+        {
+          "area": "(root)",
+          "fileCount": 1
+        },
+        {
+          "area": "api",
+          "fileCount": 1
+        },
+        {
+          "area": "scripts",
+          "fileCount": 1
+        }
+      ]
+    },
+    "gateCandidates": [
+      {
+        "id": "build",
+        "command": "pnpm run build",
+        "role": "build",
+        "source": "package.json#scripts.build",
+        "availabilityCommand": "pnpm --version && test -d node_modules",
+        "unavailableHint": "Install pnpm and run its install step in the repo root; dependencies are not present, so the script cannot run here.",
+        "cwd": null
+      }
+    ],
+    "hasBrainFolder": true,
+    "brainFolder": {
+      "present": true,
+      "directory": "agent",
+      "kind": "agent-folder",
+      "files": 14,
+      "markdownFiles": 11,
+      "sample": [
+        "agent/agent.md",
+        "agent/architecture.md",
+        "agent/components.md",
+        "agent/conventions.md",
+        "agent/data.md",
+        "agent/decisions.md",
+        "agent/errors.md",
+        "agent/graph/graph.md",
+        "agent/setup.md",
+        "agent/state.md"
+      ]
+    },
+    "git": {
+      "repository": true,
+      "history": true
+    },
+    "files": {
+      "count": 73,
+      "source": "git-ls-files",
+      "truncated": false,
+      "limit": 50000
+    }
+  },
+  "gates": [
+    {
+      "id": "build",
+      "command": "pnpm run build",
+      "role": "build",
+      "source": "package.json#scripts.build",
+      "availabilityCommand": "pnpm --version && test -d node_modules",
+      "unavailableHint": "Install pnpm and run its install step in the repo root; dependencies are not present, so the script cannot run here.",
+      "cwd": null,
+      "classification": "unavailable",
+      "enabled": false,
+      "metric": null,
+      "baseline": {
+        "status": "unavailable",
+        "exitCode": null,
+        "durationMs": 10,
+        "timeoutMs": 120000,
+        "stdoutTail": "",
+        "stderrTail": "/bin/sh: pnpm: command not found\n",
+        "unavailableReason": "Required gate runtime failed preflight: pnpm --version && test -d node_modules. Install pnpm and run its install step in the repo root; dependencies are not present, so the script cannot run here."
+      }
+    }
+  ],
+  "floor": {
+    "caseRate": {
+      "exact": 1,
+      "cases": "25 of 25",
+      "hits": 25,
+      "total": 25
+    },
+    "mrr": 0.96,
+    "violations": 0,
+    "identifierCaseRate": 1,
+    "identifierCases": 5,
+    "chosenBudget": 3000,
+    "bestBudget": 3000,
+    "rationale": "3000 tokens: the best measured score on this repo (25 of 25); no smaller budget came within one case.",
+    "budgetSweep": [
+      {
+        "tokenBudget": 3000,
+        "caseRate": {
+          "exact": 1,
+          "cases": "25 of 25",
+          "hits": 25,
+          "total": 25
+        },
+        "mrr": 0.96,
+        "violations": 0,
+        "identifierCaseRate": 1,
+        "identifierCases": 5
+      },
+      {
+        "tokenBudget": 4000,
+        "caseRate": {
+          "exact": 1,
+          "cases": "25 of 25",
+          "hits": 25,
+          "total": 25
+        },
+        "mrr": 0.96,
+        "violations": 0,
+        "identifierCaseRate": 1,
+        "identifierCases": 5
+      },
+      {
+        "tokenBudget": 6000,
+        "caseRate": {
+          "exact": 1,
+          "cases": "25 of 25",
+          "hits": 25,
+          "total": 25
+        },
+        "mrr": 0.96,
+        "violations": 0,
+        "identifierCaseRate": 1,
+        "identifierCases": 5
+      },
+      {
+        "tokenBudget": 8000,
+        "caseRate": {
+          "exact": 1,
+          "cases": "25 of 25",
+          "hits": 25,
+          "total": 25
+        },
+        "mrr": 0.96,
+        "violations": 0,
+        "identifierCaseRate": 1,
+        "identifierCases": 5
+      }
+    ],
+    "k": 8,
+    "contentSurvival": {
+      "status": "pass",
+      "tokenBudget": 3000,
+      "perCandidateCap": 660,
+      "checked": 174,
+      "survived": 88,
+      "survival": "88 of 174",
+      "truncatedAway": [],
+      "windowMissed": [
+        {
+          "caseId": "g001",
+          "id": "daijin.architecture.src",
+          "type": "architecture",
+          "ordinal": 3,
+          "coreTokens": 107,
+          "deliveredTokens": 77,
+          "allowance": 660
+        },
+        {
+          "caseId": "g001",
+          "id": "daijin.architecture.root",
+          "type": "architecture",
+          "ordinal": 3,
+          "coreTokens": 79,
+          "deliveredTokens": 35,
+          "allowance": 660
+        },
+        {
+          "caseId": "g001",
+          "id": "daijin.architecture.scripts",
+          "type": "architecture",
+          "ordinal": 6,
+          "coreTokens": 79,
+          "deliveredTokens": 61,
+          "allowance": 660
+        },
+        {
+          "caseId": "g001",
+          "id": "daijin.architecture.api",
+          "type": "architecture",
+          "ordinal": 6,
+          "coreTokens": 77,
+          "deliveredTokens": 61,
+          "allowance": 660
+        },
+        {
+          "caseId": "g002",
+          "id": "daijin.architecture.scripts",
+          "type": "architecture",
+          "ordinal": 4,
+          "coreTokens": 79,
+          "deliveredTokens": 44,
+          "allowance": 660
+        },
+        {
+          "caseId": "g002",
+          "id": "daijin.architecture.api",
+          "type": "architecture",
+          "ordinal": 4,
+          "coreTokens": 77,
+          "deliveredTokens": 28,
+          "allowance": 660
+        },
+        {
+          "caseId": "g002",
+          "id": "daijin.architecture.root",
+          "type": "architecture",
+          "ordinal": 3,
+          "coreTokens": 79,
+          "deliveredTokens": 35,
+          "allowance": 660
+        },
+        {
+          "caseId": "g003",
+          "id": "daijin.architecture.api",
+          "type": "architecture",
+          "ordinal": 4,
+          "coreTokens": 77,
+          "deliveredTokens": 28,
+          "allowance": 660
+        },
+        {
+          "caseId": "g003",
+          "id": "daijin.architecture.src",
+          "type": "architecture",
+          "ordinal": 2,
+          "coreTokens": 107,
+          "deliveredTokens": 17,
+          "allowance": 660
+        },
+        {
+          "caseId": "g003",
+          "id": "daijin.architecture.scripts",
+          "type": "architecture",
+          "ordinal": 2,
+          "coreTokens": 79,
+          "deliveredTokens": 17,
+          "allowance": 660
+        },
+        {
+          "caseId": "g003",
+          "id": "daijin.architecture.root",
+          "type": "architecture",
+          "ordinal": 2,
+          "coreTokens": 79,
+          "deliveredTokens": 19,
+          "allowance": 660
+        },
+        {
+          "caseId": "g004",
+          "id": "daijin.architecture.root",
+          "type": "architecture",
+          "ordinal": 3,
+          "coreTokens": 79,
+          "deliveredTokens": 35,
+          "allowance": 660
+        },
+        {
+          "caseId": "g005",
+          "id": "daijin.architecture.scripts",
+          "type": "architecture",
+          "ordinal": 4,
+          "coreTokens": 79,
+          "deliveredTokens": 44,
+          "allowance": 660
+        },
+        {
+          "caseId": "g005",
+          "id": "daijin.architecture.src",
+          "type": "architecture",
+          "ordinal": 4,
+          "coreTokens": 107,
+          "deliveredTokens": 22,
+          "allowance": 660
+        },
+        {
+          "caseId": "g005",
+          "id": "daijin.architecture.root",
+          "type": "architecture",
+          "ordinal": 3,
+          "coreTokens": 79,
+          "deliveredTokens": 35,
+          "allowance": 660
+        },
+        {
+          "caseId": "g006",
+          "id": "daijin.architecture.src",
+          "type": "architecture",
+          "ordinal": 3,
+          "coreTokens": 107,
+          "deliveredTokens": 77,
+          "allowance": 660
+        },
+        {
+          "caseId": "g007",
+          "id": "daijin.architecture.root",
+          "type": "architecture",
+          "ordinal": 3,
+          "coreTokens": 79,
+          "deliveredTokens": 35,
+          "allowance": 660
+        },
+        {
+          "caseId": "g007",
+          "id": "daijin.architecture.api",
+          "type": "architecture",
+          "ordinal": 3,
+          "coreTokens": 77,
+          "deliveredTokens": 18,
+          "allowance": 660
+        },
+        {
+          "caseId": "g007",
+          "id": "daijin.architecture.src",
+          "type": "architecture",
+          "ordinal": 3,
+          "coreTokens": 107,
+          "deliveredTokens": 77,
+          "allowance": 660
+        },
+        {
+          "caseId": "g007",
+          "id": "daijin.architecture.scripts",
+          "type": "architecture",
+          "ordinal": 3,
+          "coreTokens": 79,
+          "deliveredTokens": 18,
+          "allowance": 660
+        },
+        {
+          "caseId": "g008",
+          "id": "daijin.architecture.scripts",
+          "type": "architecture",
+          "ordinal": 4,
+          "coreTokens": 79,
+          "deliveredTokens": 44,
+          "allowance": 660
+        },
+        {
+          "caseId": "g008",
+          "id": "daijin.architecture.src",
+          "type": "architecture",
+          "ordinal": 3,
+          "coreTokens": 107,
+          "deliveredTokens": 77,
+          "allowance": 660
+        },
+        {
+          "caseId": "g008",
+          "id": "daijin.architecture.api",
+          "type": "architecture",
+          "ordinal": 4,
+          "coreTokens": 77,
+          "deliveredTokens": 28,
+          "allowance": 660
+        },
+        {
+          "caseId": "g008",
+          "id": "daijin.architecture.root",
+          "type": "architecture",
+          "ordinal": 3,
+          "coreTokens": 79,
+          "deliveredTokens": 35,
+          "allowance": 660
+        },
+        {
+          "caseId": "g009",
+          "id": "daijin.architecture.scripts",
+          "type": "architecture",
+          "ordinal": 6,
+          "coreTokens": 79,
+          "deliveredTokens": 61,
+          "allowance": 660
+        },
+        {
+          "caseId": "g009",
+          "id": "daijin.architecture.api",
+          "type": "architecture",
+          "ordinal": 6,
+          "coreTokens": 77,
+          "deliveredTokens": 61,
+          "allowance": 660
+        },
+        {
+          "caseId": "g009",
+          "id": "daijin.architecture.dependencies",
+          "type": "architecture",
+          "ordinal": 3,
+          "coreTokens": 187,
+          "deliveredTokens": 59,
+          "allowance": 660
+        },
+        {
+          "caseId": "g009",
+          "id": "daijin.architecture.src",
+          "type": "architecture",
+          "ordinal": 6,
+          "coreTokens": 107,
+          "deliveredTokens": 61,
+          "allowance": 660
+        },
+        {
+          "caseId": "g009",
+          "id": "daijin.architecture.root",
+          "type": "architecture",
+          "ordinal": 6,
+          "coreTokens": 79,
+          "deliveredTokens": 63,
+          "allowance": 660
+        },
+        {
+          "caseId": "g010",
+          "id": "daijin.architecture.src",
+          "type": "architecture",
+          "ordinal": 3,
+          "coreTokens": 107,
+          "deliveredTokens": 77,
+          "allowance": 660
+        },
+        {
+          "caseId": "g010",
+          "id": "daijin.architecture.root",
+          "type": "architecture",
+          "ordinal": 3,
+          "coreTokens": 79,
+          "deliveredTokens": 35,
+          "allowance": 660
+        },
+        {
+          "caseId": "g010",
+          "id": "daijin.architecture.api",
+          "type": "architecture",
+          "ordinal": 3,
+          "coreTokens": 77,
+          "deliveredTokens": 18,
+          "allowance": 660
+        },
+        {
+          "caseId": "g011",
+          "id": "daijin.architecture.root",
+          "type": "architecture",
+          "ordinal": 3,
+          "coreTokens": 79,
+          "deliveredTokens": 35,
+          "allowance": 660
+        },
+        {
+          "caseId": "g011",
+          "id": "daijin.architecture.src",
+          "type": "architecture",
+          "ordinal": 3,
+          "coreTokens": 107,
+          "deliveredTokens": 77,
+          "allowance": 660
+        },
+        {
+          "caseId": "g011",
+          "id": "daijin.architecture.scripts",
+          "type": "architecture",
+          "ordinal": 3,
+          "coreTokens": 79,
+          "deliveredTokens": 18,
+          "allowance": 660
+        },
+        {
+          "caseId": "g012",
+          "id": "daijin.architecture.src",
+          "type": "architecture",
+          "ordinal": 3,
+          "coreTokens": 107,
+          "deliveredTokens": 77,
+          "allowance": 660
+        },
+        {
+          "caseId": "g012",
+          "id": "daijin.architecture.api",
+          "type": "architecture",
+          "ordinal": 3,
+          "coreTokens": 77,
+          "deliveredTokens": 18,
+          "allowance": 660
+        },
+        {
+          "caseId": "g012",
+          "id": "daijin.architecture.scripts",
+          "type": "architecture",
+          "ordinal": 3,
+          "coreTokens": 79,
+          "deliveredTokens": 18,
+          "allowance": 660
+        },
+        {
+          "caseId": "g012",
+          "id": "daijin.architecture.root",
+          "type": "architecture",
+          "ordinal": 3,
+          "coreTokens": 79,
+          "deliveredTokens": 35,
+          "allowance": 660
+        },
+        {
+          "caseId": "g013",
+          "id": "daijin.architecture.src",
+          "type": "architecture",
+          "ordinal": 3,
+          "coreTokens": 107,
+          "deliveredTokens": 77,
+          "allowance": 660
+        },
+        {
+          "caseId": "g013",
+          "id": "daijin.architecture.api",
+          "type": "architecture",
+          "ordinal": 3,
+          "coreTokens": 77,
+          "deliveredTokens": 18,
+          "allowance": 660
+        },
+        {
+          "caseId": "g014",
+          "id": "daijin.architecture.src",
+          "type": "architecture",
+          "ordinal": 3,
+          "coreTokens": 107,
+          "deliveredTokens": 77,
+          "allowance": 660
+        },
+        {
+          "caseId": "g014",
+          "id": "daijin.architecture.root",
+          "type": "architecture",
+          "ordinal": 3,
+          "coreTokens": 79,
+          "deliveredTokens": 35,
+          "allowance": 660
+        },
+        {
+          "caseId": "g014",
+          "id": "daijin.architecture.scripts",
+          "type": "architecture",
+          "ordinal": 3,
+          "coreTokens": 79,
+          "deliveredTokens": 18,
+          "allowance": 660
+        },
+        {
+          "caseId": "g014",
+          "id": "daijin.architecture.api",
+          "type": "architecture",
+          "ordinal": 3,
+          "coreTokens": 77,
+          "deliveredTokens": 18,
+          "allowance": 660
+        },
+        {
+          "caseId": "g015",
+          "id": "daijin.architecture.api",
+          "type": "architecture",
+          "ordinal": 4,
+          "coreTokens": 77,
+          "deliveredTokens": 28,
+          "allowance": 660
+        },
+        {
+          "caseId": "g015",
+          "id": "daijin.architecture.root",
+          "type": "architecture",
+          "ordinal": 4,
+          "coreTokens": 79,
+          "deliveredTokens": 24,
+          "allowance": 660
+        },
+        {
+          "caseId": "g015",
+          "id": "daijin.architecture.src",
+          "type": "architecture",
+          "ordinal": 4,
+          "coreTokens": 107,
+          "deliveredTokens": 22,
+          "allowance": 660
+        },
+        {
+          "caseId": "g015",
+          "id": "daijin.architecture.scripts",
+          "type": "architecture",
+          "ordinal": 4,
+          "coreTokens": 79,
+          "deliveredTokens": 44,
+          "allowance": 660
+        },
+        {
+          "caseId": "g015",
+          "id": "daijin.architecture.dependencies",
+          "type": "architecture",
+          "ordinal": 3,
+          "coreTokens": 187,
+          "deliveredTokens": 59,
+          "allowance": 660
+        },
+        {
+          "caseId": "g016",
+          "id": "daijin.architecture.scripts",
+          "type": "architecture",
+          "ordinal": 4,
+          "coreTokens": 79,
+          "deliveredTokens": 44,
+          "allowance": 660
+        },
+        {
+          "caseId": "g016",
+          "id": "daijin.architecture.root",
+          "type": "architecture",
+          "ordinal": 4,
+          "coreTokens": 79,
+          "deliveredTokens": 24,
+          "allowance": 660
+        },
+        {
+          "caseId": "g016",
+          "id": "daijin.architecture.src",
+          "type": "architecture",
+          "ordinal": 4,
+          "coreTokens": 107,
+          "deliveredTokens": 22,
+          "allowance": 660
+        },
+        {
+          "caseId": "g016",
+          "id": "daijin.architecture.api",
+          "type": "architecture",
+          "ordinal": 4,
+          "coreTokens": 77,
+          "deliveredTokens": 28,
+          "allowance": 660
+        },
+        {
+          "caseId": "g017",
+          "id": "daijin.architecture.scripts",
+          "type": "architecture",
+          "ordinal": 4,
+          "coreTokens": 79,
+          "deliveredTokens": 44,
+          "allowance": 660
+        },
+        {
+          "caseId": "g017",
+          "id": "daijin.architecture.root",
+          "type": "architecture",
+          "ordinal": 4,
+          "coreTokens": 79,
+          "deliveredTokens": 24,
+          "allowance": 660
+        },
+        {
+          "caseId": "g017",
+          "id": "daijin.architecture.src",
+          "type": "architecture",
+          "ordinal": 4,
+          "coreTokens": 107,
+          "deliveredTokens": 22,
+          "allowance": 660
+        },
+        {
+          "caseId": "g017",
+          "id": "daijin.architecture.api",
+          "type": "architecture",
+          "ordinal": 4,
+          "coreTokens": 77,
+          "deliveredTokens": 28,
+          "allowance": 660
+        },
+        {
+          "caseId": "g017",
+          "id": "daijin.architecture.dependencies",
+          "type": "architecture",
+          "ordinal": 3,
+          "coreTokens": 187,
+          "deliveredTokens": 59,
+          "allowance": 660
+        },
+        {
+          "caseId": "g018",
+          "id": "daijin.architecture.scripts",
+          "type": "architecture",
+          "ordinal": 4,
+          "coreTokens": 79,
+          "deliveredTokens": 44,
+          "allowance": 660
+        },
+        {
+          "caseId": "g018",
+          "id": "daijin.architecture.src",
+          "type": "architecture",
+          "ordinal": 4,
+          "coreTokens": 107,
+          "deliveredTokens": 22,
+          "allowance": 660
+        },
+        {
+          "caseId": "g018",
+          "id": "daijin.architecture.root",
+          "type": "architecture",
+          "ordinal": 4,
+          "coreTokens": 79,
+          "deliveredTokens": 24,
+          "allowance": 660
+        },
+        {
+          "caseId": "g018",
+          "id": "daijin.architecture.api",
+          "type": "architecture",
+          "ordinal": 4,
+          "coreTokens": 77,
+          "deliveredTokens": 28,
+          "allowance": 660
+        },
+        {
+          "caseId": "g018",
+          "id": "daijin.architecture.dependencies",
+          "type": "architecture",
+          "ordinal": 3,
+          "coreTokens": 187,
+          "deliveredTokens": 59,
+          "allowance": 660
+        },
+        {
+          "caseId": "g019",
+          "id": "daijin.architecture.src",
+          "type": "architecture",
+          "ordinal": 3,
+          "coreTokens": 107,
+          "deliveredTokens": 77,
+          "allowance": 660
+        },
+        {
+          "caseId": "g019",
+          "id": "daijin.architecture.root",
+          "type": "architecture",
+          "ordinal": 3,
+          "coreTokens": 79,
+          "deliveredTokens": 35,
+          "allowance": 660
+        },
+        {
+          "caseId": "g019",
+          "id": "daijin.architecture.api",
+          "type": "architecture",
+          "ordinal": 3,
+          "coreTokens": 77,
+          "deliveredTokens": 18,
+          "allowance": 660
+        },
+        {
+          "caseId": "g020",
+          "id": "daijin.architecture.root",
+          "type": "architecture",
+          "ordinal": 3,
+          "coreTokens": 79,
+          "deliveredTokens": 35,
+          "allowance": 660
+        },
+        {
+          "caseId": "g020",
+          "id": "daijin.architecture.scripts",
+          "type": "architecture",
+          "ordinal": 3,
+          "coreTokens": 79,
+          "deliveredTokens": 18,
+          "allowance": 660
+        },
+        {
+          "caseId": "g020",
+          "id": "daijin.architecture.api",
+          "type": "architecture",
+          "ordinal": 3,
+          "coreTokens": 77,
+          "deliveredTokens": 18,
+          "allowance": 660
+        },
+        {
+          "caseId": "g020",
+          "id": "daijin.architecture.src",
+          "type": "architecture",
+          "ordinal": 3,
+          "coreTokens": 107,
+          "deliveredTokens": 77,
+          "allowance": 660
+        },
+        {
+          "caseId": "g021",
+          "id": "daijin.architecture.src",
+          "type": "architecture",
+          "ordinal": 5,
+          "coreTokens": 107,
+          "deliveredTokens": 65,
+          "allowance": 660
+        },
+        {
+          "caseId": "g021",
+          "id": "daijin.architecture.dependencies",
+          "type": "architecture",
+          "ordinal": 3,
+          "coreTokens": 187,
+          "deliveredTokens": 59,
+          "allowance": 660
+        },
+        {
+          "caseId": "g021",
+          "id": "daijin.architecture.scripts",
+          "type": "architecture",
+          "ordinal": 6,
+          "coreTokens": 79,
+          "deliveredTokens": 61,
+          "allowance": 660
+        },
+        {
+          "caseId": "g021",
+          "id": "daijin.architecture.api",
+          "type": "architecture",
+          "ordinal": 6,
+          "coreTokens": 77,
+          "deliveredTokens": 61,
+          "allowance": 660
+        },
+        {
+          "caseId": "g021",
+          "id": "daijin.architecture.root",
+          "type": "architecture",
+          "ordinal": 6,
+          "coreTokens": 79,
+          "deliveredTokens": 63,
+          "allowance": 660
+        },
+        {
+          "caseId": "g022",
+          "id": "daijin.architecture.api",
+          "type": "architecture",
+          "ordinal": 5,
+          "coreTokens": 77,
+          "deliveredTokens": 21,
+          "allowance": 660
+        },
+        {
+          "caseId": "g022",
+          "id": "daijin.architecture.scripts",
+          "type": "architecture",
+          "ordinal": 6,
+          "coreTokens": 79,
+          "deliveredTokens": 61,
+          "allowance": 660
+        },
+        {
+          "caseId": "g022",
+          "id": "daijin.architecture.dependencies",
+          "type": "architecture",
+          "ordinal": 3,
+          "coreTokens": 187,
+          "deliveredTokens": 59,
+          "allowance": 660
+        },
+        {
+          "caseId": "g022",
+          "id": "daijin.architecture.src",
+          "type": "architecture",
+          "ordinal": 6,
+          "coreTokens": 107,
+          "deliveredTokens": 61,
+          "allowance": 660
+        },
+        {
+          "caseId": "g022",
+          "id": "daijin.architecture.root",
+          "type": "architecture",
+          "ordinal": 6,
+          "coreTokens": 79,
+          "deliveredTokens": 63,
+          "allowance": 660
+        },
+        {
+          "caseId": "g023",
+          "id": "daijin.architecture.src",
+          "type": "architecture",
+          "ordinal": 5,
+          "coreTokens": 107,
+          "deliveredTokens": 65,
+          "allowance": 660
+        },
+        {
+          "caseId": "g023",
+          "id": "daijin.architecture.scripts",
+          "type": "architecture",
+          "ordinal": 5,
+          "coreTokens": 79,
+          "deliveredTokens": 19,
+          "allowance": 660
+        },
+        {
+          "caseId": "g023",
+          "id": "daijin.architecture.root",
+          "type": "architecture",
+          "ordinal": 5,
+          "coreTokens": 79,
+          "deliveredTokens": 21,
+          "allowance": 660
+        },
+        {
+          "caseId": "g024",
+          "id": "daijin.architecture.src",
+          "type": "architecture",
+          "ordinal": 5,
+          "coreTokens": 107,
+          "deliveredTokens": 65,
+          "allowance": 660
+        },
+        {
+          "caseId": "g025",
+          "id": "daijin.architecture.src",
+          "type": "architecture",
+          "ordinal": 5,
+          "coreTokens": 107,
+          "deliveredTokens": 65,
+          "allowance": 660
+        }
+      ],
+      "raiseSignal": null
+    },
+    "mcp": {
+      "unlocked": true,
+      "threshold": 0.75,
+      "caseRate": {
+        "exact": 1,
+        "cases": "25 of 25",
+        "hits": 25,
+        "total": 25
+      },
+      "reason": "25 of 25 is at or above the 0.75 threshold, so the brain is fit to serve over MCP."
+    },
+    "perCase": [
+      {
+        "caseId": "g001",
+        "hit": true,
+        "hits": 1,
+        "required": 1,
+        "misses": [],
+        "violations": [],
+        "identifier": false,
+        "standingAssisted": false
+      },
+      {
+        "caseId": "g002",
+        "hit": true,
+        "hits": 1,
+        "required": 1,
+        "misses": [],
+        "violations": [],
+        "identifier": false,
+        "standingAssisted": false
+      },
+      {
+        "caseId": "g003",
+        "hit": true,
+        "hits": 1,
+        "required": 1,
+        "misses": [],
+        "violations": [],
+        "identifier": false,
+        "standingAssisted": false
+      },
+      {
+        "caseId": "g004",
+        "hit": true,
+        "hits": 1,
+        "required": 1,
+        "misses": [],
+        "violations": [],
+        "identifier": false,
+        "standingAssisted": false
+      },
+      {
+        "caseId": "g005",
+        "hit": true,
+        "hits": 1,
+        "required": 1,
+        "misses": [],
+        "violations": [],
+        "identifier": false,
+        "standingAssisted": false
+      },
+      {
+        "caseId": "g006",
+        "hit": true,
+        "hits": 1,
+        "required": 1,
+        "misses": [],
+        "violations": [],
+        "identifier": false,
+        "standingAssisted": false
+      },
+      {
+        "caseId": "g007",
+        "hit": true,
+        "hits": 1,
+        "required": 1,
+        "misses": [],
+        "violations": [],
+        "identifier": false,
+        "standingAssisted": false
+      },
+      {
+        "caseId": "g008",
+        "hit": true,
+        "hits": 1,
+        "required": 1,
+        "misses": [],
+        "violations": [],
+        "identifier": false,
+        "standingAssisted": false
+      },
+      {
+        "caseId": "g009",
+        "hit": true,
+        "hits": 1,
+        "required": 1,
+        "misses": [],
+        "violations": [],
+        "identifier": false,
+        "standingAssisted": false
+      },
+      {
+        "caseId": "g010",
+        "hit": true,
+        "hits": 1,
+        "required": 1,
+        "misses": [],
+        "violations": [],
+        "identifier": false,
+        "standingAssisted": false
+      },
+      {
+        "caseId": "g011",
+        "hit": true,
+        "hits": 1,
+        "required": 1,
+        "misses": [],
+        "violations": [],
+        "identifier": false,
+        "standingAssisted": false
+      },
+      {
+        "caseId": "g012",
+        "hit": true,
+        "hits": 1,
+        "required": 1,
+        "misses": [],
+        "violations": [],
+        "identifier": false,
+        "standingAssisted": false
+      },
+      {
+        "caseId": "g013",
+        "hit": true,
+        "hits": 1,
+        "required": 1,
+        "misses": [],
+        "violations": [],
+        "identifier": false,
+        "standingAssisted": false
+      },
+      {
+        "caseId": "g014",
+        "hit": true,
+        "hits": 1,
+        "required": 1,
+        "misses": [],
+        "violations": [],
+        "identifier": false,
+        "standingAssisted": false
+      },
+      {
+        "caseId": "g015",
+        "hit": true,
+        "hits": 1,
+        "required": 1,
+        "misses": [],
+        "violations": [],
+        "identifier": false,
+        "standingAssisted": false
+      },
+      {
+        "caseId": "g016",
+        "hit": true,
+        "hits": 1,
+        "required": 1,
+        "misses": [],
+        "violations": [],
+        "identifier": false,
+        "standingAssisted": false
+      },
+      {
+        "caseId": "g017",
+        "hit": true,
+        "hits": 1,
+        "required": 1,
+        "misses": [],
+        "violations": [],
+        "identifier": false,
+        "standingAssisted": false
+      },
+      {
+        "caseId": "g018",
+        "hit": true,
+        "hits": 1,
+        "required": 1,
+        "misses": [],
+        "violations": [],
+        "identifier": false,
+        "standingAssisted": false
+      },
+      {
+        "caseId": "g019",
+        "hit": true,
+        "hits": 1,
+        "required": 1,
+        "misses": [],
+        "violations": [],
+        "identifier": false,
+        "standingAssisted": false
+      },
+      {
+        "caseId": "g020",
+        "hit": true,
+        "hits": 1,
+        "required": 1,
+        "misses": [],
+        "violations": [],
+        "identifier": false,
+        "standingAssisted": false
+      },
+      {
+        "caseId": "g021",
+        "hit": true,
+        "hits": 1,
+        "required": 1,
+        "misses": [],
+        "violations": [],
+        "identifier": true,
+        "standingAssisted": false
+      },
+      {
+        "caseId": "g022",
+        "hit": true,
+        "hits": 1,
+        "required": 1,
+        "misses": [],
+        "violations": [],
+        "identifier": true,
+        "standingAssisted": false
+      },
+      {
+        "caseId": "g023",
+        "hit": true,
+        "hits": 1,
+        "required": 1,
+        "misses": [],
+        "violations": [],
+        "identifier": true,
+        "standingAssisted": false
+      },
+      {
+        "caseId": "g024",
+        "hit": true,
+        "hits": 1,
+        "required": 1,
+        "misses": [],
+        "violations": [],
+        "identifier": true,
+        "standingAssisted": false
+      },
+      {
+        "caseId": "g025",
+        "hit": true,
+        "hits": 1,
+        "required": 1,
+        "misses": [],
+        "violations": [],
+        "identifier": true,
+        "standingAssisted": false
+      }
+    ]
+  },
+  "finishedAt": 1786850689469,
+  "units": [
+    {
+      "id": "daijin.architecture.src",
+      "type": "architecture",
+      "path": ".daijin/brain/architecture/src.md",
+      "title": "Module: src",
+      "tags": [
+        "architecture",
+        "generated",
+        "src"
+      ],
+      "body": "Claim: src holds 3 source files, imports 0 other areas (2 file-level references out), and is imported by 0 (2 references in).\nEvidence: import graph over 3 parsed source files, directory tree, and the tracked file list (git-ls-files).\n\nFiles in this module:\n- src/DaijinMascot.jsx (imported by 1, imports 0)\n- src/main.jsx (imported by 0, imports 2)\n- src/signature-path.js (imported by 1, imports 0)\n\n## Imports from\n\n- nothing in this repo\n\n## Imported by\n\n- nothing in this repo\n\n## External packages used here\n\n- react (2 files)\n- @gsap/react (1 files)\n- border-beam (1 files)\n- gsap (1 files)\n- lucide-react (1 files)\n- react-dom (1 files)\n- react-icons (1 files)\n- thinking-orbs (1 files)\n\n## Node built-ins used here\n\n- none\n\n## Exported symbols\n\n- DaijinMascot (src/DaijinMascot.jsx)\n- signatureDot (src/signature-path.js)\n- signaturePath (src/signature-path.js)\n- signatureStrokeWidth (src/signature-path.js)\n- signatureViewBox (src/signature-path.js)\n\n## Provenance\n\nGenerated by Daijin Layer 1. Deterministic, no model, no network.\nMethod: import graph and directory tree over the tracked source files\nReproduce: re-run daijin init on this repo at the same commit; identical input produces identical bytes.\nEvidence digest: d6f7f5b7ffdf582b48bef3f6f2905cab6502a54cdd5e5ba2b6ad5f17cf826cae",
+      "content": "# Module: src\n\nClaim: src holds 3 source files, imports 0 other areas (2 file-level references out), and is imported by 0 (2 references in).\nEvidence: import graph over 3 parsed source files, directory tree, and the tracked file list (git-ls-files).\n\nFiles in this module:\n- src/DaijinMascot.jsx (imported by 1, imports 0)\n- src/main.jsx (imported by 0, imports 2)\n- src/signature-path.js (imported by 1, imports 0)\n\n## Imports from\n\n- nothing in this repo\n\n## Imported by\n\n- nothing in this repo\n\n## External packages used here\n\n- react (2 files)\n- @gsap/react (1 files)\n- border-beam (1 files)\n- gsap (1 files)\n- lucide-react (1 files)\n- react-dom (1 files)\n- react-icons (1 files)\n- thinking-orbs (1 files)\n\n## Node built-ins used here\n\n- none\n\n## Exported symbols\n\n- DaijinMascot (src/DaijinMascot.jsx)\n- signatureDot (src/signature-path.js)\n- signaturePath (src/signature-path.js)\n- signatureStrokeWidth (src/signature-path.js)\n- signatureViewBox (src/signature-path.js)\n\n## Provenance\n\nGenerated by Daijin Layer 1. Deterministic, no model, no network.\nMethod: import graph and directory tree over the tracked source files\nReproduce: re-run daijin init on this repo at the same commit; identical input produces identical bytes.\nEvidence digest: d6f7f5b7ffdf582b48bef3f6f2905cab6502a54cdd5e5ba2b6ad5f17cf826cae",
+      "contentHash": "1c99af7acc014d178ff1fbc51e40d627adf457bad042eec749a8074419dc164f",
+      "core": "Claim: src holds 3 source files, imports 0 other areas (2 file-level references out), and is imported by 0 (2 references in).\nEvidence: import graph over 3 parsed source files, directory tree, and the tracked file list (git-ls-files).\n\nFiles in this module:\n- src/DaijinMascot.jsx (imported by 1, imports 0)\n- src/main.jsx (imported by 0, imports 2)\n- src/signature-path.js (imported by 1, imports 0)",
+      "citations": [
+        "src/DaijinMascot.jsx",
+        "src/main.jsx",
+        "src/signature-path.js"
+      ],
+      "meta": {
+        "area": "src",
+        "generated": true,
+        "generator": "daijin-layer1",
+        "layer": 1,
+        "citations": [
+          "src/DaijinMascot.jsx",
+          "src/main.jsx",
+          "src/signature-path.js"
+        ],
+        "evidenceDigest": "d6f7f5b7ffdf582b48bef3f6f2905cab6502a54cdd5e5ba2b6ad5f17cf826cae"
+      }
+    },
+    {
+      "id": "daijin.architecture.root",
+      "type": "architecture",
+      "path": ".daijin/brain/architecture/root.md",
+      "title": "Module: (root)",
+      "tags": [
+        "architecture",
+        "generated",
+        "root"
+      ],
+      "body": "Claim: (root) holds 1 source file, imports 0 other areas (0 file-level references out), and is imported by 0 (0 references in).\nEvidence: import graph over 3 parsed source files, directory tree, and the tracked file list (git-ls-files).\n\nFiles in this module:\n- vite.config.js (imported by 0, imports 0)\n\n## Imports from\n\n- nothing in this repo\n\n## Imported by\n\n- nothing in this repo\n\n## External packages used here\n\n- @vitejs/plugin-react (1 files)\n- vite (1 files)\n\n## Node built-ins used here\n\n- none\n\n## Exported symbols\n\n- none found by the deterministic scan\n\n## Provenance\n\nGenerated by Daijin Layer 1. Deterministic, no model, no network.\nMethod: import graph and directory tree over the tracked source files\nReproduce: re-run daijin init on this repo at the same commit; identical input produces identical bytes.\nEvidence digest: 9a33b129e340dc8cb01c6adeefbf7e773efd474fa5952d2d1614d2d0c0b65f75",
+      "content": "# Module: (root)\n\nClaim: (root) holds 1 source file, imports 0 other areas (0 file-level references out), and is imported by 0 (0 references in).\nEvidence: import graph over 3 parsed source files, directory tree, and the tracked file list (git-ls-files).\n\nFiles in this module:\n- vite.config.js (imported by 0, imports 0)\n\n## Imports from\n\n- nothing in this repo\n\n## Imported by\n\n- nothing in this repo\n\n## External packages used here\n\n- @vitejs/plugin-react (1 files)\n- vite (1 files)\n\n## Node built-ins used here\n\n- none\n\n## Exported symbols\n\n- none found by the deterministic scan\n\n## Provenance\n\nGenerated by Daijin Layer 1. Deterministic, no model, no network.\nMethod: import graph and directory tree over the tracked source files\nReproduce: re-run daijin init on this repo at the same commit; identical input produces identical bytes.\nEvidence digest: 9a33b129e340dc8cb01c6adeefbf7e773efd474fa5952d2d1614d2d0c0b65f75",
+      "contentHash": "fb50caa144867b80e3aefaa63b2e75d389b354b40f38f6a296f175360148ff5d",
+      "core": "Claim: (root) holds 1 source file, imports 0 other areas (0 file-level references out), and is imported by 0 (0 references in).\nEvidence: import graph over 3 parsed source files, directory tree, and the tracked file list (git-ls-files).\n\nFiles in this module:\n- vite.config.js (imported by 0, imports 0)",
+      "citations": [
+        "vite.config.js"
+      ],
+      "meta": {
+        "area": "(root)",
+        "generated": true,
+        "generator": "daijin-layer1",
+        "layer": 1,
+        "citations": [
+          "vite.config.js"
+        ],
+        "evidenceDigest": "9a33b129e340dc8cb01c6adeefbf7e773efd474fa5952d2d1614d2d0c0b65f75"
+      }
+    },
+    {
+      "id": "daijin.architecture.api",
+      "type": "architecture",
+      "path": ".daijin/brain/architecture/api.md",
+      "title": "Module: api",
+      "tags": [
+        "architecture",
+        "generated",
+        "api"
+      ],
+      "body": "Claim: api holds 1 source file, imports 0 other areas (0 file-level references out), and is imported by 0 (0 references in).\nEvidence: import graph over 3 parsed source files, directory tree, and the tracked file list (git-ls-files).\n\nFiles in this module:\n- api/visits.mjs (imported by 0, imports 0)\n\n## Imports from\n\n- nothing in this repo\n\n## Imported by\n\n- nothing in this repo\n\n## External packages used here\n\n- none\n\n## Node built-ins used here\n\n- node:crypto (1 files)\n\n## Exported symbols\n\n- handler (api/visits.mjs)\n\n## Provenance\n\nGenerated by Daijin Layer 1. Deterministic, no model, no network.\nMethod: import graph and directory tree over the tracked source files\nReproduce: re-run daijin init on this repo at the same commit; identical input produces identical bytes.\nEvidence digest: 56ceefbed9166fb58eb727a030c428f91fa603a619421df10f98da308b2acea7",
+      "content": "# Module: api\n\nClaim: api holds 1 source file, imports 0 other areas (0 file-level references out), and is imported by 0 (0 references in).\nEvidence: import graph over 3 parsed source files, directory tree, and the tracked file list (git-ls-files).\n\nFiles in this module:\n- api/visits.mjs (imported by 0, imports 0)\n\n## Imports from\n\n- nothing in this repo\n\n## Imported by\n\n- nothing in this repo\n\n## External packages used here\n\n- none\n\n## Node built-ins used here\n\n- node:crypto (1 files)\n\n## Exported symbols\n\n- handler (api/visits.mjs)\n\n## Provenance\n\nGenerated by Daijin Layer 1. Deterministic, no model, no network.\nMethod: import graph and directory tree over the tracked source files\nReproduce: re-run daijin init on this repo at the same commit; identical input produces identical bytes.\nEvidence digest: 56ceefbed9166fb58eb727a030c428f91fa603a619421df10f98da308b2acea7",
+      "contentHash": "5b6e1bba3c958124580f3db449facce42f17caabc60bfeb657dbff0a7ba234e5",
+      "core": "Claim: api holds 1 source file, imports 0 other areas (0 file-level references out), and is imported by 0 (0 references in).\nEvidence: import graph over 3 parsed source files, directory tree, and the tracked file list (git-ls-files).\n\nFiles in this module:\n- api/visits.mjs (imported by 0, imports 0)",
+      "citations": [
+        "api/visits.mjs"
+      ],
+      "meta": {
+        "area": "api",
+        "generated": true,
+        "generator": "daijin-layer1",
+        "layer": 1,
+        "citations": [
+          "api/visits.mjs"
+        ],
+        "evidenceDigest": "56ceefbed9166fb58eb727a030c428f91fa603a619421df10f98da308b2acea7"
+      }
+    },
+    {
+      "id": "daijin.architecture.scripts",
+      "type": "architecture",
+      "path": ".daijin/brain/architecture/scripts.md",
+      "title": "Module: scripts",
+      "tags": [
+        "architecture",
+        "generated",
+        "scripts"
+      ],
+      "body": "Claim: scripts holds 1 source file, imports 0 other areas (0 file-level references out), and is imported by 0 (0 references in).\nEvidence: import graph over 3 parsed source files, directory tree, and the tracked file list (git-ls-files).\n\nFiles in this module:\n- scripts/fetch-contributions.mjs (imported by 0, imports 0)\n\n## Imports from\n\n- nothing in this repo\n\n## Imported by\n\n- nothing in this repo\n\n## External packages used here\n\n- none\n\n## Node built-ins used here\n\n- node:fs (1 files)\n- node:path (1 files)\n- node:url (1 files)\n\n## Exported symbols\n\n- none found by the deterministic scan\n\n## Provenance\n\nGenerated by Daijin Layer 1. Deterministic, no model, no network.\nMethod: import graph and directory tree over the tracked source files\nReproduce: re-run daijin init on this repo at the same commit; identical input produces identical bytes.\nEvidence digest: 9a9fb5f068c33b7fbe8d30501f1f5b43182b3cabe22699a86f8f75d48f9b7c4f",
+      "content": "# Module: scripts\n\nClaim: scripts holds 1 source file, imports 0 other areas (0 file-level references out), and is imported by 0 (0 references in).\nEvidence: import graph over 3 parsed source files, directory tree, and the tracked file list (git-ls-files).\n\nFiles in this module:\n- scripts/fetch-contributions.mjs (imported by 0, imports 0)\n\n## Imports from\n\n- nothing in this repo\n\n## Imported by\n\n- nothing in this repo\n\n## External packages used here\n\n- none\n\n## Node built-ins used here\n\n- node:fs (1 files)\n- node:path (1 files)\n- node:url (1 files)\n\n## Exported symbols\n\n- none found by the deterministic scan\n\n## Provenance\n\nGenerated by Daijin Layer 1. Deterministic, no model, no network.\nMethod: import graph and directory tree over the tracked source files\nReproduce: re-run daijin init on this repo at the same commit; identical input produces identical bytes.\nEvidence digest: 9a9fb5f068c33b7fbe8d30501f1f5b43182b3cabe22699a86f8f75d48f9b7c4f",
+      "contentHash": "59d65696fd4410bb748fd2a33e0de33bf77458cd5e589764ec7fb25deebb6df0",
+      "core": "Claim: scripts holds 1 source file, imports 0 other areas (0 file-level references out), and is imported by 0 (0 references in).\nEvidence: import graph over 3 parsed source files, directory tree, and the tracked file list (git-ls-files).\n\nFiles in this module:\n- scripts/fetch-contributions.mjs (imported by 0, imports 0)",
+      "citations": [
+        "scripts/fetch-contributions.mjs"
+      ],
+      "meta": {
+        "area": "scripts",
+        "generated": true,
+        "generator": "daijin-layer1",
+        "layer": 1,
+        "citations": [
+          "scripts/fetch-contributions.mjs"
+        ],
+        "evidenceDigest": "9a9fb5f068c33b7fbe8d30501f1f5b43182b3cabe22699a86f8f75d48f9b7c4f"
+      }
+    },
+    {
+      "id": "daijin.architecture.dependencies",
+      "type": "architecture",
+      "path": ".daijin/brain/architecture/dependencies.md",
+      "title": "Dependencies",
+      "tags": [
+        "architecture",
+        "dependencies",
+        "generated"
+      ],
+      "body": "Claim: 10 declared dependencies, 10 of 10 imported by at least one source file, 0 declared and never imported, 0 imported and never declared.\nEvidence: package.json crossed with the import graph over 3 parsed source files.\n\nDeclared and used:\n\n- react ^19.2.8 (2 files)\n- @gsap/react ^2.1.2 (1 files)\n- @vitejs/plugin-react ^6.0.4 (1 files)\n- border-beam ^1.3.0 (1 files)\n- gsap ^3.15.0 (1 files)\n- lucide-react ^1.26.0 (1 files)\n- react-dom ^19.2.8 (1 files)\n- react-icons ^5.7.0 (1 files)\n- thinking-orbs ^0.1.1 (1 files)\n- vite ^8.1.5 (1 files)\n\n## Declared and never imported\n\n- none\n\n## Imported but not declared\n\n- none\n\n## Provenance\n\nGenerated by Daijin Layer 1. Deterministic, no model, no network.\nMethod: import graph and directory tree over the tracked source files\nReproduce: re-run daijin init on this repo at the same commit; identical input produces identical bytes.\nEvidence digest: 44d4cc1b43c90349f207f13530550a3541b6764c6ebe0426957344fcfaf8b9c4",
+      "content": "# Dependencies\n\nClaim: 10 declared dependencies, 10 of 10 imported by at least one source file, 0 declared and never imported, 0 imported and never declared.\nEvidence: package.json crossed with the import graph over 3 parsed source files.\n\nDeclared and used:\n\n- react ^19.2.8 (2 files)\n- @gsap/react ^2.1.2 (1 files)\n- @vitejs/plugin-react ^6.0.4 (1 files)\n- border-beam ^1.3.0 (1 files)\n- gsap ^3.15.0 (1 files)\n- lucide-react ^1.26.0 (1 files)\n- react-dom ^19.2.8 (1 files)\n- react-icons ^5.7.0 (1 files)\n- thinking-orbs ^0.1.1 (1 files)\n- vite ^8.1.5 (1 files)\n\n## Declared and never imported\n\n- none\n\n## Imported but not declared\n\n- none\n\n## Provenance\n\nGenerated by Daijin Layer 1. Deterministic, no model, no network.\nMethod: import graph and directory tree over the tracked source files\nReproduce: re-run daijin init on this repo at the same commit; identical input produces identical bytes.\nEvidence digest: 44d4cc1b43c90349f207f13530550a3541b6764c6ebe0426957344fcfaf8b9c4",
+      "contentHash": "86dad330b69917eb57330d5ee2030da408688804807949dd5c80b008e201b51f",
+      "core": "Claim: 10 declared dependencies, 10 of 10 imported by at least one source file, 0 declared and never imported, 0 imported and never declared.\nEvidence: package.json crossed with the import graph over 3 parsed source files.\n\nDeclared and used:\n\n- react ^19.2.8 (2 files)\n- @gsap/react ^2.1.2 (1 files)\n- @vitejs/plugin-react ^6.0.4 (1 files)\n- border-beam ^1.3.0 (1 files)\n- gsap ^3.15.0 (1 files)\n- lucide-react ^1.26.0 (1 files)\n- react-dom ^19.2.8 (1 files)\n- react-icons ^5.7.0 (1 files)\n- thinking-orbs ^0.1.1 (1 files)\n- vite ^8.1.5 (1 files)",
+      "citations": [
+        "package.json"
+      ],
+      "meta": {
+        "area": "dependencies",
+        "generated": true,
+        "generator": "daijin-layer1",
+        "layer": 1,
+        "citations": [
+          "package.json"
+        ],
+        "evidenceDigest": "44d4cc1b43c90349f207f13530550a3541b6764c6ebe0426957344fcfaf8b9c4"
+      }
+    },
+    {
+      "id": "daijin.convention.indentation",
+      "type": "convention",
+      "path": ".daijin/brain/convention/indentation.md",
+      "title": "Convention: Indentation",
+      "tags": [
+        "convention",
+        "generated",
+        "indentation"
+      ],
+      "body": "Rule: source files indent with spaces, width 1.\nMeasured: 5 of 5 files, mechanically, over the tracked file list.\n\n## Counts\n\n- spaces: 5\n- none: 1\n- tabs: 0\n\n## Exceptions\n\n- none found\n\n## How this was measured\n\ncounted per file over indented lines; a file is classified by whichever of tabs or spaces leads it.\n\n## Provenance\n\nGenerated by Daijin Layer 1. Deterministic, no model, no network.\nMethod: statistical count over the tracked source files\nReproduce: re-run daijin init on this repo at the same commit; identical input produces identical bytes.\nEvidence digest: dda321b7db31c6fc069e206f26ef9075ac5aa67712cdbebbd6037354ee1ed9a2",
+      "content": "# Convention: Indentation\n\nRule: source files indent with spaces, width 1.\nMeasured: 5 of 5 files, mechanically, over the tracked file list.\n\n## Counts\n\n- spaces: 5\n- none: 1\n- tabs: 0\n\n## Exceptions\n\n- none found\n\n## How this was measured\n\ncounted per file over indented lines; a file is classified by whichever of tabs or spaces leads it.\n\n## Provenance\n\nGenerated by Daijin Layer 1. Deterministic, no model, no network.\nMethod: statistical count over the tracked source files\nReproduce: re-run daijin init on this repo at the same commit; identical input produces identical bytes.\nEvidence digest: dda321b7db31c6fc069e206f26ef9075ac5aa67712cdbebbd6037354ee1ed9a2",
+      "contentHash": "eb0e0ee499223f111a31ea56d995126985f424594ca9893da5cce5fdaa8438f6",
+      "core": "Rule: source files indent with spaces, width 1.\nMeasured: 5 of 5 files, mechanically, over the tracked file list.",
+      "citations": [],
+      "meta": {
+        "area": "conventions",
+        "generated": true,
+        "generator": "daijin-layer1",
+        "layer": 1,
+        "citations": [],
+        "evidenceDigest": "dda321b7db31c6fc069e206f26ef9075ac5aa67712cdbebbd6037354ee1ed9a2"
+      }
+    },
+    {
+      "id": "daijin.convention.quotes",
+      "type": "convention",
+      "path": ".daijin/brain/convention/quotes.md",
+      "title": "Convention: String quotes",
+      "tags": [
+        "convention",
+        "generated",
+        "quotes"
+      ],
+      "body": "Rule: JavaScript and TypeScript files prefer single quotes.\nMeasured: 5 of 6 files, mechanically, over the tracked file list.\n\n## Counts\n\n- single: 5\n- double: 1\n\n## Exceptions\n\n- src/signature-path.js\n\n## How this was measured\n\ncounted per file by comparing single-quoted and double-quoted string literals outside comments.\n\n## Provenance\n\nGenerated by Daijin Layer 1. Deterministic, no model, no network.\nMethod: statistical count over the tracked source files\nReproduce: re-run daijin init on this repo at the same commit; identical input produces identical bytes.\nEvidence digest: 295ac536c5758fa724fe835ddab6c12faaaa94e8831058260cecf1761e33e7a5",
+      "content": "# Convention: String quotes\n\nRule: JavaScript and TypeScript files prefer single quotes.\nMeasured: 5 of 6 files, mechanically, over the tracked file list.\n\n## Counts\n\n- single: 5\n- double: 1\n\n## Exceptions\n\n- src/signature-path.js\n\n## How this was measured\n\ncounted per file by comparing single-quoted and double-quoted string literals outside comments.\n\n## Provenance\n\nGenerated by Daijin Layer 1. Deterministic, no model, no network.\nMethod: statistical count over the tracked source files\nReproduce: re-run daijin init on this repo at the same commit; identical input produces identical bytes.\nEvidence digest: 295ac536c5758fa724fe835ddab6c12faaaa94e8831058260cecf1761e33e7a5",
+      "contentHash": "9b77bfad65c05c9f6d71ba3cdb2e4f939e523c62d7e935ecf799bed2dc82c246",
+      "core": "Rule: JavaScript and TypeScript files prefer single quotes.\nMeasured: 5 of 6 files, mechanically, over the tracked file list.",
+      "citations": [
+        "src/signature-path.js"
+      ],
+      "meta": {
+        "area": "conventions",
+        "generated": true,
+        "generator": "daijin-layer1",
+        "layer": 1,
+        "citations": [
+          "src/signature-path.js"
+        ],
+        "evidenceDigest": "295ac536c5758fa724fe835ddab6c12faaaa94e8831058260cecf1761e33e7a5"
+      }
+    },
+    {
+      "id": "daijin.convention.semicolons",
+      "type": "convention",
+      "path": ".daijin/brain/convention/semicolons.md",
+      "title": "Convention: Statement terminators",
+      "tags": [
+        "convention",
+        "generated",
+        "semicolons"
+      ],
+      "body": "Rule: statements are written with terminating semicolons.\nMeasured: 5 of 5 files, mechanically, over the tracked file list.\n\n## Counts\n\n- with: 5\n- without: 0\n\n## Exceptions\n\n- none found\n\n## How this was measured\n\ncounted per file over statement-shaped lines; files with fewer than five such lines are not counted.\n\n## Provenance\n\nGenerated by Daijin Layer 1. Deterministic, no model, no network.\nMethod: statistical count over the tracked source files\nReproduce: re-run daijin init on this repo at the same commit; identical input produces identical bytes.\nEvidence digest: 91bc7f999d3d0fb6a4d7346cd16130f2cf199cd932e19cf005ad37a94b5fa59a",
+      "content": "# Convention: Statement terminators\n\nRule: statements are written with terminating semicolons.\nMeasured: 5 of 5 files, mechanically, over the tracked file list.\n\n## Counts\n\n- with: 5\n- without: 0\n\n## Exceptions\n\n- none found\n\n## How this was measured\n\ncounted per file over statement-shaped lines; files with fewer than five such lines are not counted.\n\n## Provenance\n\nGenerated by Daijin Layer 1. Deterministic, no model, no network.\nMethod: statistical count over the tracked source files\nReproduce: re-run daijin init on this repo at the same commit; identical input produces identical bytes.\nEvidence digest: 91bc7f999d3d0fb6a4d7346cd16130f2cf199cd932e19cf005ad37a94b5fa59a",
+      "contentHash": "8d3869aa577f1f1b1fdbced591e377e9a486ec924d8579d8dfaf0a08b11c3f11",
+      "core": "Rule: statements are written with terminating semicolons.\nMeasured: 5 of 5 files, mechanically, over the tracked file list.",
+      "citations": [],
+      "meta": {
+        "area": "conventions",
+        "generated": true,
+        "generator": "daijin-layer1",
+        "layer": 1,
+        "citations": [],
+        "evidenceDigest": "91bc7f999d3d0fb6a4d7346cd16130f2cf199cd932e19cf005ad37a94b5fa59a"
+      }
+    },
+    {
+      "id": "daijin.convention.modulesystem",
+      "type": "convention",
+      "path": ".daijin/brain/convention/modulesystem.md",
+      "title": "Convention: Module system",
+      "tags": [
+        "convention",
+        "generated",
+        "modulesystem"
+      ],
+      "body": "Rule: modules are ES modules (import and export).\nMeasured: 6 of 6 files, mechanically, over the tracked file list.\n\n## Counts\n\n- esm: 6\n- cjs: 0\n- mixed: 0\n- neither: 0\n\n## Exceptions\n\n- none found\n\n## How this was measured\n\nclassified per file by which module syntax appears; files using both are counted as mixed.\n\n## Provenance\n\nGenerated by Daijin Layer 1. Deterministic, no model, no network.\nMethod: statistical count over the tracked source files\nReproduce: re-run daijin init on this repo at the same commit; identical input produces identical bytes.\nEvidence digest: 0f3a14e62fbad75b672f82be09eee5b8b07a76c83ab292f5626d67a2f60defe4",
+      "content": "# Convention: Module system\n\nRule: modules are ES modules (import and export).\nMeasured: 6 of 6 files, mechanically, over the tracked file list.\n\n## Counts\n\n- esm: 6\n- cjs: 0\n- mixed: 0\n- neither: 0\n\n## Exceptions\n\n- none found\n\n## How this was measured\n\nclassified per file by which module syntax appears; files using both are counted as mixed.\n\n## Provenance\n\nGenerated by Daijin Layer 1. Deterministic, no model, no network.\nMethod: statistical count over the tracked source files\nReproduce: re-run daijin init on this repo at the same commit; identical input produces identical bytes.\nEvidence digest: 0f3a14e62fbad75b672f82be09eee5b8b07a76c83ab292f5626d67a2f60defe4",
+      "contentHash": "9e1c7f3e41e7109047ec34c0be099244bbc9625b57ce82076f17473ff2aec25f",
+      "core": "Rule: modules are ES modules (import and export).\nMeasured: 6 of 6 files, mechanically, over the tracked file list.",
+      "citations": [],
+      "meta": {
+        "area": "conventions",
+        "generated": true,
+        "generator": "daijin-layer1",
+        "layer": 1,
+        "citations": [],
+        "evidenceDigest": "0f3a14e62fbad75b672f82be09eee5b8b07a76c83ab292f5626d67a2f60defe4"
+      }
+    },
+    {
+      "id": "daijin.convention.filenaming",
+      "type": "convention",
+      "path": ".daijin/brain/convention/filenaming.md",
+      "title": "Convention: File naming",
+      "tags": [
+        "convention",
+        "generated",
+        "filenaming"
+      ],
+      "body": "Rule: source file names are kebab-case.\nMeasured: 2 of 6 files, mechanically, over the tracked file list.\n\n## Counts\n\n- kebab-case: 2\n- lowercase: 2\n- PascalCase: 1\n- other: 1\n\n## Exceptions\n\n- none found\n\n## How this was measured\n\nclassified per file name against kebab-case, snake_case, camelCase, PascalCase and lowercase.\n\n## Provenance\n\nGenerated by Daijin Layer 1. Deterministic, no model, no network.\nMethod: statistical count over the tracked source files\nReproduce: re-run daijin init on this repo at the same commit; identical input produces identical bytes.\nEvidence digest: 0b2f46129590e39fa057b82c41f9c920b30638d8e02d1f07aafe6b678c2b0617",
+      "content": "# Convention: File naming\n\nRule: source file names are kebab-case.\nMeasured: 2 of 6 files, mechanically, over the tracked file list.\n\n## Counts\n\n- kebab-case: 2\n- lowercase: 2\n- PascalCase: 1\n- other: 1\n\n## Exceptions\n\n- none found\n\n## How this was measured\n\nclassified per file name against kebab-case, snake_case, camelCase, PascalCase and lowercase.\n\n## Provenance\n\nGenerated by Daijin Layer 1. Deterministic, no model, no network.\nMethod: statistical count over the tracked source files\nReproduce: re-run daijin init on this repo at the same commit; identical input produces identical bytes.\nEvidence digest: 0b2f46129590e39fa057b82c41f9c920b30638d8e02d1f07aafe6b678c2b0617",
+      "contentHash": "8427a362c0528a077d355286c3c78761b6e1b4c8cf3ce2f3a36f19afbc2bfdde",
+      "core": "Rule: source file names are kebab-case.\nMeasured: 2 of 6 files, mechanically, over the tracked file list.",
+      "citations": [],
+      "meta": {
+        "area": "conventions",
+        "generated": true,
+        "generator": "daijin-layer1",
+        "layer": 1,
+        "citations": [],
+        "evidenceDigest": "0b2f46129590e39fa057b82c41f9c920b30638d8e02d1f07aafe6b678c2b0617"
+      }
+    },
+    {
+      "id": "daijin.workflow.history",
+      "type": "workflow",
+      "path": ".daijin/brain/workflow/history.md",
+      "title": "How this repository changes",
+      "tags": [
+        "workflow",
+        "history",
+        "generated"
+      ],
+      "body": "Pattern: 67 commits walked from 4 authors, 2026-07-04T02:59:43+09:00 to 2026-08-14T17:06:00+09:00; the most changed file is src/main.jsx at 34 commits.\nMeasured: git log --numstat, 67 of 67 commits (cap 2000, not reached).\n\n## Most changed files\n\n- src/main.jsx (34 commits, 3 authors, +3989/-926)\n- scripts/fetch-contributions.mjs (2 commits, 1 authors, +160/-2)\n- src/signature-path.js (2 commits, 1 authors, +10/-1)\n- vite.config.js (2 commits, 1 authors, +41/-1)\n- api/visits.mjs (1 commits, 1 authors, +94/-0)\n- src/DaijinMascot.jsx (1 commits, 1 authors, +157/-0)\n\n## Files that change together\n\n- no pair changed together often enough to report\n\n## Authors\n\n- github-actions[bot] (27 commits, 0 files)\n- mohamedfuad16 (21 commits, 3 files)\n- MohamedFuad16 (18 commits, 4 files)\n- Mohamed Fuad (1 commits, 1 files)\n\n## Repair activity\n\n9 commits are described as fixes and 0 as reverts in the window above. They are recorded as evidence and deliberately NOT written up as lessons here: a lesson must be validated against the real commit before it enters the brain, and Layer 1 does no narration.\n\n## Provenance\n\nGenerated by Daijin Layer 1. Deterministic, no model, no network.\nMethod: git log --numstat walk, capped and reported\nReproduce: re-run daijin init on this repo at the same commit; identical input produces identical bytes.\nEvidence digest: 9356ed43efcab0edec243e6a71bf64778ccc2fc2bbfa2fe4014e3d984436d309",
+      "content": "# How this repository changes\n\nPattern: 67 commits walked from 4 authors, 2026-07-04T02:59:43+09:00 to 2026-08-14T17:06:00+09:00; the most changed file is src/main.jsx at 34 commits.\nMeasured: git log --numstat, 67 of 67 commits (cap 2000, not reached).\n\n## Most changed files\n\n- src/main.jsx (34 commits, 3 authors, +3989/-926)\n- scripts/fetch-contributions.mjs (2 commits, 1 authors, +160/-2)\n- src/signature-path.js (2 commits, 1 authors, +10/-1)\n- vite.config.js (2 commits, 1 authors, +41/-1)\n- api/visits.mjs (1 commits, 1 authors, +94/-0)\n- src/DaijinMascot.jsx (1 commits, 1 authors, +157/-0)\n\n## Files that change together\n\n- no pair changed together often enough to report\n\n## Authors\n\n- github-actions[bot] (27 commits, 0 files)\n- mohamedfuad16 (21 commits, 3 files)\n- MohamedFuad16 (18 commits, 4 files)\n- Mohamed Fuad (1 commits, 1 files)\n\n## Repair activity\n\n9 commits are described as fixes and 0 as reverts in the window above. They are recorded as evidence and deliberately NOT written up as lessons here: a lesson must be validated against the real commit before it enters the brain, and Layer 1 does no narration.\n\n## Provenance\n\nGenerated by Daijin Layer 1. Deterministic, no model, no network.\nMethod: git log --numstat walk, capped and reported\nReproduce: re-run daijin init on this repo at the same commit; identical input produces identical bytes.\nEvidence digest: 9356ed43efcab0edec243e6a71bf64778ccc2fc2bbfa2fe4014e3d984436d309",
+      "contentHash": "79dba2e6474d842a56fbafe770401e997ca671768de18abe36770eca8f48be26",
+      "core": "Pattern: 67 commits walked from 4 authors, 2026-07-04T02:59:43+09:00 to 2026-08-14T17:06:00+09:00; the most changed file is src/main.jsx at 34 commits.\nMeasured: git log --numstat, 67 of 67 commits (cap 2000, not reached).",
+      "citations": [
+        "src/main.jsx",
+        "scripts/fetch-contributions.mjs",
+        "src/signature-path.js",
+        "vite.config.js",
+        "api/visits.mjs",
+        "src/DaijinMascot.jsx"
+      ],
+      "meta": {
+        "area": "history",
+        "generated": true,
+        "generator": "daijin-layer1",
+        "layer": 1,
+        "citations": [
+          "src/main.jsx",
+          "scripts/fetch-contributions.mjs",
+          "src/signature-path.js",
+          "vite.config.js",
+          "api/visits.mjs",
+          "src/DaijinMascot.jsx"
+        ],
+        "evidenceDigest": "9356ed43efcab0edec243e6a71bf64778ccc2fc2bbfa2fe4014e3d984436d309"
+      }
+    }
+  ],
+  "evidence": {
+    "repoPath": "/Users/mfuad16/Documents/GitHub/portfolio-mine",
+    "name": "portfolio-mine",
+    "files": {
+      "count": 73,
+      "source": "git-ls-files",
+      "truncated": false,
+      "limit": 50000
+    },
+    "languages": [
+      {
+        "language": "webp",
+        "files": 18,
+        "bytes": 12864414
+      },
+      {
+        "language": "Markdown",
+        "files": 14,
+        "bytes": 198911
+      },
+      {
+        "language": "png",
+        "files": 11,
+        "bytes": 315567
+      },
+      {
+        "language": "JavaScript",
+        "files": 6,
+        "bytes": 154812
+      },
+      {
+        "language": "svg",
+        "files": 4,
+        "bytes": 43187
+      },
+      {
+        "language": "JSON",
+        "files": 3,
+        "bytes": 28633
+      },
+      {
+        "language": "jpg",
+        "files": 3,
+        "bytes": 280370
+      },
+      {
+        "language": "YAML",
+        "files": 2,
+        "bytes": 20590
+      },
+      {
+        "language": "no-extension",
+        "files": 2,
+        "bytes": 61
+      },
+      {
+        "language": "pdf",
+        "files": 2,
+        "bytes": 134453
+      },
+      {
+        "language": "CSS",
+        "files": 1,
+        "bytes": 47758
+      },
+      {
+        "language": "HTML",
+        "files": 1,
+        "bytes": 1030
+      },
+      {
+        "language": "d2",
+        "files": 1,
+        "bytes": 1126
+      },
+      {
+        "language": "dot",
+        "files": 1,
+        "bytes": 29460
+      },
+      {
+        "language": "ico",
+        "files": 1,
+        "bytes": 22446
+      },
+      {
+        "language": "mdc",
+        "files": 1,
+        "bytes": 179
+      },
+      {
+        "language": "wav",
+        "files": 1,
+        "bytes": 635770
+      },
+      {
+        "language": "woff2",
+        "files": 1,
+        "bytes": 24956
+      }
+    ],
+    "structure": {
+      "totalFiles": 73,
+      "sourceFiles": 6,
+      "totalBytes": 14803723,
+      "maxDepth": 4,
+      "topLevel": [
+        {
+          "name": "public",
+          "files": 41,
+          "bytes": 14310821,
+          "directory": true
+        },
+        {
+          "name": "agent",
+          "files": 14,
+          "bytes": 261020,
+          "directory": true
+        },
+        {
+          "name": "(root files)",
+          "files": 9,
+          "bytes": 28991,
+          "directory": false
+        },
+        {
+          "name": "src",
+          "files": 4,
+          "bytes": 191729,
+          "directory": true
+        },
+        {
+          "name": ".claude",
+          "files": 1,
+          "bytes": 266,
+          "directory": true
+        },
+        {
+          "name": ".cursor",
+          "files": 1,
+          "bytes": 179,
+          "directory": true
+        },
+        {
+          "name": ".github",
+          "files": 1,
+          "bytes": 1361,
+          "directory": true
+        },
+        {
+          "name": "api",
+          "files": 1,
+          "bytes": 3855,
+          "directory": true
+        },
+        {
+          "name": "scripts",
+          "files": 1,
+          "bytes": 5501,
+          "directory": true
+        }
+      ],
+      "manifests": [
+        "package.json"
+      ],
+      "areas": [
+        {
+          "area": "src",
+          "fileCount": 3
+        },
+        {
+          "area": "(root)",
+          "fileCount": 1
+        },
+        {
+          "area": "api",
+          "fileCount": 1
+        },
+        {
+          "area": "scripts",
+          "fileCount": 1
+        }
+      ]
+    },
+    "graph": {
+      "edges": [
+        {
+          "src": "src/main.jsx",
+          "dst": "src/DaijinMascot.jsx"
+        },
+        {
+          "src": "src/main.jsx",
+          "dst": "src/signature-path.js"
+        }
+      ],
+      "inDegree": {},
+      "outDegree": {},
+      "external": [
+        {
+          "specifier": "react",
+          "files": [
+            "src/DaijinMascot.jsx",
+            "src/main.jsx"
+          ],
+          "fileCount": 2,
+          "builtin": false
+        },
+        {
+          "specifier": "@gsap/react",
+          "files": [
+            "src/main.jsx"
+          ],
+          "fileCount": 1,
+          "builtin": false
+        },
+        {
+          "specifier": "@vitejs/plugin-react",
+          "files": [
+            "vite.config.js"
+          ],
+          "fileCount": 1,
+          "builtin": false
+        },
+        {
+          "specifier": "border-beam",
+          "files": [
+            "src/main.jsx"
+          ],
+          "fileCount": 1,
+          "builtin": false
+        },
+        {
+          "specifier": "gsap",
+          "files": [
+            "src/main.jsx"
+          ],
+          "fileCount": 1,
+          "builtin": false
+        },
+        {
+          "specifier": "lucide-react",
+          "files": [
+            "src/main.jsx"
+          ],
+          "fileCount": 1,
+          "builtin": false
+        },
+        {
+          "specifier": "node:crypto",
+          "files": [
+            "api/visits.mjs"
+          ],
+          "fileCount": 1,
+          "builtin": true
+        },
+        {
+          "specifier": "node:fs",
+          "files": [
+            "scripts/fetch-contributions.mjs"
+          ],
+          "fileCount": 1,
+          "builtin": true
+        },
+        {
+          "specifier": "node:path",
+          "files": [
+            "scripts/fetch-contributions.mjs"
+          ],
+          "fileCount": 1,
+          "builtin": true
+        },
+        {
+          "specifier": "node:url",
+          "files": [
+            "scripts/fetch-contributions.mjs"
+          ],
+          "fileCount": 1,
+          "builtin": true
+        },
+        {
+          "specifier": "react-dom",
+          "files": [
+            "src/main.jsx"
+          ],
+          "fileCount": 1,
+          "builtin": false
+        },
+        {
+          "specifier": "react-icons",
+          "files": [
+            "src/main.jsx"
+          ],
+          "fileCount": 1,
+          "builtin": false
+        },
+        {
+          "specifier": "thinking-orbs",
+          "files": [
+            "src/main.jsx"
+          ],
+          "fileCount": 1,
+          "builtin": false
+        },
+        {
+          "specifier": "vite",
+          "files": [
+            "vite.config.js"
+          ],
+          "fileCount": 1,
+          "builtin": false
+        }
+      ],
+      "unresolved": [
+        {
+          "file": "src/main.jsx",
+          "specifier": "./styles.css"
+        }
+      ]
+    },
+    "dependencies": {
+      "declared": [
+        {
+          "name": "react",
+          "versions": [
+            "^19.2.8"
+          ],
+          "scopes": [
+            "dependencies"
+          ],
+          "manifests": [
+            "package.json"
+          ],
+          "importedByFiles": 2
+        },
+        {
+          "name": "@gsap/react",
+          "versions": [
+            "^2.1.2"
+          ],
+          "scopes": [
+            "dependencies"
+          ],
+          "manifests": [
+            "package.json"
+          ],
+          "importedByFiles": 1
+        },
+        {
+          "name": "@vitejs/plugin-react",
+          "versions": [
+            "^6.0.4"
+          ],
+          "scopes": [
+            "devDependencies"
+          ],
+          "manifests": [
+            "package.json"
+          ],
+          "importedByFiles": 1
+        },
+        {
+          "name": "border-beam",
+          "versions": [
+            "^1.3.0"
+          ],
+          "scopes": [
+            "dependencies"
+          ],
+          "manifests": [
+            "package.json"
+          ],
+          "importedByFiles": 1
+        },
+        {
+          "name": "gsap",
+          "versions": [
+            "^3.15.0"
+          ],
+          "scopes": [
+            "dependencies"
+          ],
+          "manifests": [
+            "package.json"
+          ],
+          "importedByFiles": 1
+        },
+        {
+          "name": "lucide-react",
+          "versions": [
+            "^1.26.0"
+          ],
+          "scopes": [
+            "dependencies"
+          ],
+          "manifests": [
+            "package.json"
+          ],
+          "importedByFiles": 1
+        },
+        {
+          "name": "react-dom",
+          "versions": [
+            "^19.2.8"
+          ],
+          "scopes": [
+            "dependencies"
+          ],
+          "manifests": [
+            "package.json"
+          ],
+          "importedByFiles": 1
+        },
+        {
+          "name": "react-icons",
+          "versions": [
+            "^5.7.0"
+          ],
+          "scopes": [
+            "dependencies"
+          ],
+          "manifests": [
+            "package.json"
+          ],
+          "importedByFiles": 1
+        },
+        {
+          "name": "thinking-orbs",
+          "versions": [
+            "^0.1.1"
+          ],
+          "scopes": [
+            "dependencies"
+          ],
+          "manifests": [
+            "package.json"
+          ],
+          "importedByFiles": 1
+        },
+        {
+          "name": "vite",
+          "versions": [
+            "^8.1.5"
+          ],
+          "scopes": [
+            "devDependencies"
+          ],
+          "manifests": [
+            "package.json"
+          ],
+          "importedByFiles": 1
+        }
+      ],
+      "declaredCount": 10,
+      "unusedDeclared": [],
+      "undeclaredImports": [],
+      "usedRatio": {
+        "count": 10,
+        "total": 10,
+        "exact": 1,
+        "display": "10 of 10"
+      }
+    },
+    "conventions": {
+      "files": 6,
+      "jsFiles": 6,
+      "indentation": {
+        "dominant": "spaces",
+        "width": 1,
+        "counts": {
+          "spaces": 5,
+          "tabs": 0,
+          "none": 1
+        },
+        "measured": {
+          "count": 5,
+          "total": 5,
+          "exact": 1,
+          "display": "5 of 5"
+        },
+        "exceptions": []
+      },
+      "quotes": {
+        "dominant": "single",
+        "counts": {
+          "single": 5,
+          "double": 1
+        },
+        "measured": {
+          "count": 5,
+          "total": 6,
+          "exact": 0.8333333333333334,
+          "display": "5 of 6"
+        },
+        "exceptions": [
+          "src/signature-path.js"
+        ]
+      },
+      "semicolons": {
+        "dominant": "with",
+        "counts": {
+          "with": 5,
+          "without": 0
+        },
+        "measured": {
+          "count": 5,
+          "total": 5,
+          "exact": 1,
+          "display": "5 of 5"
+        },
+        "exceptions": []
+      },
+      "moduleSystem": {
+        "dominant": "esm",
+        "counts": {
+          "esm": 6,
+          "cjs": 0,
+          "mixed": 0,
+          "neither": 0
+        },
+        "measured": {
+          "count": 6,
+          "total": 6,
+          "exact": 1,
+          "display": "6 of 6"
+        },
+        "exceptions": []
+      },
+      "fileNaming": {
+        "dominant": "kebab-case",
+        "counts": {
+          "lowercase": 2,
+          "kebab-case": 2,
+          "PascalCase": 1,
+          "other": 1
+        },
+        "measured": {
+          "count": 2,
+          "total": 6,
+          "exact": 0.3333333333333333,
+          "display": "2 of 6"
+        }
+      },
+      "lineEndings": {
+        "lf": 6,
+        "crlf": 0
+      }
+    },
+    "testLayout": {
+      "testFiles": 0,
+      "sourceFiles": 6,
+      "dominant": null,
+      "counts": {
+        "top-level-directory": 0,
+        "colocated": 0,
+        "__tests__": 0
+      },
+      "measured": {
+        "count": 0,
+        "total": 6,
+        "exact": 0,
+        "display": "0 of 6"
+      },
+      "sample": []
+    },
+    "symbols": {
+      "byFile": {},
+      "byName": {},
+      "unique": [
+        {
+          "name": "DaijinMascot",
+          "file": "src/DaijinMascot.jsx"
+        },
+        {
+          "name": "handler",
+          "file": "api/visits.mjs"
+        },
+        {
+          "name": "signatureDot",
+          "file": "src/signature-path.js"
+        },
+        {
+          "name": "signaturePath",
+          "file": "src/signature-path.js"
+        },
+        {
+          "name": "signatureStrokeWidth",
+          "file": "src/signature-path.js"
+        },
+        {
+          "name": "signatureViewBox",
+          "file": "src/signature-path.js"
+        }
+      ],
+      "total": 6
+    },
+    "history": {
+      "available": true,
+      "reason": null,
+      "commits": 67,
+      "capped": false,
+      "cap": 2000,
+      "total": 67,
+      "firstCommit": "2026-07-04T02:59:43+09:00",
+      "lastCommit": "2026-08-14T17:06:00+09:00",
+      "authors": [
+        {
+          "name": "github-actions[bot]",
+          "email": "41898282+github-actions[bot]@users.noreply.github.com",
+          "commits": 27,
+          "files": 0
+        },
+        {
+          "name": "mohamedfuad16",
+          "email": "Mohamed.fuad.jp@gmail.com",
+          "commits": 21,
+          "files": 3
+        },
+        {
+          "name": "MohamedFuad16",
+          "email": "4cje1108@tokai.ac.jp",
+          "commits": 18,
+          "files": 4
+        },
+        {
+          "name": "Mohamed Fuad",
+          "email": "mfuad16@Mohameds-Mac-mini.local",
+          "commits": 1,
+          "files": 1
+        }
+      ],
+      "hotFiles": [
+        {
+          "file": "src/main.jsx",
+          "commits": 34,
+          "added": 3989,
+          "deleted": 926,
+          "authors": 3
+        },
+        {
+          "file": "scripts/fetch-contributions.mjs",
+          "commits": 2,
+          "added": 160,
+          "deleted": 2,
+          "authors": 1
+        },
+        {
+          "file": "src/signature-path.js",
+          "commits": 2,
+          "added": 10,
+          "deleted": 1,
+          "authors": 1
+        },
+        {
+          "file": "vite.config.js",
+          "commits": 2,
+          "added": 41,
+          "deleted": 1,
+          "authors": 1
+        },
+        {
+          "file": "api/visits.mjs",
+          "commits": 1,
+          "added": 94,
+          "deleted": 0,
+          "authors": 1
+        },
+        {
+          "file": "src/DaijinMascot.jsx",
+          "commits": 1,
+          "added": 157,
+          "deleted": 0,
+          "authors": 1
+        }
+      ],
+      "coChange": [],
+      "fixCommits": [
+        {
+          "sha": "e1a5b4172ca8",
+          "subject": "Fix the project-open animation and the contribution window",
+          "files": [
+            "src/main.jsx"
+          ]
+        },
+        {
+          "sha": "da041b7681e5",
+          "subject": "Fix ten copy defects found sweeping the site after the snapshot pull",
+          "files": [
+            "src/main.jsx"
+          ]
+        },
+        {
+          "sha": "c609016d7811",
+          "subject": "Fix the close target, add shimmer heading and a visitor counter",
+          "files": [
+            "api/visits.mjs",
+            "src/main.jsx",
+            "vite.config.js"
+          ]
+        },
+        {
+          "sha": "1ad4d5017978",
+          "subject": "Fix the mobile card-expand glitch: pin the clone to the origin card",
+          "files": [
+            "src/main.jsx"
+          ]
+        },
+        {
+          "sha": "c1a44e00ebf7",
+          "subject": "Fix repo-wide bugs: layout drift, modal semantics, toolchain pinning",
+          "files": [
+            "scripts/fetch-contributions.mjs",
+            "src/main.jsx",
+            "vite.config.js"
+          ]
+        },
+        {
+          "sha": "495dc2a7090e",
+          "subject": "Fix invisible flow chart connector lines",
+          "files": [
+            "src/main.jsx"
+          ]
+        },
+        {
+          "sha": "730551f39c88",
+          "subject": "Fix mobile detail header lagging behind the hero image on open",
+          "files": [
+            "src/main.jsx"
+          ]
+        },
+        {
+          "sha": "6b31a2101312",
+          "subject": "Fix avatar glow offset and real mobile card-expand bug, split bio, redesign flow charts",
+          "files": [
+            "src/main.jsx"
+          ]
+        },
+        {
+          "sha": "ac651aea1f9a",
+          "subject": "Fix avatar glow bleed and dead contribution/experience section on mobile",
+          "files": [
+            "src/main.jsx"
+          ]
+        }
+      ],
+      "revertCommits": []
+    },
+    "areas": [
+      {
+        "area": "src",
+        "files": [
+          "src/DaijinMascot.jsx",
+          "src/main.jsx",
+          "src/signature-path.js"
+        ],
+        "fileCount": 3,
+        "inDegree": 2,
+        "outDegree": 2,
+        "importsOut": [],
+        "importedBy": [],
+        "external": [
+          {
+            "name": "react",
+            "count": 2
+          },
+          {
+            "name": "@gsap/react",
+            "count": 1
+          },
+          {
+            "name": "border-beam",
+            "count": 1
+          },
+          {
+            "name": "gsap",
+            "count": 1
+          },
+          {
+            "name": "lucide-react",
+            "count": 1
+          },
+          {
+            "name": "react-dom",
+            "count": 1
+          },
+          {
+            "name": "react-icons",
+            "count": 1
+          },
+          {
+            "name": "thinking-orbs",
+            "count": 1
+          }
+        ],
+        "builtins": [],
+        "commits": 37
+      },
+      {
+        "area": "(root)",
+        "files": [
+          "vite.config.js"
+        ],
+        "fileCount": 1,
+        "inDegree": 0,
+        "outDegree": 0,
+        "importsOut": [],
+        "importedBy": [],
+        "external": [
+          {
+            "name": "@vitejs/plugin-react",
+            "count": 1
+          },
+          {
+            "name": "vite",
+            "count": 1
+          }
+        ],
+        "builtins": [],
+        "commits": 2
+      },
+      {
+        "area": "api",
+        "files": [
+          "api/visits.mjs"
+        ],
+        "fileCount": 1,
+        "inDegree": 0,
+        "outDegree": 0,
+        "importsOut": [],
+        "importedBy": [],
+        "external": [],
+        "builtins": [
+          {
+            "name": "node:crypto",
+            "count": 1
+          }
+        ],
+        "commits": 1
+      },
+      {
+        "area": "scripts",
+        "files": [
+          "scripts/fetch-contributions.mjs"
+        ],
+        "fileCount": 1,
+        "inDegree": 0,
+        "outDegree": 0,
+        "importsOut": [],
+        "importedBy": [],
+        "external": [],
+        "builtins": [
+          {
+            "name": "node:fs",
+            "count": 1
+          },
+          {
+            "name": "node:path",
+            "count": 1
+          },
+          {
+            "name": "node:url",
+            "count": 1
+          }
+        ],
+        "commits": 2
+      }
+    ]
+  },
+  "goldsetFile": "/private/tmp/claude-501/-Users-mfuad16-Documents-Codex-2026-07-21-hand-ai-brain-build-instructions-md-ai-brain-platform/e95b2f5e-687e-47b1-a3be-17bfadbc8b2e/scratchpad/p3-live/artifacts/.daijin/goldset.yaml",
+  "cases": [
+    {
+      "id": "g001",
+      "key": "commit-archaeology:251de0d2f529#777b751d",
+      "query": "Polish interaction animations: hover feedback everywhere, fix tooltip fade-out bug",
+      "must_return": [
+        "daijin.architecture.src"
+      ],
+      "provenance": "commit-archaeology:251de0d2f529",
+      "source": "commit-archaeology",
+      "why": "Commit 251de0d2f529 changed only src, so an engineer asking about that work should receive the src module card.",
+      "target": {
+        "kind": "commit",
+        "sha": "251de0d2f529",
+        "area": "src"
+      }
+    },
+    {
+      "id": "g002",
+      "key": "structural:convention:fileNaming#63215c12",
+      "query": "how are source files named in this project",
+      "must_return": [
+        "daijin.convention.filenaming"
+      ],
+      "provenance": "structural:convention:fileNaming",
+      "source": "structural",
+      "why": "The fileNaming convention is measured statistically and written up as one card, so this question has exactly one answer.",
+      "target": {
+        "kind": "unit",
+        "id": "daijin.convention.filenaming"
+      }
+    },
+    {
+      "id": "g003",
+      "key": "structural:convention:indentation#8de41132",
+      "query": "how is code indented in this repo",
+      "must_return": [
+        "daijin.convention.indentation"
+      ],
+      "provenance": "structural:convention:indentation",
+      "source": "structural",
+      "why": "The indentation convention is measured statistically and written up as one card, so this question has exactly one answer.",
+      "target": {
+        "kind": "unit",
+        "id": "daijin.convention.indentation"
+      }
+    },
+    {
+      "id": "g004",
+      "key": "structural:convention:moduleSystem#ab3a27e4",
+      "query": "does this project use ES modules or CommonJS",
+      "must_return": [
+        "daijin.convention.modulesystem"
+      ],
+      "provenance": "structural:convention:moduleSystem",
+      "source": "structural",
+      "why": "The moduleSystem convention is measured statistically and written up as one card, so this question has exactly one answer.",
+      "target": {
+        "kind": "unit",
+        "id": "daijin.convention.modulesystem"
+      }
+    },
+    {
+      "id": "g005",
+      "key": "structural:convention:quotes#7d794530",
+      "query": "single or double quotes for strings here",
+      "must_return": [
+        "daijin.convention.quotes"
+      ],
+      "provenance": "structural:convention:quotes",
+      "source": "structural",
+      "why": "The quotes convention is measured statistically and written up as one card, so this question has exactly one answer.",
+      "target": {
+        "kind": "unit",
+        "id": "daijin.convention.quotes"
+      }
+    },
+    {
+      "id": "g006",
+      "key": "structural:convention:semicolons#83435253",
+      "query": "are semicolons used at the end of statements",
+      "must_return": [
+        "daijin.convention.semicolons"
+      ],
+      "provenance": "structural:convention:semicolons",
+      "source": "structural",
+      "why": "The semicolons convention is measured statistically and written up as one card, so this question has exactly one answer.",
+      "target": {
+        "kind": "unit",
+        "id": "daijin.convention.semicolons"
+      }
+    },
+    {
+      "id": "g007",
+      "key": "structural:dependencies#a7e61e3f",
+      "query": "which third party dependencies does this project declare",
+      "must_return": [
+        "daijin.architecture.dependencies"
+      ],
+      "provenance": "structural:dependencies",
+      "source": "structural",
+      "why": "The dependency census is one card crossing the manifests with the import graph.",
+      "target": {
+        "kind": "unit",
+        "id": "daijin.architecture.dependencies"
+      }
+    },
+    {
+      "id": "g008",
+      "key": "structural:history#82f1062e",
+      "query": "which files change most often in this repo",
+      "must_return": [
+        "daijin.workflow.history"
+      ],
+      "provenance": "structural:history",
+      "source": "structural",
+      "why": "Change frequency and authorship are measured in one history card, so this question has exactly one answer.",
+      "target": {
+        "kind": "unit",
+        "id": "daijin.workflow.history"
+      }
+    },
+    {
+      "id": "g009",
+      "key": "structural:history#13739fee",
+      "query": "who has been changing this codebase",
+      "must_return": [
+        "daijin.workflow.history"
+      ],
+      "provenance": "structural:history",
+      "source": "structural",
+      "why": "Change frequency and authorship are measured in one history card, so this question has exactly one answer.",
+      "target": {
+        "kind": "unit",
+        "id": "daijin.workflow.history"
+      }
+    },
+    {
+      "id": "g010",
+      "key": "structural:sole-consumer:@gsap/react#dce2b183",
+      "query": "where is the @gsap/react package used",
+      "must_return": [
+        "daijin.architecture.src"
+      ],
+      "provenance": "structural:sole-consumer:@gsap/react",
+      "source": "structural",
+      "why": "@gsap/react is imported only from src, measured from the import graph.",
+      "target": {
+        "kind": "area",
+        "area": "src"
+      }
+    },
+    {
+      "id": "g011",
+      "key": "structural:sole-consumer:@vitejs/plugin-react#6fce6f57",
+      "query": "where is the @vitejs/plugin-react package used",
+      "must_return": [
+        "daijin.architecture.root"
+      ],
+      "provenance": "structural:sole-consumer:@vitejs/plugin-react",
+      "source": "structural",
+      "why": "@vitejs/plugin-react is imported only from (root), measured from the import graph.",
+      "target": {
+        "kind": "area",
+        "area": "(root)"
+      }
+    },
+    {
+      "id": "g012",
+      "key": "structural:sole-consumer:border-beam#7cd22821",
+      "query": "where is the border-beam package used",
+      "must_return": [
+        "daijin.architecture.src"
+      ],
+      "provenance": "structural:sole-consumer:border-beam",
+      "source": "structural",
+      "why": "border-beam is imported only from src, measured from the import graph.",
+      "target": {
+        "kind": "area",
+        "area": "src"
+      }
+    },
+    {
+      "id": "g013",
+      "key": "structural:sole-consumer:gsap#bc417407",
+      "query": "where is the gsap package used",
+      "must_return": [
+        "daijin.architecture.src"
+      ],
+      "provenance": "structural:sole-consumer:gsap",
+      "source": "structural",
+      "why": "gsap is imported only from src, measured from the import graph.",
+      "target": {
+        "kind": "area",
+        "area": "src"
+      }
+    },
+    {
+      "id": "g014",
+      "key": "structural:sole-consumer:lucide-react#092b2472",
+      "query": "where is the lucide-react package used",
+      "must_return": [
+        "daijin.architecture.src"
+      ],
+      "provenance": "structural:sole-consumer:lucide-react",
+      "source": "structural",
+      "why": "lucide-react is imported only from src, measured from the import graph.",
+      "target": {
+        "kind": "area",
+        "area": "src"
+      }
+    },
+    {
+      "id": "g015",
+      "key": "structural:sole-consumer:node:crypto#f278e273",
+      "query": "where is the node:crypto built-in module used",
+      "must_return": [
+        "daijin.architecture.api"
+      ],
+      "provenance": "structural:sole-consumer:node:crypto",
+      "source": "structural",
+      "why": "node:crypto is imported only from api, measured from the import graph.",
+      "target": {
+        "kind": "area",
+        "area": "api"
+      }
+    },
+    {
+      "id": "g016",
+      "key": "structural:sole-consumer:node:fs#4ebe0d71",
+      "query": "where is the node:fs built-in module used",
+      "must_return": [
+        "daijin.architecture.scripts"
+      ],
+      "provenance": "structural:sole-consumer:node:fs",
+      "source": "structural",
+      "why": "node:fs is imported only from scripts, measured from the import graph.",
+      "target": {
+        "kind": "area",
+        "area": "scripts"
+      }
+    },
+    {
+      "id": "g017",
+      "key": "structural:sole-consumer:node:path#4e0cbf93",
+      "query": "where is the node:path built-in module used",
+      "must_return": [
+        "daijin.architecture.scripts"
+      ],
+      "provenance": "structural:sole-consumer:node:path",
+      "source": "structural",
+      "why": "node:path is imported only from scripts, measured from the import graph.",
+      "target": {
+        "kind": "area",
+        "area": "scripts"
+      }
+    },
+    {
+      "id": "g018",
+      "key": "structural:sole-consumer:node:url#a158b09e",
+      "query": "where is the node:url built-in module used",
+      "must_return": [
+        "daijin.architecture.scripts"
+      ],
+      "provenance": "structural:sole-consumer:node:url",
+      "source": "structural",
+      "why": "node:url is imported only from scripts, measured from the import graph.",
+      "target": {
+        "kind": "area",
+        "area": "scripts"
+      }
+    },
+    {
+      "id": "g019",
+      "key": "structural:sole-consumer:react#fda0a9c2",
+      "query": "where is the react package used",
+      "must_return": [
+        "daijin.architecture.src"
+      ],
+      "provenance": "structural:sole-consumer:react",
+      "source": "structural",
+      "why": "react is imported only from src, measured from the import graph.",
+      "target": {
+        "kind": "area",
+        "area": "src"
+      }
+    },
+    {
+      "id": "g020",
+      "key": "structural:sole-consumer:vite#a834a789",
+      "query": "where is the vite package used",
+      "must_return": [
+        "daijin.architecture.root"
+      ],
+      "provenance": "structural:sole-consumer:vite",
+      "source": "structural",
+      "why": "vite is imported only from (root), measured from the import graph.",
+      "target": {
+        "kind": "area",
+        "area": "(root)"
+      }
+    },
+    {
+      "id": "g021",
+      "key": "identifier:DaijinMascot#63549aef",
+      "query": "DaijinMascot",
+      "must_return": [
+        "daijin.architecture.src"
+      ],
+      "identifier": true,
+      "provenance": "identifier:DaijinMascot",
+      "source": "identifier",
+      "why": "DaijinMascot is defined in exactly one file (src/DaijinMascot.jsx), so the card for src is the only correct answer to the bare token.",
+      "target": {
+        "kind": "symbol",
+        "name": "DaijinMascot",
+        "file": "src/DaijinMascot.jsx",
+        "area": "src"
+      }
+    },
+    {
+      "id": "g022",
+      "key": "identifier:handler#3128389b",
+      "query": "handler",
+      "must_return": [
+        "daijin.architecture.api"
+      ],
+      "identifier": true,
+      "provenance": "identifier:handler",
+      "source": "identifier",
+      "why": "handler is defined in exactly one file (api/visits.mjs), so the card for api is the only correct answer to the bare token.",
+      "target": {
+        "kind": "symbol",
+        "name": "handler",
+        "file": "api/visits.mjs",
+        "area": "api"
+      }
+    },
+    {
+      "id": "g023",
+      "key": "identifier:signatureDot#c91139ee",
+      "query": "signatureDot",
+      "must_return": [
+        "daijin.architecture.src"
+      ],
+      "identifier": true,
+      "provenance": "identifier:signatureDot",
+      "source": "identifier",
+      "why": "signatureDot is defined in exactly one file (src/signature-path.js), so the card for src is the only correct answer to the bare token.",
+      "target": {
+        "kind": "symbol",
+        "name": "signatureDot",
+        "file": "src/signature-path.js",
+        "area": "src"
+      }
+    },
+    {
+      "id": "g024",
+      "key": "identifier:signaturePath#ed233e63",
+      "query": "signaturePath",
+      "must_return": [
+        "daijin.architecture.src"
+      ],
+      "identifier": true,
+      "provenance": "identifier:signaturePath",
+      "source": "identifier",
+      "why": "signaturePath is defined in exactly one file (src/signature-path.js), so the card for src is the only correct answer to the bare token.",
+      "target": {
+        "kind": "symbol",
+        "name": "signaturePath",
+        "file": "src/signature-path.js",
+        "area": "src"
+      }
+    },
+    {
+      "id": "g025",
+      "key": "identifier:signatureStrokeWidth#e8592a32",
+      "query": "signatureStrokeWidth",
+      "must_return": [
+        "daijin.architecture.src"
+      ],
+      "identifier": true,
+      "provenance": "identifier:signatureStrokeWidth",
+      "source": "identifier",
+      "why": "signatureStrokeWidth is defined in exactly one file (src/signature-path.js), so the card for src is the only correct answer to the bare token.",
+      "target": {
+        "kind": "symbol",
+        "name": "signatureStrokeWidth",
+        "file": "src/signature-path.js",
+        "area": "src"
+      }
+    }
+  ],
+  "pin": {
+    "designated": "81d453aaf200ecc1c27dfdca6f8b201bb976736a",
+    "ranAgainst": "81d453aaf200ecc1c27dfdca6f8b201bb976736a",
+    "treeCleanAtRunTime": true
+  },
+  "embedder": {
+    "provider": "ollama",
+    "model": "bge-m3:latest",
+    "digest": "7907646426070047a77226ac3e684fbbe8410524f7b4a74d02837e43f2146bab",
+    "dimension": 1024,
+    "serverVersion": "0.32.1",
+    "embedderId": "ollama:bge-m3@7907646426070047a77226ac3e684fbbe8410524f7b4a74d02837e43f2146bab"
+  }
+}

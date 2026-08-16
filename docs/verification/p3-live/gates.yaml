@@ -1,0 +1,41 @@
+# Daijin discovered gates. This file is DATA: edit it, and the engine obeys it.
+#
+# classification is what the baseline run measured, not an opinion:
+#   live        passed on the untouched repo, so a failure means your edit
+#   measured    printed GATE_METRIC, so it is judged on movement, not on a threshold
+#   pre-broken  already failed on the untouched repo. DISABLED on purpose: a gate that
+#               fails either way cannot tell a good edit from a bad one, and counting
+#               it as coverage is how a repo reports checks it does not have.
+#   unavailable its runtime is not installed here. Also disabled, also not coverage.
+#
+# Re-enabling a pre-broken gate is allowed and is a real choice: fix the repo first,
+# or the gym will attribute a pre-existing failure to the run under test.
+version: 1
+discoveredAt: 2026-08-16T03:24:25.958Z
+timeoutMs: 120000
+summary:
+  total: 1
+  live: 0
+  measured: 0
+  preBroken: 0
+  unavailable: 1
+  carryingSignal: 0
+gates:
+  - id: build
+    command: pnpm run build
+    role: build
+    cwd: null
+    availabilityCommand: pnpm --version && test -d node_modules
+    unavailableHint: Install pnpm and run its install step in the repo root; dependencies are not present, so the script cannot run here.
+    source: package.json#scripts.build
+    classification: unavailable
+    enabled: false
+    baseline:
+      status: unavailable
+      exitCode: null
+      durationMs: 10
+      timeoutMs: 120000
+      stdoutTail: ""
+      stderrTail: |
+        /bin/sh: pnpm: command not found
+      unavailableReason: "Required gate runtime failed preflight: pnpm --version && test -d node_modules. Install pnpm and run its install step in the repo root; dependencies are not present, so the script cannot run here."

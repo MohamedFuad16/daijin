@@ -1,0 +1,51 @@
+{
+  "documents": 11,
+  "meanReturnedPerQuery": 7.6,
+  "sample": [
+    {
+      "id": "g001",
+      "returned": 6,
+      "ranked": 6
+    },
+    {
+      "id": "g002",
+      "returned": 8,
+      "ranked": 8
+    },
+    {
+      "id": "g003",
+      "returned": 8,
+      "ranked": 8
+    },
+    {
+      "id": "g004",
+      "returned": 8,
+      "ranked": 8
+    },
+    {
+      "id": "g005",
+      "returned": 8,
+      "ranked": 8
+    }
+  ],
+  "candidate": {
+    "caseRate": {
+      "exact": 1,
+      "cases": "25 of 25",
+      "hits": 25,
+      "total": 25
+    },
+    "mrr": 0.96,
+    "violations": 0
+  },
+  "control": {
+    "caseRate": {
+      "exact": 0.72,
+      "cases": "18 of 25",
+      "hits": 18,
+      "total": 25
+    },
+    "mrr": 0.13652380952380952,
+    "violations": 0
+  }
+}

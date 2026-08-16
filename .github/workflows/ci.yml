@@ -38,6 +38,14 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      # The tui suite spawns the REAL engine daemon (help-text hello test,
+      # socket attach tests), so the engine's npm deps must exist or every
+      # spawn dies with ERR_MODULE_NOT_FOUND and reads as a connection error.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+        working-directory: engine
       - run: pip install -e .[dev]
         working-directory: tui
       - run: python -m pytest

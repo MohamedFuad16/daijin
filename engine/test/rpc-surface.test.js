@@ -70,6 +70,17 @@ function surface(repoPath) {
  * test file is a background writer with no owner: it cannot corrupt this file's fixture any
  * more, but it can still hold a temp directory open while the file tries to remove it, and
  * "nobody is looking at it" is not a lifecycle.
+ *
+ * THE CANCEL CONTRACT THIS RELIES ON, read rather than assumed (JobRunner.cancel):
+ * cancellation is COOPERATIVE and never throws. An unknown or already-finished job returns
+ * `{ cancelled: false }`, which the runner documents as an answer rather than an error,
+ * because a user cancelling a job that just finished has not done anything wrong. So the
+ * cleanup below cannot itself become a flake source.
+ *
+ * What cancellation does NOT give is a hard stop: the job halts at its next checkpoint, so
+ * one already past its last checkpoint still completes its write. The isolation therefore
+ * rests on the OWN REPO, not on the cancel; the cancel exists so the work stops sooner and
+ * nothing keeps running past the file that started it.
  */
 async function sweepRepo(daemon, label) {
   const root = await mkdtemp(path.join(tmpdir(), `daijin-sweep-${label}-`));

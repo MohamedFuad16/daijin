@@ -144,6 +144,25 @@ export async function repoLayout(repoPath, { stateRoot, ensure = false, now, id 
 }
 
 /**
+ * Where one repo's index file lives. THE resolver, for callers outside this module.
+ *
+ * store-adapter asked for this rather than reimplementing the derivation, and the reason
+ * they gave is the one that matters: if the daemon derives the key one way and the store
+ * another, the index goes missing in exactly the situation nobody tests, a repo reached by
+ * a different path spelling, a symlink, or a moved checkout. One derivation, called twice.
+ *
+ * The property they asked for holds: two processes independently resolving the same repo
+ * get the same directory, INCLUDING AFTER THE CHECKOUT MOVES, because the key is the
+ * manifest's repoId rather than a hash of the path. A repo with no manifest yet falls back
+ * to a path hash, which is the pre-init case and is exactly as good as the old behaviour.
+ *
+ * It takes a stateRoot and refuses to invent one, for the same reason repoLayout does.
+ */
+export async function indexPathFor(repoPath, { stateRoot } = {}) {
+  return (await repoLayout(repoPath, { stateRoot })).databasePath;
+}
+
+/**
  * Record which working tree an index was built for, and report a mismatch.
  *
  * Returns `{ moved, from }`. A mismatch means the repo was moved or a second clone shares

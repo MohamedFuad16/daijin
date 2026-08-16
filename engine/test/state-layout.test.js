@@ -310,3 +310,38 @@ test('init guarantees IDENTITY FIRST, before anything is built', async () => {
     await rm(stateRoot, { recursive: true, force: true });
   }
 });
+
+test('two processes resolving the same repo get the SAME index directory, after a move', async () => {
+  // The property store-adapter asked for before writing against this: if the daemon derives
+  // the key one way and the store another, the index goes missing in exactly the situation
+  // nobody tests, a repo reached by a different path spelling or a moved checkout.
+  const { indexPathFor } = await import('../src/state/layout.js');
+  const { repoPath, stateRoot, cleanup } = await scratch();
+  try {
+    await ensureManifest(repoPath);
+    const fromOne = await indexPathFor(repoPath, { stateRoot });
+    const fromAnother = await indexPathFor(repoPath, { stateRoot });
+    assert.equal(fromOne, fromAnother);
+
+    // A different spelling of the same path resolves to the same index, because the key is
+    // the manifest id rather than the string it was reached by.
+    const spelled = path.join(repoPath, '.', '');
+    assert.equal(await indexPathFor(spelled, { stateRoot }), fromOne);
+
+    // And after a MOVE: the manifest travels with the repo, so the id does, so the index
+    // and the trend line are still found. A path hash would have orphaned both.
+    const moved = path.join(path.dirname(repoPath), `${path.basename(repoPath)}-moved`);
+    const { cp } = await import('node:fs/promises');
+    await cp(repoPath, moved, { recursive: true });
+    try {
+      assert.equal(await indexPathFor(moved, { stateRoot }), fromOne,
+        'a moved checkout finds the index it built');
+    } finally {
+      await rm(moved, { recursive: true, force: true });
+    }
+
+    await assert.rejects(indexPathFor(repoPath, {}), /requires a stateRoot/);
+  } finally {
+    await cleanup();
+  }
+});

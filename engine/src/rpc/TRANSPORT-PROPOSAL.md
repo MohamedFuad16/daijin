@@ -261,37 +261,44 @@ method, single daemon, three clients. NOT measured: concurrent embedding calls,
 and a corpus larger than the fixtures. If a screen starts issuing concurrent
 `search`, that is the case to measure before trusting this.
 
-### The number tui-builder shipped: MAX_IN_FLIGHT = 5, PROVISIONAL
+### The limits as built: a backstop of 32 and an embedding permit of 1
 
-Recorded 2026-08-16, from tui-builder, in their words: provisional, from the
-leader's 4-to-6 prior and their own fan-out shapes, NOT measured against a loaded
-daemon. It lives in `RpcClient` rather than in each screen, so a screen cannot
-exceed it by accident and there is one number to change.
+SUPERSEDES the provisional MAX_IN_FLIGHT = 5 recorded here earlier from the
+leader's 4-to-6 prior. Updated 2026-08-16: the basis moved from a prior to a
+measurement, and the number moved with it. The earlier paragraph is replaced
+rather than annotated because a doc carrying both would leave a reader to guess
+which one the code implements.
 
-It does not contradict the measurement above, and it is worth being explicit
-about why, because "the engine said no cap and the client shipped a cap" reads
-like a disagreement and is not one. My measurement says the DAEMON does not need
-a cap at these shapes: 27 cheap reads in flight cost 37ms. A client-side cap of 5
-is about the client's own fan-out growing linearly with attached repos: their
-repo home issues one `serveStatus` plus three calls per repo, so twelve repos is
-37 calls issued at once from one client. The cap bounds that growth. Neither
-number is evidence about the other.
+There are TWO limits in `RpcClient`, because there are two different risks, and
+the single number was answering the wrong one.
 
-WHAT WOULD CHANGE IT: several attached TUIs refreshing at once, which is a case
-that only exists once the socket lands, and concurrent embedding calls, which is
-the one thing neither of us has measured. `search`, `retrievalScore` and
-`diagnose` queue behind one local Ollama, so five of those in flight is five
-waiting on a single embedder, and a cap of 5 does nothing to help there. A
-per-method serialisation would; the count is the wrong lever for that case.
+- `MAX_IN_FLIGHT = 32` is a RUNAWAY BACKSTOP, NOT A THROUGHPUT LIMIT. The basis
+  is the measurement above: three clients issuing nine concurrent calls each, 27
+  in flight, 37ms total, and three concurrent `analyze` calls costing the same
+  wall clock as one because they are filesystem bound and overlap. Breadth is
+  not the risk, so a tight cap would only slow the client down. What 32 stops is
+  a loop, not a screen.
+- `MAX_EMBEDDING_IN_FLIGHT = 1` over `{search, retrievalScore, diagnose}` is the
+  limit that MATTERS. Those methods queue behind one local Ollama, so firing
+  several at once does not overlap, it contends. This is the case flagged above
+  as worth serialising in the client, and serialising it in the client rather
+  than in each screen keeps it true no matter who calls.
 
-Their fan-out measurement, for context on why the cap exists at all: making the
-independent calls in a screen concurrent took the repo home's `load()` from 635ms
-to 142ms with 60ms injected per-call latency, and eight views from 1646ms to
-657ms. The call counts are exact; the ms figures rank screens rather than predict
-live latency. The shape that matters to this side is that each screen now issues
-a BURST rather than a chain.
+That split is the whole point: a count cap of 5 would have throttled the cheap
+reads it did not need to and still allowed five embedding calls to pile onto one
+embedder. Bounding the contended resource directly is what the measurement
+actually argued for.
 
-### A test-writing lesson from their cap work, worth carrying into any limit here
+Both limits carry `peak_in_flight` and `peak_embedding_in_flight` counters that
+the tests assert BIND, so they are measured properties rather than comments.
+
+STILL NOT MEASURED: several attached TUIs refreshing at once, which only exists
+once the socket lands, and concurrent embedding calls under real load. The
+permit of 1 is chosen from the shape of the resource (one Ollama) rather than
+from a measurement of contention, and it is the number to revisit first if an
+embedder gains parallelism.
+
+### A test-writing lesson from the cap work, worth carrying into any limit here
 
 tui-builder's first cap tests asserted `peak_in_flight <= MAX_IN_FLIGHT`. That is
 trivially true for any ceiling: they mutated the constant to 500 and the tests
@@ -299,9 +306,9 @@ stayed green. A cap test written that way passes precisely when the cap has been
 removed, which is the dead-gate shape this build keeps finding in new places.
 
 Theirs now assert the cap BINDS (peak equals the ceiling when far more work is
-issued than the ceiling allows) and, separately, that the constant sits in the
-agreed band. If a server-side limit is ever added here, its test gets written the
-same way, because the natural phrasing is the tautological one.
+issued than the ceiling allows). If a server-side limit is ever added here, its
+test gets written the same way, because the natural phrasing is the tautological
+one.
 
 ## Security posture
 

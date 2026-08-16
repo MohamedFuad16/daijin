@@ -1,5 +1,33 @@
 # Daijin build state (authoritative)
 
+## 2026-08-17 12:40 - The lead returns to its author; documented is not reachable
+
+The extractor applied tui-builder's lead to its own lane and found the
+shape there (214a69c, 624/624): serveStatus's critical - every test
+double opens a store successfully, so the cannot-open branch was
+unreachable from the tests; it had been verified BY HAND the same day
+and left in the terminal ("the same gap one step earlier: I had the
+evidence and left it there"). The test now exists and also pins the
+floor-survives-broken-index answer.
+
+THE DISTINCTION NAMED, the round's export: DOCUMENTED AND REACHABLE
+ARE DIFFERENT CLAIMS. A value can be documented, named in the
+contract, printed in a coverage list every run, and produced by no
+path any test reaches - and the enum gate asserts the first while
+reading as though it covered both: the extractor's own fails-invisible
+shape, in an instrument built to catch fails-invisible shapes, two
+days old, self-reported. The BOUND IS NAMED rather than the guard
+half-built: the enum gate proves a client can look a value up, not
+that the engine can produce it. Reachability-for-every-enum is a real
+coverage goal deliberately not half-built.
+
+The standing recommendation is updated with tui-builder's words in
+place of the extractor's own, at its request: failure parity is the
+fix, but the damage is not confined to failure paths - a double that
+can only succeed removes the reason anyone reads the surrounding code.
+Cross-lane adoption noted: the which-test-kills-each detector is now
+both lanes' habit. Tip 214a69c; all quiet; the owner's ultrareview is
+the next event.
 ## 2026-08-17 12:20 - The fourth double; the happy-path claim upgraded; tip 7f81878
 
 tui-builder REOPENED its closed lane on the extractor's checkable

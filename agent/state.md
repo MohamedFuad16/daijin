@@ -1,5 +1,30 @@
 # Daijin build state (authoritative)
 
+## 2026-08-16 22:25 - Scanner governance completed: declarations land, widenings wait
+
+gym-porter surfaced the case the settlement did not cover, with the two
+commits that had already exercised it (git log -S checked before
+claiming): the scanned-set test forces a scanner edit whenever ANY lane
+adds an engine directory, so the window rule as written would either be
+violated quietly or obeyed at the cost of a suite red for everyone
+until a window opens - and the red-until-window path drives people
+toward the exemption, the worse failure mode. RULED, its distinction
+adopted verbatim because it tracks the guarantee rather than the file:
+
+- DECLARING a new directory as scanned is NOT a widening - coverage
+  grows, nothing is excused, the guarantee gets strictly stronger. It
+  lands immediately by whoever's commit triggered it, any lane, with
+  the commit message stating "scanned-set declaration, strictly
+  stronger". (src/roles was this, and was right to land.)
+- An ALLOWLIST ENTRY is a widening - it excuses a file from the
+  ownership rule and weakens the guarantee. It goes through the leader,
+  in a freeze window, carrying its reason. (layout.js was this, landed
+  mid-round without flagging; gym-porter owned the miss itself.)
+
+The test of the ruling is that both historical cases land on the
+correct side of it. Recording the answer before the moment it is
+needed, per the conditional-ruling habit, is the pattern this build
+should keep exporting.
 ## 2026-08-16 22:20 - Governance sharpened: inert changes need no window, and inert is verified
 
 The verifier found that the scanner file's own standing note ("EXTEND

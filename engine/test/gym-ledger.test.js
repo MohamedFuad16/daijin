@@ -217,6 +217,29 @@ test('a certification COPIES its axes from the rubric, and names which rubric', 
   store.close();
 });
 
+test('the layer boundary, pinned: storage holds what it is given, and the wire cannot emit it', async () => {
+  // Noted by the verifier and recorded here as a TEST rather than as a comment, because a
+  // documented boundary that nothing checks is a boundary nobody notices moving.
+  //
+  // The design is deliberate and stays: validation lives in ONE place (grading.js), because
+  // validating in two places is how the two drift. So a caller that bypasses the validator
+  // CAN store a rubric with empty axes. What must hold is that such a record can never
+  // reach a radar as a set of measured zeros, and that safety net is the daemon's axesFor.
+  const { store, runId } = ledgerWithRun();
+  store.importRubricBatch({
+    rubrics: [rubricFor(runId, { axes: {} })],   // bypassing grading.js entirely
+    mode: 'evaluation',
+  });
+  const stored = store.rubricFor(runId);
+  assert.deepEqual(stored.axes, {}, 'storage holds exactly what a caller gave it');
+
+  const { axesFor } = await import('../src/rpc/methods.js');
+  assert.equal(axesFor(stored), null, 'and the wire renders it as NOT GRADED, never as zeros');
+  // The same net catches a partial rubric, which is the likelier real-world shape.
+  assert.equal(axesFor({ axes: { correctness_vs_gold: { score: 4 } } }), null);
+  store.close();
+});
+
 test('a scored run with no gold-provenance exclusion record cannot be certified', () => {
   // D-0020, the structural half of "the student never sees gold": a certification asserts
   // the student never saw the reference, and that assertion needs the computed exclusion

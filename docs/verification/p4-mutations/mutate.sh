@@ -443,6 +443,11 @@ run_mutation "the certification stops naming the rubric it snapshotted" \
   's/      runId, run.exam_id, rubric.id, new Date\(\).toISOString\(\), rubric.verdict,/      runId, run.exam_id, null, new Date().toISOString(), rubric.verdict,/' \
   "test/gym-ledger.test.js"
 
+run_mutation "F81: the wire safety net stops rendering an empty rubric as ungraded" \
+  src/rpc/methods.js \
+  's/  return entries\.every\(Boolean\) \? entries : null;/  return entries.filter(Boolean);/' \
+  "test/gym-ledger.test.js"
+
 # ---- summary. NOTHING MAY BE APPENDED BELOW THIS LINE ------------------------------------
 #
 # Six mutations were once appended AFTER this block and never ran, while the script still
@@ -450,7 +455,12 @@ run_mutation "the certification stops naming the rubric it snapshotted" \
 # new costume: an instrument reporting a result for a check that did not execute. The count
 # check below is the structural fix, since a comment asking people not to append is a habit.
 
-DECLARED=$(grep -c '^run_mutation ' "$0")
+# FINDING 81: the class is [[:space:]]* rather than column zero. An INDENTED run_mutation,
+# inside a conditional or a loop, would be invisible to the DECLARED side while still
+# incrementing EXECUTED, so the comparison would read as balanced while the count was wrong.
+# Zero instances today; the point is that the next person's ordinary edit must not silently
+# disarm the counter that exists to catch silent disarming.
+DECLARED=$(grep -cE '^[[:space:]]*run_mutation ' "$0")
 echo
 echo "declared: $DECLARED   executed: $EXECUTED"
 if [ "$DECLARED" -ne "$EXECUTED" ]; then

@@ -5,23 +5,23 @@ instrument, and the captured output of both. Session scratch dies; the evidence 
 
 | file | what it is |
 | --- | --- |
-| `mutate.sh` | the 76-mutation battery, P4 and P7. Exits non-zero on any survivor, skip, or declared-but-unexecuted mutation. Every line must read KILLED. |
+| `mutate.sh` | the 77-mutation battery, P4 and P7. Exits non-zero on any survivor, skip, or declared-but-unexecuted mutation. Every line must read KILLED. |
 | `mutate-output.txt` | its captured output, with the run timestamp in the header. |
 | `gate-scanner-plants.mjs` | THE ARBITER for D-0023, authored by the VERIFIER, unmodified. Exit 0 is acceptance. |
 | `gate-scanner-plants-output.txt` | its captured output run against the landed scanner. |
 | `gate-plants.mjs` | gym-porter's extended plant set (12 plants, 4 controls), per the verifier's standing note that four plants is ten minutes of thought and not a bound. |
 | `gate-plants-output.txt` | its captured output. |
 
-## Measured 2026-08-16 17:22 JST (2026-08-16 08:22Z)
+## Measured 2026-08-16 17:30 JST (2026-08-16 08:30Z)
 
 - `node docs/verification/p4-mutations/gate-scanner-plants.mjs`: caught 4/4 plants, control
   clean, ACCEPTANCE MET, exit 0. The verifier's four plants are also pinned inside
   `engine/test/gym-spend-gate.test.js` so `npm test` enforces the same bar; if the two ever
   disagree, the script wins and the test copy is the stale one.
 - `node docs/verification/p4-mutations/gate-plants.mjs`: 12 plants, 4 controls, 0 failures.
-- `bash docs/verification/p4-mutations/mutate.sh`: 76 mutations, 76 KILLED, exit 0, declared 76
-  and executed 76 (four added for the derived certification axes).
-- `node --test "test/gym-*.test.js"` from `engine/`: tests 130, pass 130, fail 0.
+- `bash docs/verification/p4-mutations/mutate.sh`: 77 mutations, 77 KILLED, exit 0, declared 77
+  and executed 77.
+- `node --test "test/gym-*.test.js"` from `engine/`: tests 131, pass 131, fail 0.
 - `npm test` from `engine/`: 503 tests, 503 pass, 0 fail. Suite-count caveat per D-0014: the
   engine suite is written by several workers at once, so every total here is a timestamped
   snapshot of a moving number.
@@ -48,7 +48,10 @@ instrument, and the captured output of both. Session scratch dies; the evidence 
 2. A SKIP means the expression matched nothing, so nothing was tested. Two happened when a
    refactor moved anchors out from under expressions. Counted, and the message says
    RE-ANCHOR THIS.
-3. A DECLARED-BUT-UNEXECUTED mutation. Six were once appended after the summary block's
+3. A DECLARED-BUT-UNEXECUTED mutation, and the counter that catches it must itself be
+   robust: the declared grep matches leading whitespace (finding 81), because an INDENTED
+   run_mutation would otherwise be invisible to the declared side while still incrementing
+   the executed side, leaving the comparison balanced and wrong. Six were once appended after the summary block's
    `exit` and never ran, while the script printed "All mutations killed." The declared count
    is now compared against the executed count, and nothing may be appended below the summary.
 
@@ -124,7 +127,7 @@ b5488c6ec01edc05dcbe9efcbd7c82b85b198ec1653d998257b45a9c38a20bc3  engine/test/gy
 dfe587fb7f9eb8133e7debe4d90c44f1d216b3b236ef339042f6d2436819a3c5  engine/test/gym-grading.test.js
 4834bba9aa63bbeb4b2ac3608a99fbb63f09dbf671cf18afde5e0532e09f69ca  engine/test/gym-harness.test.js
 e6650cdb2eae627c12bbcbfb1aaf2bea7bcc030703e261d9fb77a9f6a3467494  engine/test/gym-harvest.test.js
-9dfeb5451940cc3009e45d392c62fd473162ee0232e038423024a230f192a839  engine/test/gym-ledger.test.js
+eb34e69d70556bbd4266ac05e5345d6c7805416158e573d2826af7f2874c6982  engine/test/gym-ledger.test.js
 574fd593a48afd80dd31b8b3e8c79f15f99c840f97027705314ea2b32767dbc3  engine/test/gym-mining.test.js
 4915ea53510dca9f9174bb66c476cd99bdf6cbac2bed43fa62af26ececf6e4d6  engine/test/gym-mode-quarantine.test.js
 7e9bfce6e5c663579fa712d72451510955e530cd6939d8b4dacf21dca4ae0809  engine/test/gym-provenance.test.js
@@ -135,8 +138,8 @@ f2ff54b05ae07116ac5f763fa7cc4f15457d826e7d6936dd780807feaab4ec34  docs/verificat
 e66ab1295c82a9c0a3ec6aa5fd9eb6dc87baf83dd6fbc0b4259b4578def35b8c  docs/verification/p4-mutations/gate-plants.mjs
 5f9c2255ce54fb3ba743458a198098eb98ddf4eca8b50d73706509ad075f6b55  docs/verification/p4-mutations/gate-scanner-plants-output.txt
 285369273763bd75ee7ec8b7732955cc8fe9dd8ab267ab979284d5f418b7d7ed  docs/verification/p4-mutations/gate-scanner-plants.mjs
-337853db221e63207117f1065abc3a37c1a23ea41672e0af84cda74d2313503b  docs/verification/p4-mutations/mutate-output.txt
-58bf1f3ddf88be497d12590298c6abf41275ffb111877a266acc18796355a56f  docs/verification/p4-mutations/mutate.sh
+7e082a47696819e52d024ce3edcc43ecb6929639b1b0eee70e674b89592b0abb  docs/verification/p4-mutations/mutate-output.txt
+fb9dec43b77f0b5a88ac6ccaf34b1e9e1931ba6f72e4e3a05ed11f7520d5466a  docs/verification/p4-mutations/mutate.sh
 ```
 
 `gates.js` and `sandbox.js` are the extractor's ports, consumed unchanged and hashed here

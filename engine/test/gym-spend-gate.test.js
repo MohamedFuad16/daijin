@@ -121,15 +121,28 @@ test('the closure never normalizes a malformed gate into a valid one', async () 
   });
 });
 
-const rpcRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/rpc');
-// src/state names the gate (layout.js computes its path), so it is SCANNED rather than
-// exempted: a directory that knows where the gate is must be held to not writing it.
-const stateRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/state');
-const rolesRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/roles');
+const srcRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src');
+
+/**
+ * THE SCANNED SET. One list, and the walk below DERIVES from it.
+ *
+ * It was two lists until now: this declaration and a separate array of roots the walk
+ * iterated. They agreed only because whoever edited one remembered the other, and a
+ * directory added here but not there would have been declared as covered while never being
+ * scanned. The coverage test would have passed, because it compares this list against the
+ * directories on disk and never against what the walk actually reads. That is a silent hole
+ * of exactly the shape this file exists to prevent, so the walk now cannot disagree.
+ *
+ * src/state names the gate (layout.js computes its path) and src/roles turns a pointer into
+ * a provider key; both are SCANNED rather than exempted, because a directory that knows
+ * where the gate is must be held to not writing it.
+ */
+export const SCANNED = ['gym', 'roles', 'rpc', 'state'];
 
 async function engineSources() {
   const scanned = [];
-  for (const root of [gymRoot, rpcRoot, stateRoot, rolesRoot]) {
+  for (const directory of SCANNED) {
+    const root = path.join(srcRoot, directory);
     for (const name of (await readdir(root)).filter((entry) => entry.endsWith('.js'))) {
       scanned.push({ path: name, source: await readFile(path.join(root, name), 'utf8') });
     }
@@ -426,7 +439,6 @@ test('the scanned set covers every engine source directory', async () => {
   // is pointed at, and nothing enforced that the pointed-at set was the whole engine. A new
   // directory that reaches the gate would have been outside the scan with no test failing,
   // which is the silence the whole rule exists to prevent.
-  const srcRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src');
   const entries = await readdir(srcRoot, { withFileTypes: true });
   const directories = entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort();
 
@@ -451,7 +463,9 @@ test('the scanned set covers every engine source directory', async () => {
   //  excuses one file from the ownership rule and WEAKENS the guarantee. That goes through
   //  the leader, in a freeze window, carrying its reason. If a red suite is pressuring you
   //  toward one, that pressure is the argument for declaring rather than excusing.
-  const SCANNED = ['gym', 'roles', 'rpc', 'state'];
+  //
+  // SCANNED is the module constant above, which the walk derives from, so declaring a
+  // directory here necessarily scans it.
   const UNSCANNED = [
     // Each exemption states why it cannot reach the gate. An exemption is a claim someone
     // has to defend, exactly like an allowlist entry.

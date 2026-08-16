@@ -9,10 +9,12 @@ instrument, and the captured output of both. Session scratch dies; the evidence 
 | `mutate-output.txt` | its captured output, with the run timestamp in the header. |
 | `gate-scanner-plants.mjs` | THE ARBITER for D-0023, authored by the VERIFIER, unmodified. Exit 0 is acceptance. |
 | `gate-scanner-plants-output.txt` | its captured output run against the landed scanner. |
+| `check-scanner-commit.mjs` | makes ruling c8267a0 mechanical: a commit claiming a scanned-set declaration may add no allowlist entry, and an allowlist entry must announce itself with a reason. Self-test drives both refusals. |
+| `d0032-pattern.mjs` | the D-0032 conversion pattern offered to init-miner, with a runnable self-test. |
 | `gate-plants.mjs` | gym-porter's extended plant set (12 plants, 4 controls), per the verifier's standing note that four plants is ten minutes of thought and not a bound. |
 | `gate-plants-output.txt` | its captured output. |
 
-## Measured 2026-08-16 18:20 JST (2026-08-16 09:20Z)
+## Measured 2026-08-16 19:05 JST (2026-08-16 10:05Z)
 
 - `node docs/verification/p4-mutations/gate-scanner-plants.mjs`: caught 4/4 plants, control
   clean, ACCEPTANCE MET, exit 0. The verifier's four plants are also pinned inside
@@ -172,13 +174,15 @@ eb34e69d70556bbd4266ac05e5345d6c7805416158e573d2826af7f2874c6982  engine/test/gy
 574fd593a48afd80dd31b8b3e8c79f15f99c840f97027705314ea2b32767dbc3  engine/test/gym-mining.test.js
 4915ea53510dca9f9174bb66c476cd99bdf6cbac2bed43fa62af26ececf6e4d6  engine/test/gym-mode-quarantine.test.js
 7e9bfce6e5c663579fa712d72451510955e530cd6939d8b4dacf21dca4ae0809  engine/test/gym-provenance.test.js
-32554d69de49df1ab983611a2cbd29ff93234f0f0335f1e96d041a70ab00e6e4  engine/test/gym-spend-gate.test.js
+0771c7f3124fe9ac33a9166a5f7df0f3e2ef2d51fda5afacb011d64bf61ba629  engine/test/gym-spend-gate.test.js
 e6affd28f7130eb34bedca68e785744fee946bdc70bc2492019975ee62f377c9  docs/verification/p7-grading-harvest-acceptance-draft.md
 8a1289e65707a5ba3b39ef9b599f899cd468e2af3b72233c5b9f40638ce7fe15  docs/verification/p7-grading-harvest-acceptance.md
+a48adce90b5eb91a5e2e311eaf8901e84d2d13d626811f92ec700a668bac9e5e  docs/verification/p4-mutations/check-scanner-commit.mjs
+c82563cf33fde2b815996749b0e96f8228b0f0e52a5d05c0e6616abc22598f1e  docs/verification/p4-mutations/d0032-pattern.mjs
 f2ff54b05ae07116ac5f763fa7cc4f15457d826e7d6936dd780807feaab4ec34  docs/verification/p4-mutations/gate-plants-output.txt
 e66ab1295c82a9c0a3ec6aa5fd9eb6dc87baf83dd6fbc0b4259b4578def35b8c  docs/verification/p4-mutations/gate-plants.mjs
 5f9c2255ce54fb3ba743458a198098eb98ddf4eca8b50d73706509ad075f6b55  docs/verification/p4-mutations/gate-scanner-plants-output.txt
-285369273763bd75ee7ec8b7732955cc8fe9dd8ab267ab979284d5f418b7d7ed  docs/verification/p4-mutations/gate-scanner-plants.mjs
+327a2cb8b3399975a5501ac48398ae1b4acbc3a5c8b57aa2c7ac4df630b78e43  docs/verification/p4-mutations/gate-scanner-plants.mjs
 02e71639a5725be5e37b531c0e26e0c2aab796bf2466b741ab140c873ec75d7e  docs/verification/p4-mutations/mutate-output.txt
 fafdefa06e9f305b18dbfe3ddc29300ef287235ba7733aa85bc09b8d4b435416  docs/verification/p4-mutations/mutate.sh
 ```

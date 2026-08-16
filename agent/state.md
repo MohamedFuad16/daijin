@@ -1,5 +1,35 @@
 # Daijin build state (authoritative)
 
+## 2026-08-16 17:44 - P3.5 MEASURED: curated 20 cases of range, generated 7
+
+The curated-versus-generated question is answered on one repo, one
+embedder, one code path, both controls from one construction: the
+CURATED brain (257 units) carries 20 cases of discriminating range
+against the generated brain's 7, while the raw rates (24/25 vs 25/25)
+say almost nothing, which is the pre-registered metric earning its
+place. Granularity does NOT explain the gap and the prediction that
+curated units run large died in public (median 95 tokens, SMALLER than
+generated; a hand-written errors.md is one-paragraph records; the
+1000-1250 figure is a property of the platform's brain, not of curated
+writing); CORPUS SIZE explains it (7 of 257 is 3 percent, 7 of 11 is 63
+percent). Where size does bite is the tail: the largest curated unit
+(1625 tokens) fails content survival against the 660 cap, ruled
+REPORT-NOT-MUTATE (the adopt path never silently edits a user's units;
+the four units are named to the user). The closing insight of the P3
+arc: a generated brain is mechanically measurable BECAUSE it is
+generated (one home per fact by construction); a curated brain is
+measurable only through non-leaky seams (title ownership, path
+self-reference), with paraphrase queries staying behind the auditor's
+spend boundary as planned. Finding 80 fired only where it should
+(saturation warning on the generated arm alone, one threshold, one code
+path). The delivery correction moved AGAINST the mechanism (6.96 of 11
+over all 25; predicts 0.63 vs 0.72 observed) and is stated loudly; the
+verifier re-judges its check 4 against it. The FOURTH sweep exposed the
+hook's shared-path blindness (one lane plus foreign shared files reads
+as one lane), ruled and fixed: evidence directories lane-mapped,
+unmapped verification paths refuse. Verifier attacking P3.5 now;
+init-miner proceeds to the D-0031 brain-artifacts round.
+
 ## 2026-08-16 17:40 - D-0031 audited: invariant 1 true, unguarded, and a race
 
 The verifier audited the one invariant D-0031 claims already holds, and

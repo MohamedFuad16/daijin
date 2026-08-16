@@ -573,3 +573,18 @@ generated brains is the DISCRIMINATING RANGE (case-range and MRR-range
 from each brain's own permuted control), with raw case rate reported but
 explicitly labeled saturated at this corpus size. Choosing the metric
 before the number exists is the whole discipline.]
+
+[Addition to D-0018, 2026-08-16 13:16, a known gate limitation disclosed
+by the extractor while declining to edit the frozen contract itself: the
+contract-coverage gates on both sides match METHOD NAMES, not parameter
+shapes, so a parameter can be added to the shipped surface without any
+contract test noticing. The diagnose control arm arrived exactly that
+way (implemented first, contract line proposed to the leader, doc gap
+silent throughout). Recorded as the instrument-suspicion item it is; a
+param-shape gate is future work, not smuggled in now. Also ruled: the
+TUI shows the discriminating range AUTOMATICALLY beside any sub-75
+diagnosis result rather than behind a checkbox, per D-0030's spirit that
+the range rides with the floor wherever the floor is quoted; the
+rendering lands with tui-builder after the motion strand, and the
+control checkbox governs only whether the EXPENSIVE arm runs, never
+whether an already-measured range is shown.]

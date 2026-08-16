@@ -261,6 +261,48 @@ method, single daemon, three clients. NOT measured: concurrent embedding calls,
 and a corpus larger than the fixtures. If a screen starts issuing concurrent
 `search`, that is the case to measure before trusting this.
 
+### The number tui-builder shipped: MAX_IN_FLIGHT = 5, PROVISIONAL
+
+Recorded 2026-08-16, from tui-builder, in their words: provisional, from the
+leader's 4-to-6 prior and their own fan-out shapes, NOT measured against a loaded
+daemon. It lives in `RpcClient` rather than in each screen, so a screen cannot
+exceed it by accident and there is one number to change.
+
+It does not contradict the measurement above, and it is worth being explicit
+about why, because "the engine said no cap and the client shipped a cap" reads
+like a disagreement and is not one. My measurement says the DAEMON does not need
+a cap at these shapes: 27 cheap reads in flight cost 37ms. A client-side cap of 5
+is about the client's own fan-out growing linearly with attached repos: their
+repo home issues one `serveStatus` plus three calls per repo, so twelve repos is
+37 calls issued at once from one client. The cap bounds that growth. Neither
+number is evidence about the other.
+
+WHAT WOULD CHANGE IT: several attached TUIs refreshing at once, which is a case
+that only exists once the socket lands, and concurrent embedding calls, which is
+the one thing neither of us has measured. `search`, `retrievalScore` and
+`diagnose` queue behind one local Ollama, so five of those in flight is five
+waiting on a single embedder, and a cap of 5 does nothing to help there. A
+per-method serialisation would; the count is the wrong lever for that case.
+
+Their fan-out measurement, for context on why the cap exists at all: making the
+independent calls in a screen concurrent took the repo home's `load()` from 635ms
+to 142ms with 60ms injected per-call latency, and eight views from 1646ms to
+657ms. The call counts are exact; the ms figures rank screens rather than predict
+live latency. The shape that matters to this side is that each screen now issues
+a BURST rather than a chain.
+
+### A test-writing lesson from their cap work, worth carrying into any limit here
+
+tui-builder's first cap tests asserted `peak_in_flight <= MAX_IN_FLIGHT`. That is
+trivially true for any ceiling: they mutated the constant to 500 and the tests
+stayed green. A cap test written that way passes precisely when the cap has been
+removed, which is the dead-gate shape this build keeps finding in new places.
+
+Theirs now assert the cap BINDS (peak equals the ceiling when far more work is
+issued than the ceiling allows) and, separately, that the constant sits in the
+agreed band. If a server-side limit is ever added here, its test gets written the
+same way, because the natural phrasing is the tautological one.
+
 ## Security posture
 
 - Socket mode `0600`, and the state root `0700`. Same-user only; a unix socket

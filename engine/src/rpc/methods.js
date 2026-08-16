@@ -190,13 +190,42 @@ export function axesFor(rubric) {
   return entries.every(Boolean) ? entries : null;
 }
 
-/// Why an attempt has no axes, in the words a reader needs. `unsubmitted` is not a bad
-/// grade, it records that the student never answered and so cannot have answered badly,
-/// which is the distinction the contract asks be preserved.
-export function ungradedReason(attempt) {
-  if (attempt?.status === 'unsubmitted') return 'the student never submitted, so there is no diff to grade';
-  if (attempt?.status === 'apply-error') return 'the submitted diff did not apply, so there is nothing to grade';
-  return 'this attempt produced a diff and has not been graded yet';
+/**
+ * Why an attempt has no axes: a stable CODE to branch on and a sentence to display.
+ *
+ * Both, deliberately. The sentence is written for a reader and will be rewritten when a
+ * better wording is found; a client that branches on its prose breaks the day it improves.
+ * The code is the contract and does not move. Same principle as a hint being displayed
+ * verbatim and never parsed.
+ *
+ * `unsubmitted` is not a bad grade. It records that the student never answered and so
+ * cannot have answered badly, which is the distinction the contract asks be preserved.
+ */
+export function ungradedExplanation(attempt) {
+  if (attempt?.status === 'unsubmitted') {
+    return { code: 'unsubmitted', reason: 'the student never submitted, so there is no diff to grade' };
+  }
+  if (attempt?.status === 'apply-error') {
+    return { code: 'apply-error', reason: 'the submitted diff did not apply, so there is nothing to grade' };
+  }
+  return { code: 'pending', reason: 'this attempt produced a diff and has not been graded yet' };
+}
+
+/**
+ * Attempts newest first, sorted EXPLICITLY rather than trusted from the query.
+ *
+ * The top-level axes are the most recent graded attempt's, so an order that is merely
+ * assumed silently picks the wrong attempt, and picking the wrong attempt is invisible: the
+ * numbers look exactly as real as the right ones. `at` decides because it is when the
+ * attempt happened, which is what "most recent" means to a reader; the id breaks ties and
+ * covers a row whose `at` is missing or equal, which is the only place insertion order is
+ * the better answer.
+ */
+export function attemptsNewestFirst(attempts) {
+  return [...attempts].sort((left, right) => {
+    const byTime = String(right.at ?? '').localeCompare(String(left.at ?? ''));
+    return byTime !== 0 ? byTime : (right.id ?? 0) - (left.id ?? 0);
+  });
 }
 
 /**
@@ -997,17 +1026,21 @@ export function createMethods({
       return withLedger(repoPath, async (ledger) => {
         const exam = ledger.getExam(params.examId);
         if (!exam) throw invalidParams('unknown examId', `No exam named ${params.examId} is in the bank.`);
-        const attempts = ledger.database.prepare('SELECT * FROM run WHERE exam_id = ? ORDER BY id DESC').all(params.examId);
+        const attempts = attemptsNewestFirst(
+          ledger.database.prepare('SELECT * FROM run WHERE exam_id = ?').all(params.examId),
+        );
         // NOTE, dated 2026-08-16 (finding 79): this used to return `axes: {}` behind a
         // comment saying "empty until the grading round lands". The grading round HAS
         // landed, and `{}` is now a forbidden value: an empty object renders on a radar
         // exactly like a set of measured zeros. The ruled shape is null when ungraded, and
         // a canonically-ordered list of { name, score, max } when graded.
-        const graded = attempts.map((attempt) => ({
-          ...attempt,
-          axes: axesFor(attempt.rubric),
-          ungradedReason: attempt.rubric ? null : ungradedReason(attempt),
-        }));
+        const graded = attempts.map((attempt) => {
+          const axes = axesFor(attempt.rubric);
+          // Prose for humans, code for branching. A client that switches on the sentence
+          // breaks the day the sentence is improved.
+          const explanation = axes ? null : ungradedExplanation(attempt);
+          return { ...attempt, axes, ungradedCode: explanation?.code ?? null, ungradedReason: explanation?.reason ?? null };
+        });
         const latestGraded = graded.find((attempt) => attempt.axes);
         return {
           exam,

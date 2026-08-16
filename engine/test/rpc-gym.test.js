@@ -369,8 +369,52 @@ test('an ungraded attempt is null, never an empty object or zeroes', async () =>
 test('an ungraded attempt says WHY, distinguishing no-diff from diff-but-ungraded', async () => {
   // unsubmitted is not a bad grade: it records that the student never answered and so
   // cannot have answered badly.
-  const { ungradedReason } = await import('../src/rpc/methods.js');
-  assert.match(ungradedReason({ status: 'unsubmitted' }), /never submitted/);
-  assert.match(ungradedReason({ status: 'apply-error' }), /did not apply/);
-  assert.match(ungradedReason({ status: 'completed' }), /produced a diff and has not been graded/);
+  const { ungradedExplanation } = await import('../src/rpc/methods.js');
+  assert.match(ungradedExplanation({ status: 'unsubmitted' }).reason, /never submitted/);
+  assert.match(ungradedExplanation({ status: 'apply-error' }).reason, /did not apply/);
+  assert.match(ungradedExplanation({ status: 'completed' }).reason, /produced a diff and has not been graded/);
+});
+
+test('the ungraded reason carries a STABLE CODE beside its sentence', async () => {
+  // Prose for humans, codes for branching. A client that switches on the sentence breaks
+  // the day the sentence is improved, which is the same reason a hint is displayed verbatim
+  // and never parsed.
+  const { ungradedExplanation } = await import('../src/rpc/methods.js');
+  assert.equal(ungradedExplanation({ status: 'unsubmitted' }).code, 'unsubmitted');
+  assert.equal(ungradedExplanation({ status: 'apply-error' }).code, 'apply-error');
+  assert.equal(ungradedExplanation({ status: 'completed' }).code, 'pending');
+  assert.equal(ungradedExplanation({ status: 'gates-regressed' }).code, 'pending');
+  assert.equal(ungradedExplanation({ status: 'metric-regressed' }).code, 'pending');
+  // Every status the ledger can hold maps to exactly one of the three codes, so a new run
+  // status cannot silently arrive on the wire with no explanation at all.
+  const { RUN_STATUSES } = await import('../src/gym/ledger.js');
+  const codes = new Set(RUN_STATUSES.map((status) => ungradedExplanation({ status }).code));
+  assert.deepEqual([...codes].sort(), ['apply-error', 'pending', 'unsubmitted']);
+});
+
+test('attempts are sorted newest first EXPLICITLY, not trusted from the query', async () => {
+  // The top-level axes are the most recent graded attempt's, so an order that is merely
+  // assumed picks the wrong attempt invisibly: the numbers look exactly as real as the
+  // right ones.
+  const { attemptsNewestFirst } = await import('../src/rpc/methods.js');
+  // id order and `at` order deliberately DISAGREE: a ledger restored or merged out of band
+  // can insert an older run last, and `at` is when the attempt happened.
+  const sorted = attemptsNewestFirst([
+    { id: 1, at: '2026-08-14T00:00:00.000Z' },
+    { id: 3, at: '2026-08-12T00:00:00.000Z' },
+    { id: 2, at: '2026-08-16T00:00:00.000Z' },
+  ]);
+  assert.deepEqual(sorted.map((row) => row.id), [2, 1, 3]);
+
+  // The id breaks a tie, which is the one place insertion order is the better answer.
+  const tied = attemptsNewestFirst([
+    { id: 5, at: '2026-08-16T00:00:00.000Z' },
+    { id: 9, at: '2026-08-16T00:00:00.000Z' },
+  ]);
+  assert.deepEqual(tied.map((row) => row.id), [9, 5]);
+
+  // And it does not mutate what it was handed.
+  const input = [{ id: 1, at: 'a' }, { id: 2, at: 'b' }];
+  attemptsNewestFirst(input);
+  assert.deepEqual(input.map((row) => row.id), [1, 2]);
 });

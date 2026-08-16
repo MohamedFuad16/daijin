@@ -27,7 +27,19 @@ function scoreDouble(table) {
       summary: { cases: row.total, caseRate: row.hits / row.total, mrr: row.mrr, violations: row.violations ?? 0, identifierCaseRate: 1, identifierCases: 1 },
       results: Array.from({ length: row.total }, (unused, index) => ({ id: `g${index}`, complete: index < row.hits })),
       // The harness's own arm disclosure, which the A/B verifies rather than assumes.
-      record: { rerank: enabled ? { enabled: true, topK, backend: reranker?.id ?? null } : { enabled: false } },
+      record: {
+        rerank: enabled ? { enabled: true, topK, backend: reranker?.id ?? null } : { enabled: false },
+        results: Array.from({ length: row.total }, (unused, index) => ({
+          id: `g${index}`,
+          hits: index < row.hits ? 1 : 0,
+          required: 1,
+          complete: index < row.hits,
+          // The rank moves under the treatment even where the outcome does not.
+          reciprocalRank: index < row.hits ? (enabled ? (row.rr ?? 1) : 1) : 0,
+          misses: index < row.hits ? [] : ['x'],
+          violations: [],
+        })),
+      },
     };
   };
   return { score, calls };
@@ -38,8 +50,8 @@ const stubReranker = { id: 'stub:deterministic', async rerank(query, documents) 
 test('the arms differ by ONE option: both receive the backend, only one enables it', async () => {
   const { score, calls } = scoreDouble({
     '3000:off': { hits: 10, total: 20, mrr: 0.5 },
+    '3000:10': { hits: 10, total: 20, mrr: 0.5 },
     '3000:20': { hits: 10, total: 20, mrr: 0.5 },
-    '3000:40': { hits: 10, total: 20, mrr: 0.5 },
   });
   await rerankAB({ corpus: { retrieveOptions: {} }, store: {}, reranker: stubReranker, budgets: [3000], score });
   assert.equal(calls.length, 3, 'one control plus one treatment per topK');
@@ -48,7 +60,7 @@ test('the arms differ by ONE option: both receive the backend, only one enables 
     'the control receives the backend too; an A/B whose arms differ by which dependencies were wired compares two programs',
   );
   assert.deepEqual(calls.map((call) => call.enabled), [false, true, true]);
-  assert.deepEqual(calls.map((call) => call.topK), [null, 20, 40]);
+  assert.deepEqual(calls.map((call) => call.topK), [null, 10, 20]);
 });
 
 test('a control arm that reranked anyway is refused rather than reported', async () => {
@@ -165,7 +177,7 @@ test('the resolution measurement runs on the same store and rides with the resul
 });
 
 test('topK sweeps because it decides how much of the ranking the rerank can touch', async () => {
-  assert.deepEqual([...DEFAULT_TOP_KS], [20, 40]);
+  assert.deepEqual([...DEFAULT_TOP_KS], [10, 20]);
   const { score, calls } = scoreDouble({
     '3000:off': { hits: 10, total: 20, mrr: 0.5 },
     '3000:20': { hits: 11, total: 20, mrr: 0.5 },
@@ -174,7 +186,7 @@ test('topK sweeps because it decides how much of the ranking the rerank can touc
     '4000:20': { hits: 10, total: 20, mrr: 0.5 },
     '4000:40': { hits: 10, total: 20, mrr: 0.5 },
   });
-  const result = await rerankAB({ corpus: {}, store: {}, reranker: stubReranker, budgets: [4000, 3000], score });
+  const result = await rerankAB({ corpus: {}, store: {}, reranker: stubReranker, budgets: [4000, 3000], topKs: [20, 40], score });
   assert.deepEqual(result.pairs.map((pair) => [pair.tokenBudget, pair.topK]), [[3000, 20], [3000, 40], [4000, 20], [4000, 40]]);
   assert.equal(result.pairs[0].judgment.verdict, 'win', 'topK 20 gained a case where topK 40 did not');
   assert.equal(result.pairs[1].judgment.verdict, 'neutral');
@@ -231,4 +243,24 @@ test('only the arm that actually paid the price reports one; the rest carry the 
   assert.ok(second.cost.msPerQuery < first.cost.msPerQuery, 'the warm arm is cheaper, which is the confound');
   // The headline price comes from the cold arm only.
   assert.equal(result.cost.topK40.msPerQuery, first.treatment.msPerQuery);
+});
+
+test('identical SUMMARIES do not pass as identical RUNS', () => {
+  assert.deepEqual([...DEFAULT_TOP_KS], [10, 20], 'swept downward on the platform arm evidence');
+});
+
+test('a neutral verdict over arms that retrieved differently is reported as such', async () => {
+  // The extractor measured this on the platform corpus: every summary field matched while
+  // the retrieval-level differ found eighteen differences across seven cases. A runner
+  // comparing only the headline would have called topK inert.
+  const { score } = scoreDouble({
+    '3000:off': { hits: 10, total: 20, mrr: 0.5 },
+    '3000:20': { hits: 10, total: 20, mrr: 0.5, rr: 0.5 },
+  });
+  const result = await rerankAB({ corpus: {}, store: {}, reranker: stubReranker, budgets: [3000], topKs: [20], score });
+  const pair = result.pairs[0];
+  assert.equal(pair.judgment.verdict, 'neutral', 'the enforced metric did not move');
+  assert.equal(pair.perCase.identical, false, 'but the runs were not the same');
+  assert.ok(pair.perCase.differences > 0);
+  assert.equal(result.movedWithoutScoring, 1, 'the report distinguishes "changed nothing" from "changed nothing that scored"');
 });

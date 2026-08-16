@@ -23,12 +23,20 @@
 //   corpus that is the normal case rather than the exotic one (measured on portfolio-mine:
 //   a permuted gold set still scores 18 of 25). Reporting a win inside the noise floor is
 //   the failure this instrument exists to prevent.
+import { compareRecords } from './compare-runs.js';
 import { caseRateOf } from './floor.js';
 import { scoreGoldset } from './retrieval-score.js';
 
-/** topK values worth sweeping. topK is an experimental variable: only the top of the fused
- *  list is reordered, so it decides how much of the ranking the rerank can touch. */
-export const DEFAULT_TOP_KS = Object.freeze([20, 40]);
+/**
+ * topK values worth sweeping. topK is an experimental variable: only the top of the fused
+ * list is reordered, so it decides how much of the ranking the rerank can touch.
+ *
+ * Swept DOWNWARD, on the extractor's measured advice from the platform arm (2026-08-16):
+ * 20 and 40 scored identically on every case and in every summary field there, and 40 cost
+ * exactly twice as much. So depth past 20 bought nothing and the open question is the other
+ * direction, how shallow a shortlist still captures the reordering.
+ */
+export const DEFAULT_TOP_KS = Object.freeze([10, 20]);
 
 /**
  * Build a permuted gold set: every query kept, every answer deliberately wrong.
@@ -195,7 +203,14 @@ export async function rerankAB({
       // magnitude. The flag rides with the number rather than living in a footnote.
       const cold = !coldTopKs.has(topK);
       coldTopKs.add(topK);
-      pairs.push({ tokenBudget, topK, control, treatment, judgment, cold });
+      // Per-case diff, because IDENTICAL SUMMARIES DO NOT MEAN IDENTICAL RUNS. Measured by
+      // the extractor on the platform arm: topK 20 and 40 matched in every summary field
+      // while the retrieval-level differ reported eighteen differences across seven cases.
+      // A runner that compares only the headline would call topK inert when it is not, and
+      // "the knob changed nothing" is precisely the conclusion that needs the stronger
+      // evidence.
+      const perCase = compareRecords(control.record, treatment.record);
+      pairs.push({ tokenBudget, topK, control, treatment, judgment, cold, perCase });
       if (onStep) {
         await onStep({
           step: 'rerank-pair',
@@ -228,6 +243,13 @@ export async function rerankAB({
       control: { caseRate: pair.control.caseRate, mrr: pair.control.mrr, violations: pair.control.violations, arm: pair.control.rerank, msPerQuery: pair.control.msPerQuery },
       treatment: { caseRate: pair.treatment.caseRate, mrr: pair.treatment.mrr, violations: pair.treatment.violations, arm: pair.treatment.rerank, msPerQuery: pair.treatment.msPerQuery },
       judgment: pair.judgment,
+      // Whether the two arms actually ran the same, as opposed to scoring the same.
+      perCase: {
+        identical: pair.perCase.identical,
+        differences: pair.perCase.differences.length,
+        cases: [...new Set(pair.perCase.differences.map((entry) => entry.id))].length,
+        detail: pair.perCase.differences,
+      },
       // The price of the knob on this machine, alongside what it bought, and whether this
       // pair is a price measurement at all.
       cost: {
@@ -253,6 +275,10 @@ export async function rerankAB({
     })),
     // The sentence D-0025 asks for when the win is absent, written here so the report
     // cannot quietly omit it.
+    // Stated separately from the verdict: a neutral verdict over arms that demonstrably
+    // retrieved different documents is a different fact from a neutral verdict over arms
+    // that did the same thing.
+    movedWithoutScoring: pairs.filter((pair) => !pair.perCase.identical && pair.judgment.caseDelta === 0).length,
     conclusion: verdict === 'win'
       ? `Rerank wins on ${wins.length} of ${pairs.length} measured pairs; the knob is a default candidate on this corpus and nowhere else until measured there.`
       : verdict === 'regression'

@@ -1,5 +1,30 @@
 # Daijin build state (authoritative)
 
+## 2026-08-17 14:05 - The count was the unverified part: two was four
+
+The extractor swept its own instruments for the floor-shape rather
+than trusting the count it had just reported (b67616b, 626/626): FOUR
+sites, two of them the defect - attempts.length >= 8 over a row with
+11 keys (a reader silently dropping three passes; the coverage gate
+would catch the consequence two instruments away, which is not the
+same as this test noticing), and the classifications >= 2 harvest
+floor, the identical guard that let the health harvest report three of
+four. Both are known counts now (11 and 4), with a
+split-the-string-literal mutation killing where the floor did not.
+
+THE DISTINCTION KEPT so "assert a length" does not become a false
+smell: a detail that must be non-empty, a pin that must pin something,
+a reason that must be a sentence assert THE PROPERTY DIRECTLY; the
+defect is a LENGTH AS A STAND-IN FOR COMPLETENESS - same expression,
+different claim, only one wrong. Floors stay where values come from
+imported constants, reason written down: under-reading is impossible
+there, and a floor was only ever the wrong guard against SOME.
+
+The meta lesson, self-reported and kept: "I reported a class with a
+count attached, and the count was the part I had not verified" - the
+count came from the instances personally met, the audit-from-memory
+denominator problem in a new costume. Naming a class is cheap;
+measuring its incidence is the work.
 ## 2026-08-17 13:50 - The mirror flaw: subset is half a vocabulary check; floors against empty
 
 The extractor applied tui-builder's subset finding to its own gate and

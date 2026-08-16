@@ -125,10 +125,11 @@ const rpcRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../s
 // src/state names the gate (layout.js computes its path), so it is SCANNED rather than
 // exempted: a directory that knows where the gate is must be held to not writing it.
 const stateRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/state');
+const rolesRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/roles');
 
 async function engineSources() {
   const scanned = [];
-  for (const root of [gymRoot, rpcRoot, stateRoot]) {
+  for (const root of [gymRoot, rpcRoot, stateRoot, rolesRoot]) {
     for (const name of (await readdir(root)).filter((entry) => entry.endsWith('.js'))) {
       scanned.push({ path: name, source: await readFile(path.join(root, name), 'utf8') });
     }
@@ -432,7 +433,11 @@ test('the scanned set covers every engine source directory', async () => {
   // The scanned set is declared here rather than derived, so ADDING a directory to the
   // engine forces a decision about whether the gate scan should cover it. Deriving it would
   // make this test pass by construction and prove nothing.
-  const SCANNED = ['gym', 'rpc', 'state'];
+  // roles is SCANNED rather than exempted, and the choice is deliberate: it is the
+  // directory whose whole job is turning a pointer into a provider key, so it is where an
+  // unauthorized spend path would be most useful to hide. The exemption check only greps
+  // for the gate's name; the scan catches a write assembled through an alias.
+  const SCANNED = ['gym', 'roles', 'rpc', 'state'];
   const UNSCANNED = [
     // Each exemption states why it cannot reach the gate. An exemption is a claim someone
     // has to defend, exactly like an allowlist entry.

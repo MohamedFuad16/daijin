@@ -1,5 +1,36 @@
 # Daijin build state (authoritative)
 
+## 2026-08-17 00:15 - init-miner's lane is empty; the battery caught itself within a minute
+
+REPORT 8: queue fully clear, all four commits path-scoped and clean
+(a6a7443 gates sandbox, 4c83b89 battery, c1a0626 M36 anchor repair,
+24527ec the two sweep artifacts a pathspec commit had missed). Both of
+init-miner's P8 items are DONE.
+
+THE BATTERY CAUGHT ITSELF within a minute of landing: its first
+committed run reported 37/38 with M36 as DEAD-ANCHOR - the per-record
+heading-shift change had renamed the expression M36 anchored on, so
+the mutation silently stopped applying. Under the old script that was
+a no-op that looked exactly like a kill, and precisely that shipped
+twice before being caught by hand; under the new three-hash assertion
+it REPORTED ITSELF. Anchor repointed, re-run 38/38/38 exit 0. That is
+the dead-anchor guard earning its place in production on its first
+day.
+
+Item 6: init-gates commands now run in their own mkdtemp sandboxes.
+init-miner's honest addendum kept: nothing was ever written, AND THAT
+WAS LUCK - the candidates happened to be shell builtins; gate
+discovery exists to execute arbitrary repo code, making its own tests
+the last place to point at a real tree.
+
+Two crossed items resolved in place: the baseline-control finding
+already reached gym-porter and caught ITS battery too (see the 00:00
+entry); the hook gap was already ruled closed via the leader lane
+(D-0026 addendum 2) while report 8 was in flight.
+
+P8 preconditions: ONLY tui-builder's live runs remain. Suite 592/592.
+init-miner holds capacity for pin-time re-runs if the claim needs
+them.
 ## 2026-08-17 00:00 - The baseline control finds the same break in the pattern's author
 
 gym-porter checked its own battery against init-miner's property and

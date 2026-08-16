@@ -444,3 +444,37 @@ test('with nothing edited, discovery still writes its result', async () => {
     await rm(own, { recursive: true, force: true });
   }
 });
+
+test('gatesSet and gatesGet return the SAME shape, so a save renders like a read', async () => {
+  // The claim audit's one false claim, and it was mine: gatesGet gained its parsed half and
+  // gatesSet did not, so a client that SET a file and re-rendered got a different shape from
+  // one that GOT it. That is the defect tui-builder had just reported one level up,
+  // reintroduced an hour later between two sibling methods.
+  const { createRpcServer } = await import('../src/rpc/server.js');
+  const stateRoot = await mkdtemp(path.join(tmpdir(), 'daijin-gates-siblings-state-'));
+  const own = await mkdtemp(path.join(tmpdir(), 'daijin-gates-siblings-repo-'));
+  await mkdir(path.join(own, '.daijin'), { recursive: true });
+
+  const server = createRpcServer({ stateRoot, write: () => {} });
+  try {
+    await server.methods.repoAttach({ repoPath: own });
+    const content = 'gates:\n  - id: mine\n    command: exit 0\n    classification: live\n';
+    const set = await server.methods.gatesSet({ repoPath: own, patch: { content } });
+    const got = await server.methods.gatesGet({ repoPath: own });
+
+    assert.deepEqual(Object.keys(set).sort(), Object.keys(got).sort(), 'siblings must agree on shape');
+    assert.deepEqual(set.discovered, got.discovered, 'and on what they parsed');
+    assert.equal(set.content, content, 'the engine stores what the user wrote, byte for byte');
+
+    // A save that breaks the file says so IMMEDIATELY, rather than the user discovering it
+    // on the next screen.
+    const broken = await server.methods.gatesSet({ repoPath: own, patch: { content: 'gates:\n  - id: x\n   bad: indent\n' } });
+    assert.equal(broken.discovered, null);
+    assert.match(broken.parseError, /not valid YAML/);
+    assert.ok(broken.content.includes('bad: indent'), 'and their text comes back regardless');
+  } finally {
+    await server.close();
+    await rm(stateRoot, { recursive: true, force: true });
+    await rm(own, { recursive: true, force: true });
+  }
+});

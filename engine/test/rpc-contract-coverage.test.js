@@ -63,11 +63,19 @@ const LIVE = Object.freeze({
 // Prose STAYS for these, ruled rather than defaulted: their returns really are "the file,
 // plus classification", and seven speculative shapes would be documentation nobody asked
 // for pretending to be coverage. The gate printing them every run is the honest bound.
+// Prose STAYS for these, and as of the 2026-08-17 claim audit their claims are CHECKED
+// rather than assumed: every assertion each row makes was tested against the engine. That
+// changes what this bucket means. It was "unchecked claims", which is worse than declaring
+// nothing because a client author reasonably builds against a false one; it is now
+// "checked once", which is weaker than a running gate and much stronger than prose.
+//
+// The audit found ONE false claim in the five rows it examined, and it was gatesSet, whose
+// "updated gates.yaml" went stale the moment its sibling gained a parsed half. The engine
+// moved and that row is now declared and covered, which is why it is absent here.
 const PROSE = Object.freeze({
-  gatesSet: 'returns the updated gates.yaml; described, not declared',
-  settingsGet: 'described as "full settings object, secrets masked"',
-  settingsSet: 'described as "updated settings"',
-  agentFileSet: 'described as "updated file record with recomputed hashes"',
+  settingsGet: 'claims verified 2026-08-17: full (every DEFAULT_SETTINGS key present) and masked (a sentinel key never appears)',
+  settingsSet: 'claims verified 2026-08-17: the full settings object, same key set as settingsGet, reflecting the patch',
+  agentFileSet: 'claims verified 2026-08-17: currentHash recomputed, defaultHash stable, modified flipped, key set matches agentFileGet',
 });
 
 const REFUSING = Object.freeze({
@@ -163,6 +171,7 @@ function recipes(repoPath) {
     // Moved out of prose by the gatesGet finding: its row promised classification the wire
     // never carried, and prose is where no gate checks.
     gatesGet: { params: { repoPath } },
+    gatesSet: { params: { repoPath, patch: { content: 'gates: []\n' } } },
     agentFileGet: { params: { repoPath, role: 'student' } },
     initBrain: { params: { repoPath, mode: 'layer1' }, skipCall: true },
     gatesDiscover: { params: { repoPath }, skipCall: true },
@@ -213,7 +222,9 @@ test('the contract-shape gate partitions the WHOLE surface, and says what it doe
   // carried a path and a string, and the screen built for the promise showed an empty table
   // over a file describing three gates. Prose is not merely unchecked shape, it is unchecked
   // CLAIM.
-  console.log('  ^ prose rows are unchecked CLAIMS, not merely unchecked shapes: gatesGet promised classification the wire never carried');
+  console.log('  ^ prose rows are CLAIMS, not merely unchecked shapes. Claims verified 2026-08-17;');
+  console.log('    verified once is weaker than a running gate: a prose row can go stale silently,');
+  console.log('    which is exactly how gatesSet went wrong an hour after gatesGet was fixed.');
   console.log(`  refuse, no shape  ${Object.keys(REFUSING).join(', ')}`);
   console.log(`  known divergent   ${Object.keys(DIVERGENT).join(', ') || 'none'}`);
 });

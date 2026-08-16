@@ -1130,7 +1130,15 @@ export function createMethods({
       }
       const file = gatesFilePath(repoPath);
       await writeFile(file, content, 'utf8');
-      return { path: file, content };
+      // THE SAME SHAPE ITS SIBLING RETURNS. gatesGet gained `discovered` and `parseError`
+      // and this did not, so a client that SET a file and re-rendered got a different shape
+      // from one that GOT it, which is the defect tui-builder had just reported one level
+      // up. Found by the claim audit, an hour after I introduced it.
+      //
+      // It also answers a real question at the moment it is asked: a user who saves a file
+      // learns immediately whether it still parses, rather than saving, re-fetching, and
+      // discovering the breakage on the next screen.
+      return { path: file, content, ...parseGatesFile(content) };
     },
 
     /// Probe, then classify each candidate against a baseline run, reporting as it goes.

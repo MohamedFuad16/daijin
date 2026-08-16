@@ -537,8 +537,46 @@ export function createMethods({
   /// Open a repo's gym ledger, use it, and always close. The ledger is synchronous
   /// better-sqlite3 and REFUSES to open a database carrying brain tables, so a mis-pointed
   /// path fails loudly on open rather than growing gym tables inside a user's brain.
+  /**
+   * Open a repo's gym ledger, run `body`, and always close.
+   *
+   * A MISSING LEDGER IS AN EXPECTED STATE, not an internal error. A repo that has never run
+   * init has no `.daijin/` directory, so the driver refuses with "Cannot open database
+   * because the directory does not exist", and that string was reaching the wire as -32603
+   * on five methods. The client renders hints verbatim, which is correct, so a user who had
+   * simply not built a brain yet read database internals on the exams and gym screens.
+   *
+   * Refused HERE rather than in each method, because the miscategorisation is per-callsite
+   * and not per-method: every caller of this function inherited it. One guard at the shared
+   * seam closes the class; five guards in five methods would have closed the instances and
+   * left the next caller to rediscover it.
+   *
+   * gymStart is the sixth caller and does NOT leak, which is worth knowing because the
+   * reason is incidental rather than designed: the spend gate file lives inside `.daijin/`,
+   * the same directory whose absence causes this error, so a repo that can open its gate
+   * necessarily has the directory and a ledger can be created. Move the gate file and
+   * gymStart joins the class. Checked rather than assumed; I had written it up as a masked
+   * sixth before probing it.
+   *
+   * The wording follows the search hint's form deliberately: say what is missing and what
+   * action creates it. A user meeting this has done nothing wrong and needs a next step,
+   * not a diagnosis.
+   */
   async function withLedger(repoPath, body) {
-    const ledger = openLedger(repoPath);
+    let ledger;
+    try {
+      ledger = openLedger(repoPath);
+    } catch (error) {
+      // Only the not-yet-initialised case is translated. A ledger that exists and cannot be
+      // opened is a genuine internal error and keeps -32603, because a corrupt database is
+      // a state nobody expected and hiding it behind a friendly sentence would send the
+      // user to run init on a repo whose real problem is a damaged file.
+      if (/does not exist|ENOENT|no such file/i.test(String(error?.message ?? ''))) {
+        throw invalidParams('no gym ledger',
+          `${repoPath} has no gym ledger yet, so there are no exams or cycles to read. Run init on ${repoPath} first; it creates the ledger.`);
+      }
+      throw error;
+    }
     try {
       return await body(ledger);
     } finally {

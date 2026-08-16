@@ -663,3 +663,77 @@ test('a vetoed exam carries the reason it was vetoed for, on the bank row', asyn
     await kit.cleanup();
   }
 });
+
+// ---- a missing brain is an EXPECTED state, on every path that can meet it ----------------
+
+test('a repo with no ledger is refused by NAME, never with a driver string', async () => {
+  // Found by tui-builder sweeping thirty handlers against one adverse condition. Five
+  // methods answered a brainless repo with -32603 INTERNAL carrying "Cannot open database
+  // because the directory does not exist", and the client renders hints verbatim, which is
+  // correct, so a user who had simply not built a brain read database internals.
+  //
+  // The guard is at withLedger rather than in five methods, because the miscategorisation
+  // is PER-CALLSITE: every caller inherited it. Five fixes would have closed five instances
+  // and left the next caller to rediscover the class.
+  //
+  // gymStart is the sixth caller and is clean, for an incidental reason worth recording:
+  // its gate file lives inside the same `.daijin/` whose absence causes the error, so a
+  // repo that can open its gate necessarily has a directory the ledger can be created in.
+  // Probed rather than assumed.
+  const stateRoot = await mkdtemp(path.join(tmpdir(), 'daijin-noledger-state-'));
+  const bare = await mkdtemp(path.join(tmpdir(), 'daijin-noledger-repo-'));
+  const server = createRpcServer({ stateRoot, write: () => {} });
+  try {
+    await server.methods.repoAttach({ repoPath: bare });
+
+    const calls = [
+      ['examList', {}],
+      ['examDetail', { examId: 'exam-0001' }],
+      ['examVeto', { examId: 'exam-0001', reason: 'Superseded by a later commit that reverts this one entirely.' }],
+      ['examUpdate', { examId: 'exam-0001', patch: { title: 'x' } }],
+      ['gymStatus', {}],
+    ];
+    for (const [method, params] of calls) {
+      const error = await server.methods[method]({ repoPath: bare, ...params }).then(() => null).catch((raised) => raised);
+      assert.ok(error, `${method} must refuse on a repo with no ledger`);
+      assert.equal(error.code, ERR_INVALID_PARAMS, `${method}: a missing brain is expected, not internal`);
+
+      const hint = String(error.data?.hint ?? '');
+      // The wording follows the search hint's form: what is missing, and what creates it.
+      assert.match(hint, /no gym ledger yet/, `${method}: says what is missing`);
+      assert.match(hint, /Run init/, `${method}: says what action creates it`);
+      // AND NO DRIVER STRING. This is the assertion that would have failed before the fix,
+      // and it is written against the shape of the leak rather than its exact wording,
+      // because the next driver will phrase it differently.
+      assert.ok(!/database|SQLITE|directory does not exist|no such file/i.test(hint),
+        `${method} leaked an implementation detail: ${hint}`);
+    }
+  } finally {
+    await server.close();
+    await rm(stateRoot, { recursive: true, force: true });
+    await rm(bare, { recursive: true, force: true });
+  }
+});
+
+test('a ledger that EXISTS and cannot be opened stays internal', async () => {
+  // The refusal is narrow on purpose. A corrupt database is a state nobody expected, and
+  // dressing it as "run init" would send the user to rebuild a repo whose real problem is a
+  // damaged file. Only the not-yet-initialised case is translated.
+  const stateRoot = await mkdtemp(path.join(tmpdir(), 'daijin-badledger-state-'));
+  const repo = await mkdtemp(path.join(tmpdir(), 'daijin-badledger-repo-'));
+  await mkdir(path.join(repo, '.daijin'), { recursive: true });
+  await writeFile(gymDatabasePath(repo), 'this is not a database', 'utf8');
+
+  const server = createRpcServer({ stateRoot, write: () => {} });
+  try {
+    await server.methods.repoAttach({ repoPath: repo });
+    const error = await server.methods.examList({ repoPath: repo }).then(() => null).catch((raised) => raised);
+    assert.ok(error, 'a corrupt ledger still refuses');
+    assert.notEqual(error.code, ERR_INVALID_PARAMS,
+      'a damaged file is not the same answer as a repo that was never initialised');
+  } finally {
+    await server.close();
+    await rm(stateRoot, { recursive: true, force: true });
+    await rm(repo, { recursive: true, force: true });
+  }
+});

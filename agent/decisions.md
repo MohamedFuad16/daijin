@@ -822,3 +822,36 @@ OMISSION rather than loudly: the commit lands, looks complete, and the
 new files sit untracked. The check that catches it is the one
 init-miner ran: git status --porcelain over your own paths after the
 commit, empty or it is not done.
+
+## D-0035 (2026-08-17) The wire is designed at the boundary, and the contract gains a gate
+
+Three rulings from the extractor's post-claim measurements, all
+frozen until the P8 verdict lands (wire shapes do not move under an
+attack in progress):
+
+1. examDetail's attempts row: the ENGINE is wrong, not the contract.
+It emits the gym ledger's column names raw (seven snake_case keys,
+result_file and extensions_granted made public surface by accident;
+tokens and grades absent entirely, so a contract-written client
+crashes on first real data). Ruled per the extractor's own
+retired-SELECT* argument: MAP AT THE BOUNDARY to a designed shape
+({ id, at, status, verdict, tokens, tokenCap, grades } plus the
+finding-79 fields), amend the contract dated for the additions that
+earn their place, land with a shape test. Breaking only for readers
+of the leaked names, which is one client that already reads both.
+
+2. done/finished APPROVED: JobRunner already emits done/failed and
+done/cancelled, so a client observes a job ending exactly when it
+went wrong and must guess when it went right - the asymmetry is the
+defect. Five lines, strictly additive, same shape as the failure
+event, with a runner test. Clients keep their labelled inference as
+fallback until it lands; both independent measurements of the
+inter-event gap (9.6s, 9.7s) stand as the threshold's basis.
+
+3. THE GENERAL INSTRUMENT: a contract-shape gate asserting what the
+engine EMITS matches what the contract DOCUMENTS. Four divergences
+in one day (repoPath absent, ungradedCode absent, attempts disagreeing,
+the terminal event missing from both) are the argument that "the
+contract is a document that no test executes" is a standing defect,
+not four incidents. Queued post-verdict beside the acceptance script;
+D-0033 named the per-method seam rule, this is its surface-wide form.

@@ -1,5 +1,18 @@
 # Daijin build state (authoritative)
 
+## 2026-08-16 17:33 addendum - The regeneration test, sharper than record-vs-derivation
+
+gym-porter refined the invariant-2 ratification into the test future
+storage decisions use: ask WHAT REGENERATES A STORE, not what a store
+feels like. The index regenerates from canonical brain markdown, so
+deleting it loses nothing; the gym ledger has no canonical source above
+it, so it is the thing itself. Applied in advance to the harvest-batch
+question: proposals derive from rubrics plus gaps (closer to
+derivation), but an APPLIED batch records what entered the brain and
+when, which nothing above it regenerates, so applied batches are the
+record. Harvest storage designs to that test instead of re-running the
+argument.
+
 ## 2026-08-16 17:31 - F81 landed; the unrepresentability principle named
 
 gym-porter landed finding 81 (test-only delta, re-frozen at 300b63bb)

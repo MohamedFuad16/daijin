@@ -1,5 +1,27 @@
 # Daijin build state (authoritative)
 
+## 2026-08-16 13:05 - P6 ACCEPTED: delta PASS, no findings, both breaks defeated
+
+Verifier report 13, pinned to the install subtree (0 dirty at both ends):
+full dry run reproduced at 73/0. Break attempt 1 (can the bare completion
+line print without a ready probe) failed on THREE independent counts:
+state initializes unknown not ready, the probe is unconditional, the exit
+mapping's wildcard sends every unexpected exit to unreachable, and the
+bare line gates on ready exactly. Break attempt 2 (mock passing while the
+real path is broken) failed against the REAL dependency: the verifier ran
+the shipped probe against its own live Ollama, confirming the tag-suffix
+resolution end to end, and verified the mock is minimal on exactly the
+consumed fields, fidelity not convenience. Finding 75's refusals driven
+independently (nodeless PATH, v20 node) with the named-path promise
+demonstrated, and the control-on-the-control present (node genuinely
+hidden, so the refusal test is not vacuous). Finding 76 closed stronger
+than asked: settings-not-merely-emptied and the uninstaller saying where
+kept data lives. Clauses (g) and (h) are met and verified; P6 CLOSES.
+
+SCOREBOARD: P0 P1 P2 P3 P4 P5 P6 ALL ACCEPTED. P7 pending its delta
+check. P3.5, polish, finding-79 fix, TUI integration in flight. Live gym
+cycle owner-gated.
+
 ## 2026-08-16 13:03 - THE PRODUCT LOOP IS CLOSED: init builds, the floor gates, MCP serves
 
 The extractor's MCP serve entry (a6b8764) closed the loop and proved it

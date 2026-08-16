@@ -1,5 +1,37 @@
 # Daijin build state (authoritative)
 
+## 2026-08-17 03:20 - The surface gate lands and harvests five divergences at birth
+
+The contract-shape gate is surface-wide (a05b80c, e08dd05): 30
+documented methods partitioned into covered-here (17), live
+(acceptance script), prose-only (7, printed every run), refusal-only
+(3), and known-divergent (5) - with the partition ASSERTED both
+directions (a method in no tier fails; a tier naming a phantom fails),
+and the divergence list built as a RATCHET that may only shrink, each
+entry carrying a reason long enough to be a decision. The gate's two
+own-defects (pipe-splitting handing back the wrong column so two
+methods read as UNDOCUMENTED - the direction a gate can least afford;
+the prose-cut truncation) are both tests now. Suite 608/608.
+
+THE FIRST HARVEST, all five the same pattern - THE ENGINE EMITS MORE
+THAN ITS ROW DOCUMENTS, the exact state that let repoPath, ungradedCode
+and the attempts row ship: scoreHistory's origin stamps, mcpSnippet's
+lock reason, agentFileGet's installed/path, analyze's five extras, and
+board documenting a FINDING where the engine returns the envelope.
+
+RULINGS: scoreHistory, mcpSnippet, agentFileGet AMEND (each field
+designed or client-read); board's row is fixed to the envelope (it
+documents the wrong noun); analyze gets the attempts-row standard -
+extras a client reads are documented, extras nobody reads come OFF
+(adding later beats removing later); examVeto/examUpdate reference the
+examList row shape; the remaining prose rows STAY prose with the gate
+printing them - prose is the right level for file-plus-classification
+returns, and the printed list is the honest bound, not a hole to
+paper over. Contract row edits for this batch are DELEGATED to the
+extractor with the rulings as the approved content, one commit with
+the ratchet shrink so no red window opens between contract and gate;
+the leader reviews the landed diff - the gate itself now enforces
+contract-equals-engine, which is what makes the delegation safe.
 ## 2026-08-17 03:05 - Dithered charts land; two chart defects fixed by the wiring
 
 tui-builder's dither work is in (bff59ce): texture.py is the single

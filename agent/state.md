@@ -1,5 +1,48 @@
 # Daijin build state (authoritative)
 
+## 2026-08-17 05:20 - The conformance test catches the gates screen lying; one engine item reopens
+
+tui-builder closed all three items (f86c127, 326 green) and the guard
+built for item 1 found something bigger than its assignment. It could
+not be a mutation - a mock-only path is invisible to every test that
+uses the mock, both sides agreeing with each other - so it is a
+WIRE-CONFORMANCE TEST: drive the real daemon, assert every field a
+screen reads exists in the response, skip with a stated reason rather
+than pass quietly. IT FAILED ON ITS FIRST RUN, and not on vetoReason:
+gatesGet returns { path, content } while the gates SCREEN read a
+structured gates list not on the wire - so against the real engine the
+table was ALWAYS EMPTY and the notice read "0 carrying signal, 0
+excluded" for a file containing three gates. The worst shape: not a
+blank screen a user would question, but a plausible, confident, wrong
+answer in the exact form used when the answer is genuinely zero - the
+gates screen, which exists to stop dead gates reporting coverage,
+reporting coverage it did not have. Interim fix landed: the file
+renders verbatim and the gap is named.
+
+WHY NO GATE CAUGHT IT: gatesGet sits in the PROSE tier, and the prose
+itself is wrong - the contract row promises "content plus per-gate
+classification and liveness evidence" and the engine sends content and
+path. A divergence living in the bucket no tier checks, because the
+prose ruling assumed the prose was accurate. RULED: the ENGINE moves
+to the contract - the screen was built for classification, the
+discovery job produces it, and the row promised it. Assigned to the
+extractor: measure what discovery persists, propose the declared
+shape (content stays; structured per-gate classification joins), land
+with the shape gate covering it, moving gatesGet from prose to
+covered. tui-builder then restores the structured table with the
+verbatim view as fallback.
+
+THE DISCLOSURE AGAINST ITS OWN CLAIM, accepted and dated: P8 clause
+(a)'s evidence counted WIDGETS PER SCREEN, and widgets are not data -
+the gates screen rendered 41 widgets around an always-empty table, so
+the evidence could not distinguish a populated screen from an empty
+one. The claim pin is untouched and the verdict already carried the
+read-not-reproduced bound; this names the specific thinness inside
+that bound, disclosed by the claimant against itself. The
+wire-conformance test is the corrective instrument - the only
+client-side check that can catch a screen agreeing with its own
+fixture - and clause-(a)-strength evidence (fields read, not widgets
+mounted) rides the next acceptance run.
 ## 2026-08-17 05:05 - vetoReason lands through the retired lane's own bar
 
 The fix is in (1c436d2, cross-lane named, delegation cited):

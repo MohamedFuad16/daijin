@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import test from 'node:test';
+import test, { after } from 'node:test';
 
 import YAML from 'yaml';
 
@@ -19,6 +19,21 @@ import {
   classifyBaselineRun, discoverGates, packageManagerOf, probeGateCandidates,
   renderGatesYaml, summariseGates,
 } from '../src/init/gate-discovery.js';
+
+/**
+ * Every command this file runs executes SOMEWHERE, and that somewhere must not be the repo.
+ *
+ * These commands are shell builtins today (`exit 0`, `echo`), so nothing was written, but the
+ * cwd was process.cwd(), which is the engine checkout: one candidate that touched the disk
+ * and a test run would write where nobody expects. Gate discovery exists to run ARBITRARY
+ * repo code, so its tests are the last place to point that at a real tree. Reported by the
+ * extractor as hygiene rather than a defect, and it is right on both counts.
+ */
+function sandbox() {
+  const root = mkdtempSync(path.join(tmpdir(), 'daijin-gates-cwd-'));
+  after(() => rmSync(root, { recursive: true, force: true }));
+  return root;
+}
 
 const MANIFEST = {
   'package.json': {
@@ -76,18 +91,18 @@ test('Makefile targets and language conventions are probed, and inferred sources
 });
 
 test('classification: live, measured, pre-broken and unavailable each from a real run', async () => {
-  const live = classifyBaselineRun(await runCommand('exit 0', { cwd: process.cwd(), timeoutMs: 10_000 }));
+  const live = classifyBaselineRun(await runCommand('exit 0', { cwd: sandbox(), timeoutMs: 10_000 }));
   assert.equal(live.classification, 'live');
   assert.equal(live.enabled, true);
 
-  const broken = classifyBaselineRun(await runCommand('exit 3', { cwd: process.cwd(), timeoutMs: 10_000 }));
+  const broken = classifyBaselineRun(await runCommand('exit 3', { cwd: sandbox(), timeoutMs: 10_000 }));
   assert.equal(broken.classification, 'pre-broken');
   assert.equal(broken.enabled, false, 'a gate that fails either way cannot tell a good edit from a bad one');
   assert.match(broken.reason, /already fails on the untouched baseline \(exit 3\)/);
 
   // A measured gate reports a NUMBER and stays enabled even while failing: it is judged on
   // movement, which is the platform's answer to a tool with pre-existing violations.
-  const measured = classifyBaselineRun(await runCommand('echo GATE_METRIC:lower-better:17; exit 1', { cwd: process.cwd(), timeoutMs: 10_000 }));
+  const measured = classifyBaselineRun(await runCommand('echo GATE_METRIC:lower-better:17; exit 1', { cwd: sandbox(), timeoutMs: 10_000 }));
   assert.equal(measured.classification, 'measured');
   assert.equal(measured.enabled, true);
   assert.deepEqual(measured.metric, { direction: 'lower-better', value: 17, baselineValue: 17 });
@@ -104,7 +119,7 @@ test('discovery runs every candidate and excludes pre-broken and unavailable fro
     { id: 'metric', command: 'echo GATE_METRIC:lower-better:5', role: 'lint', source: 'x', availabilityCommand: null, cwd: null },
     { id: 'missing-tool', command: 'exit 0', role: 'build', source: 'x', availabilityCommand: 'exit 7', unavailableHint: 'Install it.', cwd: null },
   ];
-  const { gates, summary } = await discoverGates({ repoPath: process.cwd(), candidates, timeoutMs: 10_000 });
+  const { gates, summary } = await discoverGates({ repoPath: sandbox(), candidates, timeoutMs: 10_000 });
   assert.deepEqual(gates.map((gate) => [gate.id, gate.classification]), [
     ['ok', 'live'], ['broken', 'pre-broken'], ['metric', 'measured'], ['missing-tool', 'unavailable'],
   ]);

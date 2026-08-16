@@ -687,3 +687,40 @@ red-suite ATTRIBUTIONS (mid-edit readings) may have been battery
 windows; verdicts stand (all were taken in freeze windows with hash
 pins), and the verifier annotates the two attributions rather than
 re-running.
+
+## D-0032 addendum (2026-08-16) The dissolution was overbroad: two mechanisms
+
+Verifier report 19 corrects one explanatory sentence above: the
+chunk-count variance does NOT dissolve into the battery mechanism. A
+mutated source fails a test; it does not drift a count on an ISOLATED
+fixed-content fixture, and the extractor's 44-versus-45 drift (timing
+lever moving frequency from 1-in-3 to 5-in-6) was observed on exactly
+such a fixture. Two mechanisms, both real, neither subsuming the other.
+The ruling above is unaffected; the consequence is added: fixing either
+mechanism alone leaves the npm-test gate unsound, and a clean run after
+one fix only establishes that no battery was running during it. The
+drift is assigned to the extractor to pin; an init-lane fix lands via
+init-miner. Report 19 also demonstrated the pure-function corollary:
+purity is a property of execution, not of load, and a pure function
+imported from a mutated file is a mutated pure function.
+
+## D-0033 (2026-08-16) A method whose only tests inject its seam has not been tested against reality
+
+The extractor found retrievalScore and diagnose DEAD against any real
+brain: both built their corpus with project: null, which retrieve.js
+refuses by name. Every unit test injected the scorer, so the refusal
+first appeared when the method met an actual index, months of green
+suite notwithstanding. Same shape as the earlier mcpSnippet defect:
+invisible to a green suite, found by executing the thing once.
+
+RULING, generalizing the existing "anything we hand a user to paste is
+executed by a test" rule to every injected seam: for each RPC method
+that takes an injectable dependency, at least one test (or a named
+acceptance clause) must execute the method against the REAL
+implementation of that seam, and the regression test for any such
+defect asserts on what crosses the seam (the corpus handed to the
+scorer), not on the outcome, so it stays hermetic while still binding
+the real wiring. A green suite composed entirely of injected seams is a
+statement about the tests' own stubs. Clause (d) of P8 would have
+caught this instance; the rule exists so it does not take an
+integration phase to discover a method has no data source.

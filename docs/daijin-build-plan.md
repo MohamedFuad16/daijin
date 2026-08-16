@@ -181,7 +181,15 @@ P8 INTEGRATION (registered 2026-08-16 17:52, pre-registered before any part is
    chunks with tokensUsed from the real store; (e) exam and gym screens render
    the deferral-free surface honestly against a real ledger carrying at least
    one imported rubric: graded axes as the canonical list, no radar for
-   ungraded, reasons from ungradedCode; (f) spend surfaces are live: gymStart's
+   ungraded, reasons from ungradedCode [sharpened 2026-08-16, BEFORE the
+   acceptance run, on the extractor's finding that nothing in this build has
+   ever graded anything (the teacher role and student driver are paid and
+   unbuilt), so a grader-produced rubric cannot exist at zero spend: the
+   rubric is SEEDED through the real import API, meeting every validator, and
+   the claim this clause supports is GRADED AXES RENDER FROM REAL STORAGE,
+   never "the gym grades"; a grader-produced rubric belongs to the owner-gated
+   live half, the same handling clauses (f), P4 and P7 gave their paid
+   directions]; (f) spend surfaces are live: gymStart's
    refusal renders the real gate path, consent dialogs show a real
    budgetEstimate with its basis, and no spend-touching call passes without
    confirm, with the stated bound [added 2026-08-16, verifier audit] that the
@@ -194,7 +202,16 @@ P8 INTEGRATION (registered 2026-08-16 17:52, pre-registered before any part is
    stream in all three modes, and the coalescing claim gets its REAL-TERMINAL
    measurement (repaint cadence recorded from an actual terminal, honest bounds
    stated), per tui-builder's own request that the repaint count not stand in
-   for a smoothness claim; (i) both suites green at the pinned commits, zero
+   for a smoothness claim [CORRECTED 2026-08-16 by that measurement, run
+   against the mock stream at real-terminal fidelity: the repaint-count
+   framing (34 to 3) was WRONG in mechanism; it counted the coalescer's own
+   function calls, not paints. Textual's frame scheduler already batches, so
+   coalescing does not measurably change repaint cadence (5.5% difference,
+   inside run-to-run noise across four paired runs); what it does is make each
+   paint SMALLER: 15.5% fewer bytes reach the terminal (range 10.8% to 18.9%),
+   and at an instant stream the effect is exactly zero, byte-for-byte
+   identical arms. The registered claim is byte volume, not cadence; the live
+   half of this clause remains open pending the fixture-repo run]; (i) both suites green at the pinned commits, zero
    provider calls throughout, dash and spend sweeps clean [sharpened 2026-08-16
    per the extractor: "green" means FIVE consecutive clean runs at the pinned
    commit with the run count recorded, because one green run of a suite that
@@ -204,7 +221,18 @@ P8 INTEGRATION (registered 2026-08-16 17:52, pre-registered before any part is
    per verifier report 18: each of the five runs asserts the SOURCE HASH is
    stable across the run, captured before and after, because a green run that
    overlapped a mutation window and was retried is invisible to the record, and
-   the hash-stability assertion is what caught the mechanism]. The verifier attacks
+   the hash-stability assertion is what caught the mechanism. Third sharpening,
+   same day, from the verifier's own audit of its contribution: the
+   before-and-after hash CANNOT SEE a mutation window that opens and closes
+   entirely inside a run, and in the measured environment (10-second runs,
+   sub-second mutation cycles, near-continuous windows) the fully-contained
+   window was the common case, so the measured flake rate was a floor. The
+   hash check stays, WITH ITS BOUND STATED, and the clause adds the
+   cause-level assertion: each run asserts no mutation battery is executing
+   against the shared tree (no in-place override set, no battery-artifact
+   siblings in src/ at start and end); D-0032's private-copy conversion is the
+   fix, and this assertion detects its violation rather than standing in for
+   it]. The verifier attacks
    the registered text; a clause that cannot be demonstrated is reported as
    such, never softened.
 

@@ -1,5 +1,70 @@
 # Daijin build state (authoritative)
 
+## 2026-08-16 18:05 - Conversions land; three rulings; P8 path is short now
+
+GYM-PORTER'S D-0032 CONVERSION LANDED (391d806): the battery copies
+src/test/package.json to a temp dir, links node_modules, mutates THERE;
+in-place survives only as a loud explicit override. Untouched is
+MEASURED: shared-tree digest identical before and after all 77
+mutations, 77/77 killed, and the check lives in the captured output.
+Its instrument caught two breaks the conversion itself introduced
+(third catch each), yielding a named lesson: an anchor on a value that
+is SUPPOSED to change is a stale anchor waiting; anchor mutations on
+the mechanism, not the data. Also named for the general record: a tool
+whose cost is externalized (every consequence lands in someone else's
+test run) is one nobody is positioned to notice. Remaining unconverted
+battery: init-miner's mutate-all.mjs.
+
+STORE-ADAPTER'S D-0031 INSTALL SIDE LANDED (715ae71): dry run 80/80,
+suite 584/584. brainDatabasePath left adapters entirely (layout is the
+extractor's exported resolver; one key, one owner); the legacy repoPath
+default now THROWS instead of silently splitting daemon and store onto
+different files. The uninstaller speaks the three lifetimes (authored
+.daijin, regenerable index/, unrepeatable records/). Clone question
+answered: clones SHARE the id because the id keys records/ and
+score-history is a property of the project; refinement offered (each
+history entry stamps origin path + index digest so mixed checkouts
+cannot fake a smooth series). A mutation that deleted nothing was
+reported and discarded as evidence, correctly.
+
+EXTRACTOR: found retrievalScore and diagnose DEAD against any real
+brain (project: null, refused by name in retrieve.js; every unit test
+injected the scorer) - fixed fd2afb0, and the generalization is now
+D-0033: a method whose only tests inject its seam has not been tested
+against reality. Built the P8 fixture repo (deterministic 6-commit
+history, real init 32.6s, floor 25/25, permuted control 13/25 = 12
+cases of range, better gauge than portfolio-mine) and the seed-rubric
+script (real API, real validators, honest header). Suite at 586.
+
+THREE RULINGS ISSUED, all amended into the plan BEFORE acceptance runs:
+(e) the rubric is SEEDED through the real import API; the claim is
+"graded axes render from real storage", never "the gym grades" -
+grader-produced rubrics belong to the owner-gated live half. (h)
+tui-builder's real-terminal measurement CORRECTED its own repaint claim
+- coalescing does not change cadence (Textual already batches); it cuts
+bytes-to-terminal 15.5% (10.8-18.9% across four paired runs), exactly
+zero at an instant stream; the registered claim is byte volume, not
+cadence, and the 34-to-3 number was function calls. (i) third
+sharpening from the verifier auditing ITS OWN contribution: the
+before/after hash cannot see a window fully contained inside a run (in
+the measured environment the common case, so report 18's rate was a
+floor); the clause adds a cause-level no-battery-executing assertion
+with the hash check's bound stated.
+
+VERIFIER's attribution sweep found FIVE affected attributions, not two
+(docs/verification/verifier-attribution-corrections.md); no verdict
+moves. The durable discipline, adopted: an observed red gets exactly
+one of three labels - caused with evidence, attributed by another party
+and named as theirs, or UNEXPLAINED. "In-flight lane work" was a
+fourth, invented label that read like an explanation so nobody asked
+again. And the transferable question, from its hash-hole self-audit:
+what would this check look like if the thing it measures were absent?
+If the answer is "identical", ask what fits between the samples.
+
+P8 now waits on exactly: init-miner's mutate-all.mjs conversion +
+D-0031 canonical-brain round, the extractor pinning the chunk drift,
+and tui-builder's live-half runs on the now-existing fixture.
+
 ## 2026-08-16 17:54 - The flake is pinned (D-0032); reports 18 and 19; CI green
 
 (Stamp note: this entry is newer than the 17:58 entry below despite the

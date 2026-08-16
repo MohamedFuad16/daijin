@@ -1,5 +1,39 @@
 # Daijin build state (authoritative)
 
+## 2026-08-17 04:40 - The engine queue is empty; the instrument's final state recorded
+
+The final delegated commit landed (140391f): search gains context (the
+product of the method, not a leak), retrievalScore gains at (symmetry
+with its history row), and diagnose trades prose for a declared
+eleven-key shape - discriminatingRange null when the control arm did
+not run, recommendation null BY DESIGN because the choice it would
+carry is the auditor's and that one spends. The tiering hole is closed
+on BOTH sides: the row declares a shape so something can compare it,
+and the live entry says where it is checked rather than why it is not
+checked here - either half alone would have left the same silence in a
+different place.
+
+One more self-caught anti-pattern, recorded at its author's request: a
+parser test asserted search's row EQUALLED today's key list, so
+amending the contract broke the test - asserting the artifact rather
+than the reader's ability to read it, the same class the extractor
+spent the day reporting in others' work. Now asserts the property.
+
+FINAL STATE OF THE INSTRUMENT, for whoever reads it at the ultrareview
+window: 30 documented methods; 18 unit-gate covered both directions; 4
+live, shape-checked by the acceptance script with the two lists
+asserted to agree; 5 prose by ruling, printed every run; 3 refusing;
+ZERO divergent in either tier. 612/612 unit, 18/18 acceptance, and
+removing diagnose's shape drops the acceptance to 17 rather than
+passing quietly. The printed remainder is the trust anchor, not the
+coverage number: the instrument was wrong five times and every failure
+pointed toward under-reporting.
+
+ROSTER STATE: extractor ON CALL (takes ultrareview engine findings);
+tui-builder closing the experiment-gap fix, then on call; verifier on
+call. The project's remaining sequence is the owner's: ultrareview,
+then D-0034 (repo public, release with checksum, portfolio-mine
+redirect).
 ## 2026-08-17 04:20 - The live tier pays on run one; a method fell between two tiers
 
 mode is back (3492669; the removal rule WORKED rather than being

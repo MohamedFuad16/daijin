@@ -162,6 +162,34 @@ P5 TUI shell: entry screen, dashboard, brain browser + retrieval tester, gym liv
    exercised by tests; (e) dash and spend sweeps clean, copy gate scans composited
    screen output; (f) the live-engine rendering check of the original sentence moves
    to the P6 integration pass, when the engine daemon exists to serve a real client.]
+P8 INTEGRATION (registered 2026-08-16 17:52, pre-registered before any part is
+   claimed, per the standing rule; claimed jointly by tui-builder and the
+   extractor, attacked by the verifier). The real TUI against the real daemon,
+   real store, real embedder, zero spend, on a fixture repo initialized by the
+   real pipeline. Clauses, each falsifiable: (a) daijin <repo> reaches a working
+   engine over BOTH transports (stdio spawn and socket attach), and all seven
+   screens render live data, no mock on either side; (b) the boot screen renders
+   real serveStatus cards with the concurrency strand active and a visible
+   loading state, never a frozen frame; (c) the init activity feed renders a
+   REAL initBrain layer1 run's step events end to end on the fixture repo; (d)
+   the brain browser lists real documents and the retrieval tester returns real
+   chunks with tokensUsed from the real store; (e) exam and gym screens render
+   the deferral-free surface honestly against a real ledger carrying at least
+   one imported rubric: graded axes as the canonical list, no radar for
+   ungraded, reasons from ungradedCode; (f) spend surfaces are live: gymStart's
+   refusal renders the real gate path, consent dialogs show a real
+   budgetEstimate with its basis, and no spend-touching call passes without
+   confirm; (g) both connect stories demonstrated: spawn-owning and
+   attach-to-running (two TUIs, one daemon), and a second daemon's lock refusal
+   reaching the user through the stderr tail; (h) motion runs against the live
+   stream in all three modes, and the coalescing claim gets its REAL-TERMINAL
+   measurement (repaint cadence recorded from an actual terminal, honest bounds
+   stated), per tui-builder's own request that the repaint count not stand in
+   for a smoothness claim; (i) both suites green at the pinned commits, zero
+   provider calls throughout, dash and spend sweeps clean. The verifier attacks
+   the registered text; a clause that cannot be demonstrated is reported as
+   such, never softened.
+
 P6 install story: packaging + curl script. Check: clean-machine dry run documented.
    [ACCEPTANCE TRANSCRIBED 2026-08-16, with honest provenance: clauses (a) through
    (f) were authored by the leader in the P6 assignment message BEFORE the build,

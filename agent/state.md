@@ -1,5 +1,34 @@
 # Daijin build state (authoritative)
 
+## 2026-08-17 03:15 - The counter built, and the leader's framing corrected
+
+The extractor built the tenth-use counter (106ec15,
+engine/test-live/mutate-once.mjs) and CORRECTED THE FRAMING IT WAS
+HANDED, rightly: the proposed guard (refuse to mutate a file with
+uncommitted changes) would have fired on every legitimate use and
+never on the failure - mutating a dirty file is the NORMAL case, since
+the thing under test is usually the thing being written. THE DEFECT
+WAS IN THE RESTORE PATH: restoring was a fresh decision each time, and
+the tenth decision was wrong. So the tool removes restoring as a
+decision - original bytes held in memory, written back in a finally,
+re-read to confirm, refusing to exit quietly on mismatch; the only way
+to skip the restore is to kill the process. The generalization is
+recorded as the ruling it implies: WHEN A ROUTINE HAS A DANGEROUS
+STEP, THE COUNTER BELONGS ON THE STEP THAT FAILED, NOT THE STEP THAT
+IS EASIEST TO GATE - gating the easy step trains people to add the
+flag, which is how a guard becomes a formality.
+
+It also closes the first survivor lie structurally (a mutation that
+would not apply exits 2 with the reason) and deliberately does NOT
+claim the second (information-preserving mutations are invisible to
+any tool; SURVIVED hands the question back rather than implying
+missing coverage). Self-tested five ways including the one naive
+scripts get wrong: the restore must survive a FAILING command, which
+is the normal, desired outcome. Offered, not imposed.
+
+Team paused at tui-builder's session limit 01:40 JST; limit reset
+03:10; all lanes resumed 03:15. Remaining project-wide: tui-builder's
+two fixes (mock content rule, baseline vocabulary).
 ## 2026-08-17 07:20 - Enum sweep closes the third mode; every enum bound to its source
 
 The sweep landed (ca54f84, 620/620 + 18/18): two unnamed enums found -

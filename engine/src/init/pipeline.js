@@ -37,12 +37,26 @@ import { importRelationships, ingestUnits } from './ingest.js';
 import { narrate, SpendRefusedError } from './narrate.js';
 import { scaffoldLayer1, validateCitations } from './scaffold.js';
 import { listRepoFiles } from './walk.js';
+import { repoPaths } from '../state/layout.js';
 
 export const DAIJIN_DIRECTORY = '.daijin';
 export const BRAIN_DIRECTORY = `${DAIJIN_DIRECTORY}/brain`;
 export const GOLDSET_FILE = `${DAIJIN_DIRECTORY}/goldset.yaml`;
 export const RETIRED_GOLDSET_FILE = `${DAIJIN_DIRECTORY}/goldset-retired.yaml`;
 export const REPORT_FILE = `${DAIJIN_DIRECTORY}/init-report.json`;
+
+/**
+ * The repo-side paths, from the module that owns the mapping.
+ *
+ * repoPaths joins its sub-paths under a given root, so passing the ARTIFACT root gives the
+ * same structure in the place a read-only target needs it. Two things follow that matter:
+ * nothing here computes .daijin sub-paths by hand, and agentsRoot is a SIBLING of brainRoot
+ * under one root, which is precisely the arrangement the ingest-boundary contract guard
+ * exists to survive.
+ */
+export function artifactPaths(artifactRoot) {
+  return repoPaths(artifactRoot);
+}
 
 /** Modes, from RPC v4 initBrain. */
 export const MODES = Object.freeze(['ingest', 'layer1', 'layer1+layer2']);
@@ -209,7 +223,7 @@ export async function reindexFromBrain({
   const steps = stepper({ jobId, onStep, clock });
   steps.setPhase('reindex');
 
-  const brainRoot = path.join(artifacts, BRAIN_DIRECTORY);
+  const brainRoot = artifactPaths(artifacts).brainRoot;
   const brain = await readBrainArtifacts(brainRoot);
   if (!brain.present || brain.units.length === 0) {
     throw new Error(
@@ -439,7 +453,7 @@ export async function initBrain({
   let brainWrite = null;
   if (writeArtifacts) {
     steps.setPhase('brain');
-    const brainRoot = path.join(artifacts, BRAIN_DIRECTORY);
+    const brainRoot = artifactPaths(artifacts).brainRoot;
     brainWrite = await writeBrainArtifacts(brainRoot, units, {
       generator: mode === 'ingest' ? 'daijin-adopt' : 'daijin-layer1',
     });

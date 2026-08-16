@@ -28,7 +28,13 @@ export async function contractRow(method, { file = METHODS_MD } = {}) {
   const text = await readFile(file, 'utf8');
   for (const line of text.split('\n')) {
     if (!line.startsWith('|')) continue;
-    const cells = line.split('|').map((cell) => cell.trim());
+    // Split on UNESCAPED pipes only. A cell may legitimately contain `\|`, which is how
+    // Markdown carries an alternation like `"layer1+layer2" \| "gym"`, and splitting
+    // naively mis-columns the row: budgetEstimate and agentFileGet both returned their
+    // PARAMS cell as their returns cell, so the reader reported them as undocumented. A
+    // gate that under-covers because of its own parser is worse than no gate, because the
+    // uncovered set looks covered.
+    const cells = line.split(/(?<!\\)\|/).map((cell) => cell.trim());
     if (cells[1] !== `\`${method}\``) continue;
     return cells[3] ?? null;
   }

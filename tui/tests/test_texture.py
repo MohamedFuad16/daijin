@@ -140,3 +140,56 @@ def test_the_stipple_widget_carries_per_point_textures_through_render():
     rendered = str(line.render())
     assert T.PASS.cap in rendered
     assert "╱" in rendered or T.FAIL.cap in rendered
+
+
+# The radar interior ----------------------------------------------------------
+
+
+def _lit(lines: list[str]) -> int:
+    """Count braille dots actually set, across the canvas rows."""
+    total = 0
+    for line in lines:
+        for ch in line:
+            code = ord(ch) - 0x2800
+            if 0 < code < 256:
+                total += bin(code).count("1")
+    return total
+
+
+def test_the_radar_interior_is_filled_rather_than_a_bare_wire():
+    from daijin_tui.widgets.radar import radar_lines
+
+    axes = [{"name": f"a{i}", "score": 5, "max": 5} for i in range(5)]
+    canvas = radar_lines(axes, 26, 8)[:8]
+    # Measured, not guessed: rings, spokes and outline alone light 137 dots at
+    # this size; with the interior stipple it is 249. 200 sits between them
+    # with margin on both sides.
+    assert _lit(canvas) > 200, f"only {_lit(canvas)} dots set, the interior is empty"
+
+
+def test_a_bigger_score_encloses_more_texture():
+    from daijin_tui.widgets.radar import radar_lines
+
+    small = [{"name": f"a{i}", "score": 1, "max": 5} for i in range(5)]
+    large = [{"name": f"a{i}", "score": 5, "max": 5} for i in range(5)]
+    # Measured: 249 dots at full score against 150 at one fifth, a ratio of
+    # 1.66. The grid and spokes are common to both, which is why the ratio is
+    # well under the ratio of the areas.
+    assert _lit(radar_lines(large, 26, 8)[:8]) > _lit(radar_lines(small, 26, 8)[:8]) * 1.4, (
+        "the fill does not track the scores, so area says nothing"
+    )
+
+
+def test_the_interior_is_a_stipple_not_a_slab():
+    """A solid fill would hide a second radar drawn over it."""
+    from daijin_tui.widgets.radar import radar_lines
+
+    axes = [{"name": f"a{i}", "score": 5, "max": 5} for i in range(5)]
+    canvas = radar_lines(axes, 26, 8)[:8]
+    full_cells = sum(1 for line in canvas for ch in line if ord(ch) - 0x2800 == 255)
+    # Measured: the stipple lights zero fully-solid cells; removing the stride
+    # that makes it a stipple lights 48 of 208. Ten is comfortably between.
+    assert full_cells < 10, (
+        f"{full_cells} cells are fully lit; that is a slab, and a slab hides "
+        "anything drawn over it"
+    )

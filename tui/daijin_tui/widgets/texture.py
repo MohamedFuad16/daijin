@@ -79,6 +79,7 @@ def dither_grid(
     height: int = 10,
     width: int = 3,
     gap: int = 1,
+    ceiling: float | None = None,
 ) -> list[list[tuple[str, Texture | None]]]:
     """The bar chart as a grid of (text, texture) cells, top row first.
 
@@ -89,7 +90,10 @@ def dither_grid(
     if not values:
         return []
     height = max(1, height)
-    top = max(values) or 1.0
+    # A caller with a real ceiling gets bars comparable to other charts; one
+    # without gets bars scaled to the tallest value, which is only comparable
+    # within itself.
+    top = float(ceiling) if ceiling else (max(values) or 1.0)
     filled = [max(0, min(height, round(value / top * height))) for value in values]
     grid: list[list[tuple[str, Texture | None]]] = []
     for row in range(height):
@@ -120,11 +124,14 @@ def dither_columns(
     height: int = 10,
     width: int = 3,
     gap: int = 1,
+    ceiling: float | None = None,
 ) -> list[str]:
     """The plain text form, for asserting the drawing without a terminal."""
     return [
         "".join(text for text, _ in row).rstrip()
-        for row in dither_grid(values, textures, height=height, width=width, gap=gap)
+        for row in dither_grid(
+            values, textures, height=height, width=width, gap=gap, ceiling=ceiling
+        )
     ]
 
 

@@ -278,3 +278,28 @@ def test_an_ordinary_step_keeps_its_level_styling_and_no_marker():
         {"ts": 1000, "jobId": "j", "phase": "classify", "step": "classify", "detail": "eslint live", "level": "info"}
     )
     assert "[" not in line.split("classify", 2)[-1][:3]
+
+
+def test_the_phase_says_it_ended_and_the_step_says_what_happened():
+    """Every job now ends with phase done; the step carries the outcome."""
+    for step, expected in (("finished", "complete"), ("written", "complete"),
+                           ("failed", "ended: failed"), ("cancelled", "ended: cancelled")):
+        checklist = PhaseChecklist([("alpha", "Alpha")], clock=lambda: 0.0)
+        checklist.apply_event({"jobId": "j", "phase": "alpha", "step": "s", "detail": "", "level": "info"})
+        checklist.apply_event({"jobId": "j", "phase": "done", "step": step, "detail": "", "level": "info"})
+        assert checklist.finished_at is not None
+        assert checklist.finish_is_inferred is False
+        assert expected in checklist.snapshot_lines()[0], f"{step} rendered as {checklist.snapshot_lines()[0]}"
+
+
+def test_a_failure_after_a_done_is_not_hidden():
+    """A job that announces done and then throws sends a second done, failed.
+
+    Suppressing it to keep the count at one would hide the thing most worth
+    seeing, so the later step wins.
+    """
+    checklist = PhaseChecklist([("alpha", "Alpha")], clock=lambda: 0.0)
+    checklist.apply_event({"jobId": "j", "phase": "alpha", "step": "s", "detail": "", "level": "info"})
+    checklist.apply_event({"jobId": "j", "phase": "done", "step": "finished", "detail": "", "level": "info"})
+    checklist.apply_event({"jobId": "j", "phase": "done", "step": "failed", "detail": "boom", "level": "error"})
+    assert "failed" in checklist.snapshot_lines()[0]

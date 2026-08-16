@@ -73,6 +73,41 @@ def _axis_points(
     return points
 
 
+def _stipple_interior(
+    canvas: "BrailleCanvas",
+    points: Sequence[tuple[float, float]],
+    center: tuple[float, float],
+) -> None:
+    """Fill the scored polygon with a stipple, denser toward the center.
+
+    The outline alone says where the scores are; the fill says how much area
+    they enclose, which is the thing a radar is actually for. Density rises
+    toward the middle so the shape reads as a solid body rather than a wire,
+    and it stays a stipple rather than a fill because two overlapping solid
+    radars would hide each other.
+    """
+    if len(points) < 3:
+        return
+    # Fan of triangles from the center, sampled on a lattice. Sampling rather
+    # than scan-filling keeps it a texture: a scan fill would be a slab.
+    for index, point in enumerate(points):
+        nxt = points[(index + 1) % len(points)]
+        steps = int(max(abs(point[0] - nxt[0]), abs(point[1] - nxt[1]))) + 2
+        for a in range(steps + 1):
+            edge_x = point[0] + (nxt[0] - point[0]) * (a / steps)
+            edge_y = point[1] + (nxt[1] - point[1]) * (a / steps)
+            span = int(max(abs(edge_x - center[0]), abs(edge_y - center[1]))) + 1
+            for b in range(span + 1):
+                t_ratio = b / span
+                x = center[0] + (edge_x - center[0]) * t_ratio
+                y = center[1] + (edge_y - center[1]) * t_ratio
+                # Denser toward the center: skip more dots the further out.
+                stride = 2 if t_ratio < 0.45 else (3 if t_ratio < 0.8 else 5)
+                if (int(round(x)) + int(round(y))) % stride:
+                    continue
+                canvas.set(x, y)
+
+
 def radar_lines(
     axes: Sequence[dict[str, Any]],
     cell_width: int = 30,
@@ -97,6 +132,7 @@ def radar_lines(
     for point in _axis_points(ones, center, radius):
         canvas.line(center[0], center[1], point[0], point[1])
     canvas.polygon(_axis_points(values, center, radius))
+    _stipple_interior(canvas, _axis_points(values, center, radius), center)
     rendered = canvas.lines()
     legend: list[str] = []
     for index, axis in enumerate(axes):

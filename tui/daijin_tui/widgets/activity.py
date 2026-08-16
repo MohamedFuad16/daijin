@@ -113,6 +113,7 @@ class PhaseChecklist(Static):
         self.job_id: str | None = None
         self.last_event_at: float | None = None
         self.finish_is_inferred = False
+        self.terminal_step: str | None = None
         self.order: list[str] = []
         self.state: dict[str, dict[str, Any]] = {}
         for key, label in phases:
@@ -142,6 +143,7 @@ class PhaseChecklist(Static):
         self.finished_at = None
         self.last_event_at = None
         self.finish_is_inferred = False
+        self.terminal_step = None
         for entry in self.state.values():
             entry.update(
                 {"status": "pending", "detail": "", "counts": {}, "steps": 0, "warns": 0, "started": None, "ended": None}
@@ -167,6 +169,13 @@ class PhaseChecklist(Static):
             self.started_at = now
 
         if phase in TERMINAL_PHASES:
+            # Key on the PHASE, never the step: the step says what happened
+            # (finished, written, kept-yours, failed, cancelled), the phase
+            # says that it ended. A job that announces done and then throws
+            # sends a second done whose step is failed, and hiding that to
+            # protect a one-event invariant would hide the thing most worth
+            # seeing, so the later step wins.
+            self.terminal_step = str(event.get("step") or "")
             for key in self.order:
                 entry = self.state[key]
                 if entry["status"] == "active":
@@ -306,6 +315,8 @@ class PhaseChecklist(Static):
         elif self.finish_is_inferred:
             # The engine never said it finished; the stream simply stopped.
             state = "complete (inferred from an idle stream)"
+        elif self.terminal_step in ("failed", "cancelled"):
+            state = f"ended: {self.terminal_step}"
         else:
             state = "complete"
         return f"{job}  {state}  phase {done}/{len(self.order)}  elapsed {self.elapsed:.1f}s"

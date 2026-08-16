@@ -64,25 +64,31 @@ def with_repo(params: dict[str, Any], repo: Any) -> dict[str, Any]:
 def attempt_number(attempt: dict[str, Any], position: int) -> int:
     """The attempt's index, whatever the engine calls it.
 
-    The v5 contract says attempts are { tokens, verdict, grades }. The engine
-    sends id, work_tokens, verdict and axes. Rather than pick one and render
-    blanks against the other, read both and fall back to position. The
-    divergence is reported, not silently absorbed.
+    The engine's boundary mapping now sends id, so the earlier read-both-names
+    bridge is gone. Position remains the fallback for a row that carries none.
     """
-    for key in ("n", "id"):
-        value = attempt.get(key)
-        if isinstance(value, int):
-            return value
+    value = attempt.get("id")
+    if isinstance(value, int):
+        return value
     return position
 
 
 def attempt_tokens(attempt: dict[str, Any]) -> int:
-    """Work tokens, under either name the two sides use."""
-    for key in ("tokens", "work_tokens"):
-        value = attempt.get(key)
-        if isinstance(value, (int, float)):
-            return int(value)
-    return 0
+    """Work tokens spent on the attempt."""
+    value = attempt.get("tokens")
+    return int(value) if isinstance(value, (int, float)) else 0
+
+
+def attempt_cap(attempt: dict[str, Any]) -> int | None:
+    """The attempt's token cap, which is the bar's real denominator.
+
+    A token count without its cap is unreadable: 41,200 means one thing under a
+    450,000 cap and another under 800,000. Scaling the bars to the tallest
+    attempt instead would make every chart look the same no matter how much
+    headroom the run actually had.
+    """
+    value = attempt.get("tokenCap")
+    return int(value) if isinstance(value, (int, float)) and value > 0 else None
 
 
 class ExamsScreen(DaijinScreen):
@@ -274,10 +280,14 @@ class ExamsScreen(DaijinScreen):
         else:
             history.set_data([])
         if numbered:
+            caps = [attempt_cap(a) for _, a in numbered]
+            cap = max((c for c in caps if c), default=None)
             tokens.set_data(
                 [str(n) for n, _ in numbered],
                 [attempt_tokens(a) for _, a in numbered],
                 [texture_for_verdict(a.get("verdict")) for _, a in numbered],
+                ceiling=cap,
+                ceiling_label=f"cap {cap:,}" if cap else "",
             )
         else:
             tokens.set_data([], [])

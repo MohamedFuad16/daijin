@@ -39,6 +39,8 @@ class DitherBars(Static):
         self.labels: list[str] = []
         self.values: list[float] = []
         self.textures: list[Texture] = []
+        self.ceiling: float | None = None
+        self.ceiling_label = ""
         self.add_class("dither-bars")
 
     def set_data(
@@ -46,10 +48,17 @@ class DitherBars(Static):
         labels: Sequence[str],
         values: Sequence[float],
         textures: Sequence[Texture] | None = None,
+        ceiling: float | None = None,
+        ceiling_label: str = "",
     ) -> None:
         self.labels = [str(label) for label in labels]
         self.values = [float(value) for value in values]
         self.textures = list(textures) if textures else [NEUTRAL] * len(self.values)
+        # A real ceiling makes the bars comparable across exams. Without one
+        # they are scaled to the tallest bar, so every chart looks equally full
+        # however much headroom the run had.
+        self.ceiling = float(ceiling) if ceiling else None
+        self.ceiling_label = ceiling_label
         self.refresh()
 
     def render(self) -> Text:
@@ -60,7 +69,11 @@ class DitherBars(Static):
             text.append("no data", style="dim")
             return text
         grid = dither_grid(
-            self.values, self.textures, height=self.chart_height, width=self.bar_width
+            self.values,
+            self.textures,
+            height=self.chart_height,
+            width=self.bar_width,
+            ceiling=self.ceiling,
         )
         for row in grid:
             for cell, texture in row:
@@ -76,6 +89,8 @@ class DitherBars(Static):
                 shown.append(texture)
         if shown:
             text.append(legend(shown), style="dim")
+        if self.ceiling_label:
+            text.append(f"   {self.ceiling_label}", style="dim")
         return text
 
 

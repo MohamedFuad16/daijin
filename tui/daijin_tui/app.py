@@ -28,7 +28,9 @@ from .rpc import (
     MockRpcClient,
     RpcClient,
     RpcError,
+    SocketRpcClient,
     StdioRpcClient,
+    default_socket_path,
 )
 from .screens import (
     BoardScreen,
@@ -47,6 +49,7 @@ from .screens import (
 # launching that gets a process that exits 0 without ever answering, which is a
 # silent failure a first-run user cannot diagnose.
 ENGINE_COMMAND = "node engine/src/rpc/daemon.js"
+DEFAULT_STATE_ROOT = "~/.daijin"
 
 
 class DaijinApp(App):
@@ -121,6 +124,20 @@ class DaijinApp(App):
 
 
 def build_client(args: argparse.Namespace) -> tuple[RpcClient, bool]:
+    if args.socket:
+        # Attach to a running daemon, or start one and attach to that. Several
+        # windows then share one engine, which is the whole point: stdio is
+        # parent-child and a second window cannot share the pipe.
+        command = (args.engine or ENGINE_COMMAND).split() + [
+            f"--state-root={args.state_root}",
+            "--socket",
+        ]
+        return (
+            SocketRpcClient(
+                default_socket_path(args.state_root), spawn_command=command
+            ),
+            False,
+        )
     if args.engine:
         return StdioRpcClient(args.engine.split()), False
     engine = MockEngine(
@@ -170,6 +187,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="contract version the mock reports, for exercising the upgrade screen",
     )
     parser.add_argument(
+        "--socket",
+        action="store_true",
+        help="attach to a shared daemon over a unix socket, spawning one if none is running",
+    )
+    parser.add_argument(
+        "--state-root",
+        default=DEFAULT_STATE_ROOT,
+        help=f"where attached repos, settings and the socket live, default {DEFAULT_STATE_ROOT}",
+    )
+    parser.add_argument(
         "--engine",
         default=None,
         help=f"command that starts the engine daemon on stdio, for example {ENGINE_COMMAND!r}",
@@ -179,12 +206,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    if not args.mock and not args.engine:
+    if not args.mock and not args.engine and not args.socket:
         print(
             "The engine is not wired yet. Run the shell against the bundled mock:\n"
             "  daijin . --mock\n"
             "or point it at the engine daemon:\n"
-            f"  daijin . --engine '{ENGINE_COMMAND}'",
+            f"  daijin . --engine '{ENGINE_COMMAND}'\n"
+            "or share one daemon across windows:\n"
+            "  daijin . --socket",
             file=sys.stderr,
         )
         return 2

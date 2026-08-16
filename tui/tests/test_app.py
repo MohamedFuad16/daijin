@@ -122,3 +122,21 @@ async def test_the_engine_command_in_the_help_text_actually_answers_hello(tmp_pa
         )
     finally:
         await client.aclose()
+
+
+def test_socket_flag_selects_the_attaching_client():
+    from daijin_tui.rpc import SocketRpcClient
+
+    client, is_mock = build_client(parse_args([".", "--socket", "--state-root", "/tmp/dj"]))
+    assert isinstance(client, SocketRpcClient)
+    assert is_mock is False
+    assert client.socket_path.endswith("daemon.sock")
+    # It can start a daemon if none is running, and that daemon serves sockets.
+    assert "--socket" in client.spawn_command
+    assert "--state-root=/tmp/dj" in client.spawn_command
+
+
+def test_the_help_offers_the_shared_daemon_too(capsys):
+    assert main([".", ]) == 2
+    err = capsys.readouterr().err
+    assert "--socket" in err

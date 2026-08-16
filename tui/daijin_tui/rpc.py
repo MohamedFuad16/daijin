@@ -30,7 +30,9 @@ import copy
 import inspect
 import json
 import sys
+import time
 from collections import deque
+from pathlib import Path
 from typing import Any, Awaitable, Callable, Iterable, Sequence
 
 from . import mock_data
@@ -256,8 +258,66 @@ def _unwrap(response: dict[str, Any]) -> Any:
     return response.get("result")
 
 
-class StdioRpcClient(RpcClient):
-    """Talks to an engine process over its stdin and stdout."""
+class LineProtocolClient(RpcClient):
+    """Shared framing: one JSON object per line, ids pending per connection.
+
+    Both transports use it, so the wire handling cannot drift between them.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._pending: dict[int, asyncio.Future[Any]] = {}
+
+    async def _pump(self, reader: asyncio.StreamReader) -> None:
+        while True:
+            line = await reader.readline()
+            if not line:
+                break
+            text = line.decode("utf-8", errors="replace").strip()
+            if not text:
+                continue
+            try:
+                message = json.loads(text)
+            except json.JSONDecodeError:
+                continue
+            self._on_message(message)
+
+    def _on_message(self, message: dict[str, Any]) -> None:
+        if not isinstance(message, dict):
+            return
+        if "method" in message and "id" not in message:
+            self.dispatch_notification(str(message["method"]), message.get("params") or {})
+            return
+        request_id = message.get("id")
+        future = self._pending.pop(request_id, None) if request_id is not None else None
+        if future is None or future.done():
+            return
+        try:
+            future.set_result(_unwrap(message))
+        except RpcError as error:
+            future.set_exception(error)
+
+    def _fail_pending(self, error: BaseException) -> None:
+        for future in self._pending.values():
+            if not future.done():
+                future.set_exception(error)
+        self._pending.clear()
+
+    async def _send(self, writer: Any, method: str, params: dict[str, Any] | None) -> Any:
+        request_id = self._request_id()
+        payload = {"jsonrpc": "2.0", "id": request_id, "method": method, "params": params or {}}
+        future: asyncio.Future[Any] = asyncio.get_running_loop().create_future()
+        self._pending[request_id] = future
+        writer.write((json.dumps(payload) + "\n").encode("utf-8"))
+        await writer.drain()
+        return await future
+
+
+class StdioRpcClient(LineProtocolClient):
+    """Talks to an engine process over its stdin and stdout.
+
+    This client OWNS its daemon: the process is its child and dies with it.
+    """
 
     def __init__(self, command: Sequence[str], *, cwd: str | None = None) -> None:
         super().__init__()
@@ -265,7 +325,6 @@ class StdioRpcClient(RpcClient):
         self.cwd = cwd
         self._proc: asyncio.subprocess.Process | None = None
         self._reader: asyncio.Task[None] | None = None
-        self._pending: dict[int, asyncio.Future[Any]] = {}
         self._stderr_reader: asyncio.Task[None] | None = None
         self._stderr: deque[str] = deque(maxlen=STDERR_TAIL_LINES)
 
@@ -311,19 +370,7 @@ class StdioRpcClient(RpcClient):
 
     async def _read_loop(self) -> None:
         assert self._proc is not None and self._proc.stdout is not None
-        stream = self._proc.stdout
-        while True:
-            line = await stream.readline()
-            if not line:
-                break
-            text = line.decode("utf-8", errors="replace").strip()
-            if not text:
-                continue
-            try:
-                message = json.loads(text)
-            except json.JSONDecodeError:
-                continue
-            self._on_message(message)
+        await self._pump(self._proc.stdout)
         # Let the stderr drain finish so a refusal written just before exit is
         # not lost to a race with the stdout EOF.
         if self._stderr_reader is not None:
@@ -333,43 +380,11 @@ class StdioRpcClient(RpcClient):
                 pass
         self._fail_pending(self._startup_error("The engine exited without answering."))
 
-    def _on_message(self, message: dict[str, Any]) -> None:
-        if not isinstance(message, dict):
-            return
-        if "method" in message and "id" not in message:
-            self.dispatch_notification(str(message["method"]), message.get("params") or {})
-            return
-        request_id = message.get("id")
-        future = self._pending.pop(request_id, None) if request_id is not None else None
-        if future is None or future.done():
-            return
-        try:
-            future.set_result(_unwrap(message))
-        except RpcError as error:
-            future.set_exception(error)
-
-    def _fail_pending(self, error: BaseException) -> None:
-        for future in self._pending.values():
-            if not future.done():
-                future.set_exception(error)
-        self._pending.clear()
-
     async def _call_impl(self, method: str, params: dict[str, Any] | None = None) -> Any:
         if self._proc is None:
             await self.start()
         assert self._proc is not None and self._proc.stdin is not None
-        request_id = self._request_id()
-        payload = {
-            "jsonrpc": "2.0",
-            "id": request_id,
-            "method": method,
-            "params": params or {},
-        }
-        future: asyncio.Future[Any] = asyncio.get_running_loop().create_future()
-        self._pending[request_id] = future
-        self._proc.stdin.write((json.dumps(payload) + "\n").encode("utf-8"))
-        await self._proc.stdin.drain()
-        return await future
+        return await self._send(self._proc.stdin, method, params)
 
     async def aclose(self) -> None:
         if self._stderr_reader is not None:
@@ -399,6 +414,211 @@ class StdioRpcClient(RpcClient):
                 pass
             self._proc = None
         self._fail_pending(ConnectionError("client closed"))
+
+
+# Connect states, per TRANSPORT-PROPOSAL.md. There is deliberately no
+# "waiting" state: waiting is a rendering decision this client makes from
+# elapsed_ms at its own threshold, so no number belonging to this UI lives on
+# the engine side.
+CONNECT_CONNECTING = "connecting"
+CONNECT_SPAWNING = "spawning"
+CONNECT_ATTACHED = "attached"
+CONNECT_FAILED = "failed"
+
+# How long to keep retrying a connect before giving up, and how long before the
+# UI should start saying something. Both are this client's to choose.
+CONNECT_BUDGET_S = 2.0
+CONNECT_SAY_SOMETHING_AFTER_S = 0.5
+
+
+class SocketRpcClient(LineProtocolClient):
+    """Attaches to a running daemon over a unix socket, spawning one if absent.
+
+    A separate class from StdioRpcClient rather than a mode of it, because the
+    two have genuinely different lifecycles: the stdio client OWNS its daemon
+    and the socket client usually does not. A client that sometimes owns its
+    engine and sometimes does not eventually grows a quit path that kills a
+    daemon another window is using.
+    """
+
+    def __init__(
+        self,
+        socket_path: str,
+        *,
+        spawn_command: Sequence[str] | None = None,
+        connect_budget: float = CONNECT_BUDGET_S,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
+        super().__init__()
+        self.socket_path = str(socket_path)
+        self.spawn_command = list(spawn_command) if spawn_command else None
+        self.connect_budget = connect_budget
+        self._clock = clock
+        self._reader_stream: asyncio.StreamReader | None = None
+        self._writer: asyncio.StreamWriter | None = None
+        self._reader_task: asyncio.Task[None] | None = None
+        self._spawned: asyncio.subprocess.Process | None = None
+        self._stderr_reader: asyncio.Task[None] | None = None
+        self._stderr: deque[str] = deque(maxlen=STDERR_TAIL_LINES)
+        self._started_at: float | None = None
+        self.connect_state = CONNECT_CONNECTING
+        self.failure: dict[str, Any] | None = None
+
+    # Connect surface -----------------------------------------------------
+
+    @property
+    def elapsed_ms(self) -> int:
+        if self._started_at is None:
+            return 0
+        return int((self._clock() - self._started_at) * 1000)
+
+    @property
+    def should_say_waiting(self) -> bool:
+        """True once the wait is long enough to be worth telling the user.
+
+        A silent multi-second wait looks exactly like a hang, which is the
+        discarded-stderr failure in another form: a real reason, invisible.
+        """
+        return (
+            self.connect_state in (CONNECT_CONNECTING, CONNECT_SPAWNING)
+            and self.elapsed_ms >= CONNECT_SAY_SOMETHING_AFTER_S * 1000
+        )
+
+    @property
+    def owns_daemon(self) -> bool:
+        """Whether this client started the daemon it is talking to."""
+        return self._spawned is not None
+
+    @property
+    def stderr_tail(self) -> str | None:
+        """The spawned daemon's stderr, or None when this client attached.
+
+        None is NOT "the engine said nothing": it means this client never had
+        that daemon's stderr, because someone else started it. Rendering the
+        two the same reports silence from a daemon that may have written a
+        perfectly good refusal to a terminal two windows away.
+        """
+        if self._spawned is None:
+            return None
+        return "\n".join(self._stderr)
+
+    # Lifecycle -----------------------------------------------------------
+
+    async def start(self) -> None:
+        if self._writer is not None:
+            return
+        self._started_at = self._clock()
+        self.connect_state = CONNECT_CONNECTING
+        self.failure = None
+
+        if await self._try_connect():
+            return
+
+        if self.spawn_command:
+            self.connect_state = CONNECT_SPAWNING
+            await self._spawn()
+
+        # Bounded retry. A lost spawn race resolves itself here: the loser's
+        # daemon exits on the lock and its client attaches to the winner.
+        delay = 0.02
+        while (self._clock() - self._started_at) < self.connect_budget:
+            await asyncio.sleep(delay)
+            delay = min(delay * 2, 0.2)
+            if await self._try_connect():
+                return
+
+        self.connect_state = CONNECT_FAILED
+        reason = (
+            f"No engine answered on {self.socket_path} within "
+            f"{self.connect_budget:.1f}s."
+        )
+        self.failure = {"reason": reason, "engineStderr": self.stderr_tail}
+        raise self._connect_error(reason)
+
+    def _connect_error(self, reason: str) -> ConnectionError:
+        tail = self.stderr_tail
+        if tail:
+            return ConnectionError(f"{reason}\n\nThe engine said:\n{tail}")
+        return ConnectionError(reason)
+
+    async def _try_connect(self) -> bool:
+        try:
+            reader, writer = await asyncio.open_unix_connection(self.socket_path)
+        except (FileNotFoundError, ConnectionRefusedError, OSError):
+            return False
+        self._reader_stream, self._writer = reader, writer
+        self._reader_task = asyncio.create_task(self._read_loop())
+        self.connect_state = CONNECT_ATTACHED
+        return True
+
+    async def _spawn(self) -> None:
+        assert self.spawn_command is not None
+        self._spawned = await asyncio.create_subprocess_exec(
+            *self.spawn_command,
+            stdin=asyncio.subprocess.DEVNULL,
+            stdout=asyncio.subprocess.DEVNULL,
+            # Kept, not discarded: a daemon that refuses to start says why here,
+            # and a lock refusal names the holding pid and the lock path.
+            stderr=asyncio.subprocess.PIPE,
+        )
+        self._stderr_reader = asyncio.create_task(self._drain_stderr())
+
+    async def _drain_stderr(self) -> None:
+        assert self._spawned is not None and self._spawned.stderr is not None
+        while True:
+            line = await self._spawned.stderr.readline()
+            if not line:
+                break
+            text = line.decode("utf-8", errors="replace").rstrip()
+            if text:
+                self._stderr.append(text)
+
+    async def _read_loop(self) -> None:
+        assert self._reader_stream is not None
+        await self._pump(self._reader_stream)
+        # The daemon went away. No automatic reconnect: a silent respawn would
+        # present a fresh engine that knows nothing about the job the user was
+        # watching, while the user believes they are still watching it.
+        self.connect_state = CONNECT_FAILED
+        self.failure = {
+            "reason": "The engine stopped.",
+            "engineStderr": self.stderr_tail,
+        }
+        self._fail_pending(self._connect_error("The engine stopped."))
+
+    async def _call_impl(self, method: str, params: dict[str, Any] | None = None) -> Any:
+        if self._writer is None:
+            await self.start()
+        assert self._writer is not None
+        return await self._send(self._writer, method, params)
+
+    async def aclose(self) -> None:
+        for task in (self._reader_task, self._stderr_reader):
+            if task is not None:
+                task.cancel()
+                try:
+                    await task
+                except (asyncio.CancelledError, Exception):
+                    pass
+        self._reader_task = None
+        self._stderr_reader = None
+        if self._writer is not None:
+            try:
+                self._writer.close()
+                await self._writer.wait_closed()
+            except Exception:
+                pass
+            self._writer = None
+        # A daemon this client did NOT start outlives it: other windows may be
+        # attached, and MCP serving and the gym outlive any one window.
+        if self._spawned is not None:
+            self._spawned = None
+        self._fail_pending(ConnectionError("client closed"))
+
+
+def default_socket_path(state_root: str) -> str:
+    """Beside the lock, so the socket follows the state it serves."""
+    return str(Path(state_root).expanduser().resolve() / "daemon.sock")
 
 
 class MockEngine:

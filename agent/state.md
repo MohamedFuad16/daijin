@@ -1,5 +1,39 @@
 # Daijin build state (authoritative)
 
+## 2026-08-17 13:00 - The fifth double is three methods; a probe's bound stated; tip ec1d048
+
+tui-builder swept all thirty mock handlers rather than letting the
+close's "four doubles fixed" imply "all of them exist" - "four fixed
+and four exist are different claims and only one of them was mine to
+make". Probed against the live daemon on a brainless repo: THREE
+methods refuse there (search -32602 with a human hint; examList and
+gymStatus -32603 with a raw driver string) and the mock answered all
+three, so every client branch handling those refusals was unreachable.
+The branches were already correct, WHICH IS THE POINT RATHER THAN A
+LET-OFF: nothing was keeping them correct. Mock now refuses with the
+engine's wording; the retrieval tester's refusal lands where the user
+types, not only in the banner. CI green watched (31969131065), tip
+ec1d048.
+
+THE BOUND STATED, the honest form: the other seven handlers match the
+engine AS FAR AS THAT PROBE REACHES - one adverse condition, named;
+corrupt store, detached-mid-call and colliding writes are explicitly
+NOT claimed. ENGINE ITEM RULED to the extractor: a missing brain is an
+EXPECTED state, and examList/gymStatus refusing it with -32603
+(internal) carrying a raw driver string - which the screens render
+verbatim to the user - while search/diagnose/retrievalScore refuse the
+same state with -32602 and a person's hint, is a miscategorization;
+the engine moves to -32602-with-hint on both.
+
+Near-miss confessed before it hardened: its probe sent a wrong
+parameter name and nearly reported a client defect as someone else's
+surface defect - caught by reading its own code first; "checking what
+the green or the red is evidence OF" covers both directions.
+
+PROCESS: the weaker-trigger reopen (its own unstated bound in the
+leader's close, no external prediction) is RATIFIED under the same
+rule - a claim about a surface entering an owner review outranks an
+administrative close, and visibility remains the control.
 ## 2026-08-17 12:40 - The lead returns to its author; documented is not reachable
 
 The extractor applied tui-builder's lead to its own lane and found the

@@ -48,7 +48,11 @@ async function documentedMethods() {
 const LIVE = Object.freeze({
   search: 'embeds the query against a live Ollama',
   retrievalScore: 'scores the whole gold set through the embedder',
-  diagnose: 're-measures, so it embeds',
+  // Live AND now shape-declared. It was the method that exposed the tiering hole: listed
+  // here because it embeds, described in prose so nothing could compare it, and therefore
+  // checked by NO tier while this list claimed it was covered elsewhere. The row now
+  // declares a shape and the acceptance script compares it.
+  diagnose: 're-measures, so it embeds; its shape is declared and checked in the acceptance script',
   // Its read path returns the file verbatim, so the shape is set by the WRITER, and the
   // writer runs a measurement. Checking it against a hand-written fixture would assert the
   // fixture: the gate's own staleness check caught exactly that here, reporting a pinned

@@ -40,25 +40,15 @@ const { documentedShape } = await import(`${ENGINE}/test/helpers/contract-shape.
 /// its live tier; a check that exists in neither place is the hole both were built to close.
 const LIVE_TIER = ['search', 'retrievalScore', 'diagnose', 'scoreHistory'];
 
-// The same ratchet the unit gate carries, for the same reason and with the same rule: each
-// entry PINS its exact delta, the delta is subtracted, anything beyond it still fails, and
-// the list may only shrink. These are what the live tier found on its first run, which is
-// the tier's whole justification: the unit suite structurally cannot reach these methods,
-// so nothing had ever compared them.
-const DIVERGENT = Object.freeze({
-  search: {
-    extra: ['context'], missing: [],
-    why: 'engine returns the assembled context block beside the chunks; the row names chunks and tokensUsed only',
-  },
-  retrievalScore: {
-    extra: ['at'], missing: [],
-    why: 'engine stamps when the measurement was taken, which the history row also carries; the contract row does not name it',
-  },
-  diagnose: {
-    extra: [], missing: [], undocumented: true,
-    why: 'the contract row describes this return in English and declares no shape, so there is nothing to compare against. It was listed as live because it embeds, and being live hid that it is also prose: neither tier was going to check it',
-  },
-});
+// The same ratchet the unit gate carries, and EMPTY for the same reason that one is: the
+// three entries this tier found on its first run were all resolved by amending the rows
+// they disagreed with. `search.context` is the product an agent pastes, `retrievalScore.at`
+// is the stamp the history row already documents, and `diagnose` traded prose for a
+// declared shape, which is what closed the falling-between-tiers hole it exposed.
+//
+// The rule if it fills again: each entry PINS its exact delta, the delta is subtracted,
+// anything beyond it still fails, staleness is reported, and the list may only shrink.
+const DIVERGENT = Object.freeze({});
 
 const keep = process.argv.includes('--keep');
 const results = [];

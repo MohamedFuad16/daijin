@@ -84,8 +84,15 @@ test('the reader works against the REAL contract, not only fixtures', async () =
   assert.ok(attempts.includes('tokens') && attempts.includes('grades'));
   assert.equal(attempts.some((key) => key.includes('_')), false, 'no ledger column names are documented');
 
+  // A PROPERTY, not a snapshot. The first version asserted search's row equalled
+  // ['chunks','tokensUsed'] and broke the moment the row was legitimately amended, which
+  // is a test asserting today's contract rather than the reader's ability to read it. The
+  // contract-shape gate is what compares the row against the engine; this file only has to
+  // prove the reader works.
   const search = await documentedKeys('search');
-  assert.deepEqual(search, ['chunks', 'tokensUsed']);
+  assert.ok(search.includes('chunks') && search.includes('tokensUsed'),
+    'the reader finds the stable core of a real row');
+  assert.ok(search.every((key) => /^[a-zA-Z][a-zA-Z0-9]*$/.test(key)), 'and reads keys rather than prose');
 });
 
 test('optionality survives the read, because the contract really says it', async () => {

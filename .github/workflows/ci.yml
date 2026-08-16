@@ -48,7 +48,10 @@ jobs:
         working-directory: engine
       - run: pip install -e .[dev]
         working-directory: tui
-      - run: python -m pytest
+      # -rs prints the reason for every skip. The wire-conformance check skips
+      # here because CI has no Ollama and so no indexed brain, and a skip whose
+      # reason nobody can read is how a skip path quietly becomes the only path.
+      - run: python -m pytest -rs
         working-directory: tui
   install-dry-run:
     runs-on: ubuntu-latest

@@ -1,5 +1,42 @@
 # Daijin build state (authoritative)
 
+## 2026-08-17 06:00 - The claim audit closes the engine; a prose row can go stale silently
+
+The audit landed (1abfbdc): one false claim in five rows, the
+predicted rate - AND IT WAS THE AUDITOR'S OWN, introduced an hour
+earlier. gatesSet promised "updated gates.yaml" and returned
+{ path, content } while its sibling gatesGet had just gained
+{ discovered, parseError }: a client that SET a file and re-rendered
+got a different shape than one that GOT it - the exact defect
+tui-builder reported, reintroduced between sibling methods because one
+of a pair was fixed without looking at the other. Engine moved per the
+standing test (the row promised it, the product wants it - a user who
+saves learns immediately whether the file still parses); the gate now
+holds the pair together.
+
+THE AUDIT'S REAL FINDING, sharper than the bucket's original danger:
+A PROSE ROW CAN GO STALE SILENTLY. gatesSet was accurate when written
+and became false when its NEIGHBOR changed, with nothing noticing for
+an hour - no author error needed, only a change elsewhere. The printed
+residual now says so: claims verified 2026-08-17; verified once is
+weaker than a running gate.
+
+Verified and staying prose, annotated: settingsGet (every key present;
+key MASKING checked with a sentinel appearing nowhere in the
+serialized response), settingsSet, agentFileSet. ONE FALSE ALARM
+CAUGHT INSIDE THE AUDIT, kept because a leak claim is the worst thing
+to get wrong in either direction: the first masking probe printed
+raw-key-material-true on a fixture with NO keys - re-derived directly
+(zero matches), then tested properly with a sentinel; the true was the
+probe's own artifact, and passing it on would have cost the team an
+evening on a secrets leak that did not exist. Design observation
+parked, not acted on: keyRef rides in full beside keyMasked, so the
+masked form is decorative today; true-but-worth-an-eye.
+
+THE ENGINE IS QUIET. Final surface: 20 covered, 3 prose
+claims-verified, 4 live, 3 refusing, ZERO divergent. 616/616 unit,
+18/18 acceptance. Remaining project-wide: tui-builder's gates-table
+restoration; then the owner's sequence (ultrareview, D-0034).
 ## 2026-08-17 05:40 - gatesGet was a mapping; prose rows are unchecked CLAIMS
 
 gatesGet landed (0c64509): the classification WAS NEVER MISSING -

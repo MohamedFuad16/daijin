@@ -1,61 +1,183 @@
+<div align="center">
+
 # Daijin
 
-An installable engineering-memory tool: a Textual TUI over a Node engine daemon
-that connects to any repo, builds and serves a project brain over MCP behind a
-measured retrieval floor, and runs the certification gym with the ADR-0167
-harness defaults.
+**A project brain for any repo: measured retrieval served over MCP, with a certification gym for coding agents. Terminal-native.**
 
-Extracted from the AI Brain Platform
-(`~/Documents/Codex/2026-07-21/hand-ai-brain-build-instructions-md/ai-brain-platform`).
-The extraction copies, it never mutates the platform, until parity is proven.
+[![TUI](https://img.shields.io/badge/TUI-Python_Textual-1f425f?style=for-the-badge&logo=python&logoColor=white)](tui/)
+[![Engine](https://img.shields.io/badge/Engine-Node_22_ESM-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)](engine/)
+[![Retrieval](https://img.shields.io/badge/Retrieval-Local_first%2C_zero_spend-brightgreen?style=for-the-badge)](#the-floor-is-measured)
+[![Tests](https://img.shields.io/badge/Tests-900%2B_across_both_suites-blue?style=for-the-badge)](#getting-started)
 
-## Layout
+</div>
 
-- `engine/` Node ESM. Copied core plus new code. Owns DB, MCP, gym, RPC.
-- `tui/` Python Textual. Pure RPC client.
-- `adapters/` sqlite-vec + FTS5 binding, Ollama client.
-- `install/` curl script and packaging.
-- `docs/daijin-build-plan.md` the authoritative build plan (leader's brief).
-- `agent/state.md` the authoritative build-state record.
+---
 
-## Non-negotiable constraints
+## Overview
 
-- Zero-spend defaults. Nothing in retrieval calls a paid API. Gym spend sits
-  behind an owner gate, blocked by default.
-- Tests first. Every mechanism ships with a test that fails without it.
-- No em dashes or en dashes anywhere. Identifiers and commits in English.
-- Frozen contracts: `engine/src/store/store.d.ts` and `engine/src/rpc/methods.md`.
+Daijin connects to any git repository, builds a **project brain** (durable,
+evidence-cited markdown knowledge distilled from the codebase and its history),
+indexes it locally, and serves it to AI assistants over **MCP**, but only after
+the brain passes a **measured retrieval floor**. A brain that cannot answer
+questions about its own repo does not get recommended to your tools.
 
-## Measured anchors (verify, do not re-derive)
+On top of the brain sits a **certification gym**: exams mined from the repo's
+real commit history, run under a harness with graded five-axis rubrics, an
+append-only ledger, and a spend gate that is **blocked by default** and opened
+only by the owner's hand.
+
+The whole product is terminal-native: a Python Textual TUI over a Node engine
+daemon, speaking a frozen JSON-RPC contract over stdio or a Unix socket.
+
+## Features
+
+- **Brain init pipeline**: analyze the repo, scaffold a canonical markdown
+  brain (`.daijin/brain/`: architecture, conventions, decisions, lessons),
+  mine a gold set of retrieval cases from real commits, and index it all
+  locally. The index is disposable by design; the brain files are the truth
+  and the index regenerates from them at any time.
+- **Three-layer memory architecture**: the agent contract (never indexed,
+  always loaded), the brain (durable, hand-editable markdown with citations),
+  and the index (throwaway, lives outside the repo under `~/.daijin/`).
+  Generated brains are hand-editable into curated ones with no format
+  migration.
+- **A floor, not a vibe**: retrieval quality is scored against the mined gold
+  set and reported in count form (`31 of 34`), never as a bare rounded
+  percentage. Every floor report carries a permuted-control range so a
+  saturated score cannot masquerade as a meaningful one. MCP serving unlocks
+  only above the floor threshold.
+- **Local-first, zero-spend retrieval**: bge-m3 embeddings via local Ollama,
+  sqlite-vec + FTS5 hybrid search with RRF fusion. Nothing in the retrieval
+  path calls a paid API, ever.
+- **Certification gym**: exams with provenance, five-axis graded rubrics
+  rendered as radar and dithered charts, per-attempt token accounting against
+  the real cap, quarantine semantics for compromised benchmarks, and
+  certify-by-elimination. All provider spend sits behind an owner-only gate
+  file; the engine can only ever write it blocked.
+- **Eight-screen TUI**: repos, init activity feed (live step events), brain
+  browser + retrieval tester, gates, gym, exams, board, settings. Textured
+  chart vocabulary (pattern and color as two channels, readable without
+  color), three motion modes (full, reduced, off), and a full mock mode so
+  the UI runs with no engine at all.
+- **Gates as data**: CI commands are discovered from the repo, classified
+  against a measured baseline, and stored in a `gates.yaml` the user owns.
+  The engine never overwrites a user's edit; if discovery loses the race it
+  keeps your version and says so on the stream.
+- **A contract that can fail the build**: the RPC surface is a frozen,
+  versioned document, and a shape gate asserts that what the engine emits
+  matches what the contract documents, in both directions, with its
+  uncovered set printed every run.
+
+## How It Works
+
+```
+1. Attach     daijin connects to your repo; state lives under ~/.daijin, never in your tree.
+2. Init       analyze -> scaffold brain -> mine gold set -> discover gates -> index -> measure.
+3. Floor      retrieval is scored against the gold set, with a permuted control beside it.
+4. Serve      above the floor, daijin hands you a paste-ready MCP snippet for your tools.
+5. Gym        (owner-gated) exams run under the harness; rubrics grade five axes; the
+              ledger records everything, and only evaluation-mode runs touch the scored record.
+```
+
+## Tech Stack
+
+| Layer | Technology |
+| ----- | ---------- |
+| TUI | Python 3.12+, Textual, plotext, custom texture/motion vocabularies |
+| Engine | Node 22, pure ESM, no framework |
+| Store | SQLite + sqlite-vec (1024-dim) + FTS5 (`porter unicode61`), RRF fusion |
+| Embeddings | Ollama, `bge-m3`, fully local |
+| RPC | JSON-RPC 2.0 over stdio or Unix socket, frozen contract (`methods.md` v5) |
+| Serving | MCP (Model Context Protocol) server per repo |
+| Testing | `node:test` (engine, 600+) and pytest (TUI, 320+), mutation-verified gates |
+
+## Project Structure
+
+```
+engine/                  # Node daemon: store, init pipeline, RAG, gym, RPC, MCP
+  src/store/store.d.ts   # Frozen storage contract
+  src/rpc/methods.md     # Frozen RPC contract (v5), enforced by a shape gate
+  test-live/             # Live-only harnesses (need Ollama): fixtures, parity, acceptance
+tui/                     # Python Textual client: eight screens, mock mode, motion + texture
+adapters/                # sqlite-vec + FTS5 binding, Ollama client
+install/                 # Install script and clean-machine dry run
+docs/
+  daijin-build-plan.md   # The authoritative build plan and registered acceptances
+  verification/          # Durable evidence: measurements, mutation batteries, protocols
+agent/                   # Build records: state.md (authoritative), decisions.md (ADRs)
+```
+
+## Getting Started
+
+Prereqs: Node 22+, Python 3.12+, and a local [Ollama](https://ollama.com) with
+`bge-m3` pulled (only needed for real indexing; the TUI runs without it in
+mock mode).
+
+```bash
+# Engine
+cd engine
+npm install
+npm test                 # 600+ tests, zero network, zero spend
+
+# TUI
+cd ../tui
+python -m venv .venv && .venv/bin/pip install -e '.[dev]'
+.venv/bin/python -m pytest   # 320+ tests
+
+# Explore the full UI with no engine and no Ollama
+.venv/bin/daijin . --mock
+
+# Point it at a real repo (spawns the engine daemon)
+.venv/bin/daijin /path/to/your/repo
+```
+
+Everything above runs at zero spend. The only provider-calling paths in the
+product (gym runs, auditor narration, Layer 2 enrichment) refuse unless the
+owner's spend gate is open and the spend is explicitly confirmed in the UI.
+
+## The Floor Is Measured
+
+Anchors from the source platform, kept exact because rounded displays have
+failed healthy trees before. Verify against the committed baselines; do not
+re-derive from memory.
 
 [Corrected 2026-08-16 after verifier report 1: the first freeze of this section
 carried k=10 and a rounded 91.2% floor; both were wrong against the committed
 baseline.]
 
-- Retrieval floor, per platform/rag/retrieval-baseline.json (measured
-  2026-08-14 at platform commit 7917fab, corpus 538 documents):
-  caseRate exactly 0.9117647058823529, which is 31 of 34 cases. Floors compare
-  against the exact rational, never a rounded percentage; a 0.912 floor fails
-  a healthy tree. caseRate and violations (0) are ENFORCED. MRR
-  0.6588935574229692 is recorded for movement only and deliberately NOT
-  floored: in the 2026-08-09 regression, case rate fell while MRR rose.
-- Config behind that floor: k=8, tokenBudget 4000, RRF_K 60,
-  perCandidateCapRatio 0.22, slot floor 0.55, raw-cosine champion, standing
-  pins outside the budget.
-- FTS5 recipe: `tokenize='porter unicode61'` (porter stems), stopword
-  filtering via a 30-word hand-written list approximating Postgres 'english'
-  (not snowball), whitespace tokens as quoted phrases, bm25, top 40. Evidence:
-  docs/fts5-report.json; the script docs/fts5-adapter-recipe.py is a preserved
-  measurement instrument, not product code, and its header prose is corrected
-  in place.
-- Budget policy: 4,000 is the anchor; the shipped number is measured per repo
-  by an init-time sweep at 3k/4k/6k/8k, smallest budget within one case of the
-  best score. The content-survival gate is the mechanical raise signal.
-- Platform suite: 599 tests, 599 pass (measured 2026-08-16 by the leader,
-  `npm test` in the platform repo). This is the green constraint during
-  extraction.
-- Three measured MRR reference points on the platform corpus at k=8; any
-  comparison names its reference and path (D-0017): 0.6588935574229692
-  pgvector parity path; 0.6637955182072829 pgvector shipped path (ORDER BY
-  d.id); 0.6598739495798318 sqlite shipped path. Case rate is identical
-  (0.9117647058823529) on all three.
+- Retrieval floor, per the platform's `retrieval-baseline.json` (measured
+  2026-08-14, corpus 538 documents): caseRate exactly
+  `0.9117647058823529` = 31 of 34 cases. caseRate and violations (0) are
+  enforced; MRR (`0.6588935574229692`) is recorded for movement only and
+  deliberately not floored (case rate has fallen while MRR rose).
+- Config behind the floor: k=8, tokenBudget 4000, RRF_K 60,
+  perCandidateCapRatio 0.22, slot floor 0.55, raw-cosine champion.
+- Budgets are measured per corpus by an init-time sweep (3k/4k/6k/8k),
+  smallest budget within one case of the best score; the content-survival
+  gate is the mechanical raise signal, and it has moved a real budget.
+- Three MRR reference points exist for the platform corpus at k=8; any
+  comparison names its reference and path (D-0017).
+
+## Project Discipline
+
+- **Zero-spend defaults.** Nothing in retrieval calls a paid API. Gym spend
+  sits behind an owner gate, blocked by default, observable before anything
+  is attempted.
+- **Tests first, and tests that can fail.** Every mechanism ships with a test
+  that fails without it; gates and batteries are mutation-verified, and a
+  check that has never been seen to fail is not yet a check.
+- **Frozen contracts**: `engine/src/store/store.d.ts` and
+  `engine/src/rpc/methods.md`. Contract changes require the leader, and the
+  shape gate makes the contract able to break the build.
+- **Style**: no em dashes or en dashes anywhere; identifiers and commits in
+  English.
+
+## License
+
+Private project. All rights reserved.
+
+---
+
+<div align="center">
+Built by <a href="https://github.com/MohamedFuad16">Mohamed Fuad</a>
+</div>

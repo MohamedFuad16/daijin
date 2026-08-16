@@ -167,8 +167,13 @@ P8 INTEGRATION (registered 2026-08-16 17:52, pre-registered before any part is
    extractor, attacked by the verifier). The real TUI against the real daemon,
    real store, real embedder, zero spend, on a fixture repo initialized by the
    real pipeline. Clauses, each falsifiable: (a) daijin <repo> reaches a working
-   engine over BOTH transports (stdio spawn and socket attach), and all seven
-   screens render live data, no mock on either side; (b) the boot screen renders
+   engine over BOTH transports (stdio spawn and socket attach), and EVERY screen
+   in app.MODES renders live data, no mock on either side [corrected 2026-08-16
+   from "all seven screens", a constant inherited from P5's keyboard clause
+   across a change of meaning: seven is the number of key-reachable screens,
+   eight is the number that render, and the init screen's rendering is
+   demonstrated through clause (c); the MODES reference is the form that cannot
+   go stale]; (b) the boot screen renders
    real serveStatus cards with the concurrency strand active and a visible
    loading state, never a frozen frame; (c) the init activity feed renders a
    REAL initBrain layer1 run's step events end to end on the fixture repo; (d)
@@ -179,7 +184,11 @@ P8 INTEGRATION (registered 2026-08-16 17:52, pre-registered before any part is
    ungraded, reasons from ungradedCode; (f) spend surfaces are live: gymStart's
    refusal renders the real gate path, consent dialogs show a real
    budgetEstimate with its basis, and no spend-touching call passes without
-   confirm; (g) both connect stories demonstrated: spawn-owning and
+   confirm, with the stated bound [added 2026-08-16, verifier audit] that the
+   CONFIRMED direction of the paid methods (rolePing, diagnoseNarrate, initBrain
+   layer1+layer2) belongs to the owner-gated live half and is out of this
+   clause, the same handling P4 and P7 gave their live halves; (g) both connect
+   stories demonstrated: spawn-owning and
    attach-to-running (two TUIs, one daemon), and a second daemon's lock refusal
    reaching the user through the stderr tail; (h) motion runs against the live
    stream in all three modes, and the coalescing claim gets its REAL-TERMINAL

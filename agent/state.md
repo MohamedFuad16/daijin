@@ -1,5 +1,33 @@
 # Daijin build state (authoritative)
 
+## 2026-08-17 02:50 - Findings 85 and the done-invariant both landed; gate scoped two-tier
+
+Both post-verdict engine items are in. THE DONE-INVARIANT (aedd617,
+4562011; contract at f5e59c2): every job emits exactly one done-phase
+event, runner fills in finished only when the job did not announce its
+own, refuses events after done, with the one deliberate exception
+tested and in the contract text (done-then-throw reports both, failed
+second - suppressing a failure to preserve a count would hide what the
+user most needs). Verified on the real fixture; four mutations bite.
+
+THE ATTEMPTS ROW (d8a4731; contract at 073fca2): the designed boundary
+shape { id, at, status, verdict, tokens, tokenCap, grades, axes,
+ungradedCode, ungradedReason }, newest first. tokenCap ships because a
+count without its cap is unreadable; grades and axes are THE SAME list
+under both documents' names with a test asserting they cannot diverge;
+five storage fields are gone with reasons in the source; the key set
+is CLOSED so a field cannot arrive by accident the way these did. The
+by-name rubric leak (finding 85's forbidden shape) is off the wire.
+Shape test does four things and four mutations bite. Suite 600/600.
+mode stays off the wire with the comeback path stated (add it when a
+screen wants to grey out harness-debug attempts, never infer it).
+
+CONTRACT-SHAPE GATE SCOPED TWO-TIER, per the no-silent-caps rule: the
+unit-suite gate covers every method a hermetic test can call; the
+live-embedder methods are covered in the acceptance script's runs; and
+the gate NAMES its uncovered set in its output, because a gate that
+silently covers a subset reads as covering everything. Remaining
+queue: the gate, the acceptance script, tui-builder's dither work.
 ## 2026-08-17 02:25 - Finding 85: the divergence is larger; queue reordered
 
 REPORT 22 ADDENDUM, from the verifier spending its check on the one

@@ -43,6 +43,17 @@ export const ADR_0167_DEFAULTS = Object.freeze({
   /** Edits since the boundary that count as forward motion. */
   progressEdits: 2,
   maxRounds: 30,
+  /** ADR-0147's pre-seal check: the fraction of the cap at which unverified edits get one
+   *  last verdict while the student can still act on it. null disables. Distinct from the
+   *  boundary check in both trigger and audience: the boundary check fires at the CROSSING
+   *  and its verdict is never delivered; this one fires BEFORE the crossing and its whole
+   *  purpose is delivery. exp4's twice-observed failure was a run sealing over edits nobody
+   *  had checked, with budget still on the clock to fix them. */
+  preSealFraction: 0.85,
+  /** How many times the pre-seal check may re-arm. A delivery commissions new edits ("fix
+   *  these errors"), and those edits themselves need verifying; unbounded, a student that
+   *  edits after every delivery would spend its remaining budget on checks. */
+  preSealMaxDeliveries: 2,
 });
 
 function integer(value, fallback, min, max, name) {
@@ -52,6 +63,34 @@ function integer(value, fallback, min, max, name) {
     throw new Error(`${name} must be an integer from ${min} to ${max}.`);
   }
   return parsed;
+}
+
+function fraction(value, fallback, name) {
+  if (value === undefined || value === '') return fallback;
+  const parsed = Number(value);
+  // Bounded away from both ends: at 0 the check fires on the first token, and at 1 it fires
+  // at the cap, where the seal has already taken the decision away from the student.
+  if (!Number.isFinite(parsed) || parsed < 0.1 || parsed > 0.95) {
+    throw new Error(`${name} must be a number from 0.1 to 0.95, or null to disable.`);
+  }
+  return parsed;
+}
+
+/**
+ * Should the pre-seal check fire now?
+ *
+ * ADR-0147. Three conditions, and the middle one is the whole point: there must be edits NO
+ * check has assessed. A run whose recent work is already verified needs no last verdict, and
+ * firing anyway would spend gate time to tell the student what it already knows.
+ */
+export function preSealDecision({
+  fraction: preSealFraction, workTokens, tokenCap, editsSinceAssessedCheck, deliveries, maxDeliveries, canCheck, solved,
+}) {
+  if (preSealFraction === null || preSealFraction === undefined) return false;
+  if (!canCheck || solved) return false;
+  if (deliveries >= maxDeliveries) return false;
+  if (editsSinceAssessedCheck <= 0) return false;
+  return workTokens >= tokenCap * preSealFraction;
 }
 
 /**
@@ -111,6 +150,10 @@ export function resolveBudgetPolicy(config = {}) {
     submitRehearsal: config.submitRehearsal === undefined ? defaults.submitRehearsal : Boolean(config.submitRehearsal),
     progressEdits: integer(config.progressEdits, defaults.progressEdits, 1, 20, 'progressEdits'),
     maxRounds: integer(config.maxRounds, defaults.maxRounds, 1, 100, 'maxRounds'),
+    preSealFraction: config.preSealFraction === null ? null : fraction(
+      config.preSealFraction, defaults.preSealFraction, 'preSealFraction',
+    ),
+    preSealMaxDeliveries: integer(config.preSealMaxDeliveries, defaults.preSealMaxDeliveries, 0, 10, 'preSealMaxDeliveries'),
   };
   for (const [tier, cap] of Object.entries(policy.tierTokenCaps)) {
     if (!Number.isInteger(cap) || cap < 1_000 || cap > 5_000_000) {

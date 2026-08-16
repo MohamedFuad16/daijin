@@ -9,7 +9,7 @@ import test from 'node:test';
 import { tokens } from '../src/rag/tokens.js';
 import {
   BUDGET_SWEEP, MCP_UNLOCK_THRESHOLD, caseRateOf, checkContentSurvival, chooseBudget,
-  localCorpus, mcpUnlock, sourceContentFor, sweepBudgets, withEmbeddingEnvironment,
+  localCorpus, mcpUnlock, sourceContentFor, sweepBudgets,
 } from '../src/init/floor.js';
 
 const point = (tokenBudget, hits, total = 25) => ({
@@ -153,22 +153,31 @@ test('a unit with no registered core is skipped rather than counted as surviving
 
 // --- the harness seam ---------------------------------------------------------------
 
-test('localCorpus names its own environment variable rather than a database URL', () => {
-  const environment = {};
-  const corpus = localCorpus({ id: 'fixture', project: 'default', goldsetPath: '/tmp/g.yaml', environment });
-  assert.equal(corpus.databaseUrlEnv, 'DAIJIN_INJECTED_STORE');
-  assert.match(environment.DAIJIN_INJECTED_STORE, /no-connection-string/);
+test('localCorpus carries no connection string at all', () => {
+  const before = { ...process.env };
+  const corpus = localCorpus({ id: 'fixture', project: 'default', goldsetPath: '/tmp/g.yaml' });
+  assert.equal(corpus.databaseUrlEnv, undefined, 'a SQLite corpus has no database URL to name');
   assert.equal(corpus.retrievalFixesPath, null, 'curated fixes are per-corpus data a fresh repo has none of');
+  assert.deepEqual({ ...process.env }, before, 'building a corpus descriptor touches nothing global');
 });
 
-test('the borrowed embedding environment is put back exactly, absent keys included', async () => {
-  delete process.env.EMBEDDING_MODEL_TEST_ONLY;
-  process.env.EMBEDDING_DIM = 'original';
-  await withEmbeddingEnvironment({ EMBEDDING_DIM: '64', EMBEDDING_MODEL_TEST_ONLY: 'x' }, async () => {
-    assert.equal(process.env.EMBEDDING_DIM, '64');
-    assert.equal(process.env.EMBEDDING_MODEL_TEST_ONLY, 'x');
-  });
-  assert.equal(process.env.EMBEDDING_DIM, 'original');
-  assert.equal('EMBEDDING_MODEL_TEST_ONLY' in process.env, false, 'a key that was absent must be absent again');
-  delete process.env.EMBEDDING_DIM;
+test('the sweep hands the environment to the harness instead of lending process.env', async () => {
+  // The earlier lend-and-restore was a race the moment two measurements overlap, and the
+  // sweep runs four in a row. The environment now travels as an argument.
+  const seen = [];
+  const before = { ...process.env };
+  const score = async ({ environment, retrieveOptions }) => {
+    seen.push({ environment, tokenBudget: retrieveOptions.tokenBudget, envDuring: process.env.EMBEDDING_MODEL });
+    return {
+      summary: { cases: 2, caseRate: 1, mrr: 1, violations: 0, hitRate: 1, identifierCases: 1, identifierCaseRate: 1 },
+      results: [{ id: 'g1', complete: true }, { id: 'g2', complete: true }],
+      record: {},
+    };
+  };
+  const environment = { EMBEDDING_MODEL: 'injected-only', EMBEDDING_DIM: '8' };
+  await sweepBudgets({ corpus: { retrieveOptions: {} }, store: {}, score, budgets: [3000, 4000], environment });
+  assert.equal(seen.length, 2);
+  assert.ok(seen.every((call) => call.environment.EMBEDDING_MODEL === 'injected-only'), 'every point receives it');
+  assert.ok(seen.every((call) => call.envDuring === before.EMBEDDING_MODEL), 'and process.env is never written');
+  assert.deepEqual({ ...process.env }, before);
 });

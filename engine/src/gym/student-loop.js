@@ -29,7 +29,7 @@
 // order is an artifact of where usage lands in a chat-completions round trip; discarding the
 // evidence produced by the very tokens that crossed the cap is not a property worth porting.
 
-import { boundaryCheckDecision, budgetExtensionDecision } from './budget.js';
+import { boundaryCheckDecision, budgetExtensionDecision, preSealDecision } from './budget.js';
 
 export const STUDENT_ACTIONS = Object.freeze(['edit', 'read', 'check', 'submit']);
 
@@ -127,6 +127,12 @@ export async function runStudentLoop({
   // because a live driver's create-file tool is the only thing that knows, and scanning for
   // untracked files instead would sweep in whatever the build wrote.
   const createdPaths = new Set();
+
+  // Pre-seal lifecycle (ADR-0147). 'not-reached' means the run ended before the conditions
+  // met, which is a different fact from 'the check ran and passed' and is recorded as such:
+  // an artifact that cannot tell those apart cannot say whether a treatment landed.
+  let preSealDeliveries = 0;
+  let preSealState = policy.preSealFraction === null ? null : 'not-reached';
 
   const buildChecks = [];
   const extensions = [];
@@ -241,6 +247,30 @@ export async function runStudentLoop({
       await logger.step('gym-student-read', { round }, 'no forward motion recorded');
     }
 
+    // The pre-seal check (ADR-0147), BEFORE the crossing rather than at it. Unverified edits
+    // exist and the budget is nearly gone, so the student gets one last verdict while it can
+    // still act on it. This verdict IS delivered, which is the entire difference between this
+    // check and the boundary check below.
+    if (preSealDecision({
+      fraction: policy.preSealFraction,
+      workTokens,
+      tokenCap: cap,
+      editsSinceAssessedCheck,
+      deliveries: preSealDeliveries,
+      maxDeliveries: policy.preSealMaxDeliveries,
+      canCheck: Boolean(checkBuild),
+      solved: Boolean(solution),
+    })) {
+      preSealDeliveries += 1;
+      const record = await runCheck('pre-seal', true);
+      preSealState = record?.status === 'pass' ? 'passed' : 'delivered';
+      if (record && record.status !== 'pass') {
+        message = 'PRE-SEAL CHECK: your budget is nearly spent and your last edits do not build. '
+          + `The check reported ${record.diagnostics} diagnostic(s), exit ${record.exitCode}. `
+          + 'Fix them now: unverified edits are discarded when the budget seals.';
+      }
+    }
+
     // The boundary check. The crossing found edits with no verdict, so the harness produces
     // the verdict itself rather than refusing on hygiene. The result is NOT delivered to the
     // student, so every delivery label keeps its meaning.
@@ -341,6 +371,8 @@ export async function runStudentLoop({
       buildChecks,
       extensions,
       rehearsals,
+      preSealBuildCheck: preSealState,
+      preSealDeliveries,
       sealedState: solution?.sealed ? solution.sealedState : null,
       sealedStateChecked: solution?.sealed ? editsSinceAssessedCheck === 0 : null,
       discardedEdits: solution?.discardedEdits ?? 0,

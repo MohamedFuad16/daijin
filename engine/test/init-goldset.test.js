@@ -13,7 +13,7 @@ import {
 } from '../src/init/goldset.js';
 import {
   diversityGate, existenceGate, findStaleCases, leakageGate, longestSharedSpan,
-  provenanceGate, retireCases, runGoldsetGates, stalenessGate,
+  pruneVanishedConstraints, provenanceGate, retireCases, runGoldsetGates, stalenessGate,
 } from '../src/init/goldset-gates.js';
 import { scaffoldLayer1 } from '../src/init/scaffold.js';
 
@@ -335,6 +335,7 @@ test('mined cases carry the fields the score harness and the contract both requi
   const { cases } = mineGoldset({ evidence, units, history, chunkCount: 500 });
   for (const entry of cases) {
     assert.ok(entry.id && entry.query && entry.provenance);
+    assert.ok(entry.key && entry.key.startsWith(entry.provenance), 'every case carries its stable key from mining time');
     assert.ok(Array.isArray(entry.must_return) && entry.must_return.length > 0, 'answers are artifacts, never prose');
     assert.ok(entry.why && entry.why.length > 0, 'the harness refuses a case with no reason (retrieval-score.js validateGoldset)');
   }
@@ -369,4 +370,36 @@ test('the widening ramp reaches every candidate, even past an answer the quota o
   const perAnswer = new Map();
   for (const entry of capped) perAnswer.set(entry.must_return[0], (perAnswer.get(entry.must_return[0]) || 0) + 1);
   assert.equal(perAnswer.size, 6, 'all six answers are represented before any answer takes a second slot');
+});
+
+test('a vacuous ranking constraint is PRUNED, not grounds for retiring a good case', async () => {
+  // The deadlock this resolves: existence checks must_return AND must_not_outrank, while
+  // staleness judged only the answer. A case whose distractor was deleted was therefore
+  // never stale and never existent, and the two gates blocked each other forever.
+  const unitsById = new Map([['live.answer', { id: 'live.answer', type: 'architecture', meta: { area: 'a' } }]]);
+  const cases = [
+    { id: 'g001', query: 'a question', must_return: ['live.answer'], must_not_outrank: ['deleted.card', 'live.answer2'], provenance: 'structural:x' },
+    { id: 'g002', query: 'another', must_return: ['live.answer'], provenance: 'structural:y' },
+  ];
+  const { cases: pruned, pruned: record } = pruneVanishedConstraints(cases, { unitsById });
+  assert.equal(pruned[0].must_not_outrank, undefined, 'every constraint was dead, so the field goes');
+  assert.deepEqual(record, [{ case: 'g001', dropped: ['deleted.card', 'live.answer2'] }]);
+  assert.equal(pruned[1].must_not_outrank, undefined);
+  assert.deepEqual(findStaleCases(pruned, { unitsById }), [], 'the case itself is still perfectly askable');
+
+  // MUTATION: skip the pruning and the existence gate rejects a case staleness will never
+  // retire, which is the deadlock.
+  const store = { async existingDocumentIds(ids) { return ids.filter((id) => unitsById.has(id)); } };
+  const unpruned = await existenceGate(cases, { store });
+  assert.equal(unpruned.status, 'fail');
+  assert.equal((await existenceGate(pruned, { store })).status, 'pass');
+});
+
+test('runGoldsetGates reports what it pruned rather than doing it silently', async () => {
+  const units = [{ id: 'u1', type: 'architecture', meta: { area: 'a' }, content: 'text' }];
+  const store = { async existingDocumentIds(ids) { return ids.filter((id) => id === 'u1'); } };
+  const cases = [{ id: 'g001', query: 'q', must_return: ['u1'], must_not_outrank: ['gone'], provenance: 'structural:x', target: { kind: 'unit', id: 'u1' } }];
+  const result = await runGoldsetGates(cases, { store, units, files: [], commits: new Set(), date: '2026-08-16', floors: { minimumCases: 1, minimumIdentifierCases: 0, minimumTypes: 1, minimumAreas: 1 } });
+  assert.deepEqual(result.constraintsPruned, [{ case: 'g001', dropped: ['gone'] }]);
+  assert.equal(result.passed, true);
 });

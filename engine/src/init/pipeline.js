@@ -28,7 +28,7 @@ import {
 } from './floor.js';
 import { collectGateSources, discoverGates, gatesFilePath, probeGateCandidates, renderGatesYaml } from './gate-discovery.js';
 import { readHistory, shaIndex } from './git.js';
-import { mineGoldset } from './goldset.js';
+import { caseKey, mineGoldset } from './goldset.js';
 import { runGoldsetGates } from './goldset-gates.js';
 import { importRelationships, ingestUnits } from './ingest.js';
 import { narrate, SpendRefusedError } from './narrate.js';
@@ -101,7 +101,7 @@ export async function writeRetiredGoldset(artifactRoot, retired) {
   const merged = [...(Array.isArray(existing) ? existing : []), ...retired];
   const seen = new Set();
   const deduped = merged.filter((entry) => {
-    const key = `${entry?.provenance || ''}::${entry?.query || ''}`;
+    const key = entry?.key || `${entry?.provenance || ''}::${entry?.query || ''}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -144,12 +144,32 @@ export async function readExistingGoldset(artifactRoot) {
  * the gauge is inherited rather than measured today.
  */
 export function mergeGoldset(mined, carried) {
-  const key = (entry) => `${entry.provenance || ''}::${entry.query || ''}`;
-  const minedKeys = new Set(mined.map(key));
-  const inherited = carried
-    .filter((entry) => !entry.retired && !minedKeys.has(key(entry)))
-    .map((entry) => ({ ...entry, carried: true }));
-  return [...mined, ...inherited].map((entry, index) => ({ ...entry, id: `g${String(index + 1).padStart(3, '0')}` }));
+  // Identity is the STABLE KEY the miner wrote, not the positional id and not the query.
+  // Legacy files written before keys existed fall back to provenance plus query, which is
+  // what that generation of the format had.
+  const identity = (entry) => entry.key || caseKey(entry.provenance || '', entry.query || '');
+  const carriedByKey = new Map(carried.filter((entry) => !entry.retired).map((entry) => [identity(entry), entry]));
+
+  const merged = mined.map((entry) => {
+    const previous = carriedByKey.get(identity(entry));
+    carriedByKey.delete(identity(entry));
+    if (!previous) return entry;
+    // Mechanics own the ANSWER, because must_return is a fact about the tree as it is now.
+    // The user owns the WORDING. Preserving their edit is the whole point of a stable key:
+    // without it their rewritten question came back every run as a second case.
+    const userWorded = previous.query && previous.query !== entry.query;
+    return {
+      ...entry,
+      query: previous.query || entry.query,
+      ...(previous.must_not_outrank ? { must_not_outrank: previous.must_not_outrank } : {}),
+      ...(userWorded ? { userEdited: true } : {}),
+    };
+  });
+
+  // Whatever is left was authored by a user or mined by a version that no longer proposes
+  // it. It rides along and the staleness gate judges it.
+  const inherited = [...carriedByKey.values()].map((entry) => ({ ...entry, carried: true }));
+  return [...merged, ...inherited].map((entry, index) => ({ ...entry, id: `g${String(index + 1).padStart(3, '0')}` }));
 }
 
 /** A retrieve() bound to this repo's store, for the content-survival pass. */
@@ -398,6 +418,7 @@ export async function initBrain({
     notes: mined.notes,
     active: gated.active.length,
     retired: gated.retired.length,
+    constraintsPruned: gated.constraintsPruned,
     passed: gated.passed,
     gates: gated.gates.map((entry) => ({ id: entry.id, status: entry.status, detail: entry.detail, failures: entry.failures || [] })),
   };
@@ -436,9 +457,8 @@ export async function initBrain({
     goldsetPath: goldsetFile || path.join(artifacts, GOLDSET_FILE),
     standingPrefix,
     pathGrammar,
-    environment,
   });
-  const sweep = await sweepBudgets({ corpus, store, budgets, k, environment, onStep: (event) => steps.emit(event) });
+  const sweep = await sweepBudgets({ corpus, store, budgets, k, environment, fetchImpl, onStep: (event) => steps.emit(event) });
   const retrieveFn = boundRetrieve({ store, project: scope, environment, standingPrefix, pathGrammar, k, fetchImpl });
   const deliveries = await collectDeliveries({
     cases: gated.active, retrieveFn, tokenBudget: sweep.chosen,

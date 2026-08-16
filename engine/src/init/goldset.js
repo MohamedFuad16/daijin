@@ -22,6 +22,8 @@
 //
 // Answers are ARTIFACTS, never prose (store.d.ts GoldCase): every must_return entry is a
 // document id that must resolve in the live index, and the existence gate proves it.
+import { createHash } from 'node:crypto';
+
 import { queryTokens } from '../rag/tokens.js';
 import { classifyCommit } from './git.js';
 import { areaOf, compareStrings } from './walk.js';
@@ -62,6 +64,22 @@ export function targetCaseCount(chunkCount, {
     minimum,
     maximum,
   };
+}
+
+/**
+ * A case's stable identity, written once at mining time and never recomputed for a case
+ * that already carries one.
+ *
+ * NOT the id: ids are positional (g001, g002) and are reassigned on every mining run, so
+ * they cannot survive a re-mine. NOT the query either, because the query is the field a
+ * user edits, and an identity that changes when a user rewords a question turns their edit
+ * into a duplicate case. The key binds the provenance (where the case came from) to the
+ * CANONICAL query the miner produced, so re-mining the same fact reproduces the same key
+ * while a user's rewording leaves it alone.
+ */
+export function caseKey(provenance, canonicalQuery) {
+  const digest = createHash('sha256').update(`${canonicalQuery}`, 'utf8').digest('hex').slice(0, 8);
+  return `${provenance}#${digest}`;
 }
 
 function normalizeQuery(value) {
@@ -398,6 +416,7 @@ export function mineGoldset({
   });
   const cases = selected.map((entry, index) => ({
     id: `g${String(index + 1).padStart(3, '0')}`,
+    key: caseKey(entry.provenance, entry.query),
     query: entry.query,
     must_return: entry.must_return,
     ...(entry.must_not_outrank.length ? { must_not_outrank: entry.must_not_outrank } : {}),

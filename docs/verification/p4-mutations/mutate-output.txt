@@ -1,9 +1,9 @@
-# Captured 2026-08-16T03:18:27Z (UTC)
+# Captured 2026-08-16T03:24:25Z (UTC)
 # Command: bash docs/verification/p4-mutations/mutate.sh
 
-KILLED   (3 failing): boundary check never fires (condition inverted)
+KILLED   (4 failing): boundary check never fires (condition inverted)
 KILLED   (1 failing): extension no longer requires edits since the boundary
-KILLED   (3 failing): extension no longer requires a passing check
+KILLED   (4 failing): extension no longer requires a passing check
 KILLED   (2 failing): hard outer bound is not enforced at configuration time
 KILLED   (2 failing): the seal keeps the unverified state instead of rolling back
 KILLED   (1 failing): the submit rehearsal fires on every submission, not once
@@ -36,3 +36,7 @@ KILLED   (2 failing): rule 3 dropped: a document the gold commit ADDED is retrie
 KILLED   (1 failing): an oversized exclusion is truncated instead of refused
 KILLED   (1 failing): an unknown gold commit fails OPEN instead of loud
 KILLED   (1 failing): the scanned set stops covering the engine
+KILLED   (2 failing): the pre-seal check fires without unverified edits to warn about
+KILLED   (1 failing): the pre-seal check is unbounded, so it never yields to the boundary check
+KILLED   (1 failing): the pre-seal verdict is not delivered to the student
+KILLED   (1 failing): pre-seal constants drift (fraction 0.5, deliveries 5)

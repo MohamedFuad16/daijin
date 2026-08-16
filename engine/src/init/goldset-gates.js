@@ -173,6 +173,35 @@ export function findStaleCases(cases, { files = [], commits = new Set(), unitsBy
   return stale;
 }
 
+/**
+ * Drop ranking constraints whose document no longer exists.
+ *
+ * The existence gate checks must_return AND must_not_outrank; staleness judged only the
+ * ANSWER. So a case whose distractor was deleted was never stale and never existent, and
+ * the two gates deadlocked the pipeline against each other. Found by the carry-forward
+ * test on 2026-08-16: deleting one module left six cases naming its card, four in
+ * must_return and two in must_not_outrank, and only the four could ever be retired.
+ *
+ * Pruning is the right resolution rather than retiring: must_not_outrank says "this
+ * document must not beat the answer", and a document that no longer exists cannot beat
+ * anything. The constraint is vacuous, not the case. Retiring a good case because a
+ * distractor vanished would shrink the gauge for no reason.
+ */
+export function pruneVanishedConstraints(cases, { unitsById }) {
+  const pruned = [];
+  const next = cases.map((entry) => {
+    if (!entry.must_not_outrank?.length) return entry;
+    const kept = entry.must_not_outrank.filter((id) => unitsById.has(id));
+    if (kept.length === entry.must_not_outrank.length) return entry;
+    pruned.push({ case: entry.id, dropped: entry.must_not_outrank.filter((id) => !unitsById.has(id)) });
+    const copy = { ...entry };
+    if (kept.length > 0) copy.must_not_outrank = kept;
+    else delete copy.must_not_outrank;
+    return copy;
+  });
+  return { cases: next, pruned };
+}
+
 /** Retire the stale cases, keeping their record. */
 export function retireCases(cases, stale, { date }) {
   const byId = new Map(stale.map((entry) => [entry.case, entry.reason]));
@@ -317,10 +346,12 @@ export async function runGoldsetGates(cases, {
   const cardByArea = new Map(
     units.filter((unit) => unit.type === 'architecture' && unit.meta?.area).map((unit) => [unit.meta.area, unit]),
   );
-  const stale = findStaleCases(cases, { files, commits, unitsById });
+  // Vacuous ranking constraints go first, so staleness and existence judge the same ids.
+  const { cases: withLiveConstraints, pruned } = pruneVanishedConstraints(cases, { unitsById });
+  const stale = findStaleCases(withLiveConstraints, { files, commits, unitsById });
   // Retirement happens BEFORE the gates so the gates judge the set that will measure.
   // Passing retire: false is how the mutation test proves the staleness gate can fail.
-  const withRetirements = retire ? retireCases(cases, stale, { date }) : cases;
+  const withRetirements = retire ? retireCases(withLiveConstraints, stale, { date }) : withLiveConstraints;
   const active = withRetirements.filter((entry) => !entry.retired);
 
   const gates = [
@@ -341,5 +372,6 @@ export async function runGoldsetGates(cases, {
     cases: withRetirements,
     active,
     retired: withRetirements.filter((entry) => entry.retired),
+    constraintsPruned: pruned,
   };
 }

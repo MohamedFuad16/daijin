@@ -43,22 +43,15 @@ export function caseRateOf(summary, results) {
 /**
  * Build a corpus descriptor for a local, already-open store.
  *
- * The harness's scoreGoldset resolves an environment before it scores (retrieval-score.js
- * loadCorpusEnvironment), and it does so even when a store is injected, so a corpus that
- * measures over SQLite still has to name a database-url variable. Rather than edit that
- * file (it belongs to the extractor), this names a variable of its own and sets it to a
- * value that is obviously not a connection string. Flagged to the leader as a one-line
- * fix in retrieval-score.js: skip the environment resolution when a store is injected.
+ * No database URL is named or needed. The harness believes an injected environment and
+ * reaches for nothing global when one is supplied (retrieval-score.js scoreGoldset), so a
+ * corpus measured over SQLite carries no connection string at all. The earlier sentinel
+ * variable here existed only to satisfy a requirement that no longer exists.
  */
-export const INJECTED_STORE_ENV = 'DAIJIN_INJECTED_STORE';
-
 export function localCorpus({
   id, project = null, goldsetPath, baselinePath = null, standingPrefix = 'global.',
-  pathGrammar = null, retrieveOptions = {}, environment = process.env,
+  pathGrammar = null, retrieveOptions = {},
 }) {
-  if (!environment[INJECTED_STORE_ENV]) {
-    environment[INJECTED_STORE_ENV] = 'injected-store://no-connection-string';
-  }
   return {
     id,
     project,
@@ -67,55 +60,31 @@ export function localCorpus({
     retrievalFixesPath: null,
     baselinePath,
     envFiles: [],
-    databaseUrlEnv: INJECTED_STORE_ENV,
     pathGrammar,
     standingPrefix,
     retrieveOptions,
     storeOptions: {},
-    note: 'Local per-repo corpus measured over an injected Store. No database URL is used.',
+    note: 'Local per-repo corpus measured over an injected Store with an injected environment.',
   };
-}
-
-/**
- * Run fn with the embedding configuration visible on process.env, then restore it.
- *
- * The harness resolves its environment itself (`loadCorpusEnvironment` returns
- * `process.env`) and hands that to retrieve(), so an environment passed into init never
- * reaches the embedding identity. In the product that is correct, because the user's .env
- * IS process.env. It is wrong for a caller that injects a configuration, which is every
- * test and every second repo in one process. Rather than edit retrieval-score.js, which
- * belongs to the extractor, the keys are lent for the duration and put back exactly as
- * they were, including keys that were absent.
- *
- * Flagged to the leader as a one-line fix in the harness: thread `environment` and
- * `fetchImpl` from scoreGoldset's options into retrieve's dependencies. This wrapper goes
- * away when it lands.
- */
-export async function withEmbeddingEnvironment(environment, fn) {
-  if (!environment || environment === process.env) return fn();
-  const keys = Object.keys(environment).filter((key) => /^(EMBEDDING_|OLLAMA_)/.test(key));
-  const saved = keys.map((key) => [key, Object.hasOwn(process.env, key) ? process.env[key] : undefined]);
-  for (const key of keys) process.env[key] = environment[key];
-  try {
-    return await fn();
-  } finally {
-    for (const [key, value] of saved) {
-      if (value === undefined) delete process.env[key];
-      else process.env[key] = value;
-    }
-  }
 }
 
 /**
  * Run the gold set at one budget.
  */
-export async function scoreAtBudget({ corpus, store, tokenBudget, k = 8, score = scoreGoldset }) {
+export async function scoreAtBudget({
+  corpus, store, tokenBudget, k = 8, score = scoreGoldset, environment = null, fetchImpl = null,
+}) {
   const { summary, results, record } = await score({
     corpus,
     store,
     k,
     label: `budget-${tokenBudget}`,
     retrieveOptions: { ...(corpus.retrieveOptions || {}), tokenBudget },
+    // Believed by the harness, which then touches nothing global. This matters beyond
+    // tidiness: a lend-and-restore of process.env is a race the moment two measurements
+    // overlap, and the sweep below runs four in a row.
+    ...(environment ? { environment } : {}),
+    ...(fetchImpl ? { fetchImpl } : {}),
   });
   return {
     tokenBudget,
@@ -158,14 +127,12 @@ export function chooseBudget(curve) {
  * Sweep the budgets and choose. Zero-spend end to end.
  */
 export async function sweepBudgets({
-  corpus, store, budgets = BUDGET_SWEEP, k = 8, score = scoreGoldset, environment = null, onStep = null,
+  corpus, store, budgets = BUDGET_SWEEP, k = 8, score = scoreGoldset,
+  environment = null, fetchImpl = null, onStep = null,
 } = {}) {
   const curve = [];
   for (const tokenBudget of [...budgets].sort((left, right) => left - right)) {
-    const point = await withEmbeddingEnvironment(
-      environment,
-      () => scoreAtBudget({ corpus, store, tokenBudget, k, score }),
-    );
+    const point = await scoreAtBudget({ corpus, store, tokenBudget, k, score, environment, fetchImpl });
     curve.push(point);
     if (onStep) {
       await onStep({

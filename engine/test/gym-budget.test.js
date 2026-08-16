@@ -51,9 +51,15 @@ function scriptedEngineer(script, worktree) {
   };
 }
 
+// The crossing tests below ISOLATE the extension mechanism by disabling the pre-seal check
+// (ADR-0147), which would otherwise verify the sprint at 0.85 of the cap and leave the
+// boundary check nothing to do. That interaction is not swept under the rug: the test named
+// "with BOTH campaign defaults on" proves the boundary check still fires in the shipped
+// configuration once the pre-seal deliveries are spent, which is what keeps it from being
+// dead coverage.
 const LOOP_POLICY = {
   baseTokenCap: 1_000, tierTokenCaps: { S: 1_000, M: 1_000, L: 1_000 },
-  extensionStep: 500, extensionLimit: 2, maxRounds: 6,
+  extensionStep: 500, extensionLimit: 2, maxRounds: 6, preSealFraction: null,
 };
 
 test('budgetExtensionDecision: every branch of the policy', () => {
@@ -291,12 +297,131 @@ test('the ADR constants are the shipped defaults, not merely the shipped branche
   assert.equal(ADR_0167_DEFAULTS.boundaryCheck, true);
   assert.equal(ADR_0167_DEFAULTS.submitRehearsal, false);
   assert.equal(ADR_0167_DEFAULTS.progressEdits, 2);
+  // ADR-0147's constants, ported with the same discipline: the fraction and the delivery
+  // bound are the mechanism, and a port with the right branches and a 0.5 fraction is a
+  // different treatment wearing the same name.
+  assert.equal(ADR_0167_DEFAULTS.preSealFraction, 0.85);
+  assert.equal(ADR_0167_DEFAULTS.preSealMaxDeliveries, 2);
+  assert.equal(resolveBudgetPolicy({ preSealFraction: null }).preSealFraction, null, 'null disables it');
+  assert.throws(() => resolveBudgetPolicy({ preSealFraction: 0.99 }), /must be a number from 0.1 to 0.95/);
+  assert.throws(() => resolveBudgetPolicy({ preSealFraction: 0 }), /must be a number from 0.1 to 0.95/);
   // 800,000 plus eight steps of 400,000 is 4,000,000, which is the headroom the outer bound
   // is meant to leave. One more step at the same size would exceed it and is refused.
   const shipped = resolveBudgetPolicy({});
   assert.equal(shipped.baseTokenCap + shipped.extensionStep * shipped.extensionLimit, 4_000_000);
   assert.throws(() => resolveBudgetPolicy({ extensionLimit: 10, extensionStep: 450_000 }), /must not be able to exceed 5000000/);
   assert.equal(resolveBudgetPolicy({ extensionStep: 0 }).extensionStep, 0, 'step 0 is a legal configuration, not a validation error');
+});
+
+test('the pre-seal check delivers a last verdict while the student can still act on it', async () => {
+  // ADR-0147, exp4's twice-observed failure: a run sealing over edits nobody checked, with
+  // budget still on the clock to fix them. At 0.85 of the cap with unverified edits, the
+  // harness runs the check and DELIVERS the failure, which is the whole difference between
+  // this check and the boundary check.
+  const worktree = memoryWorktree('1');
+  let calls = 0;
+  const checkBuild = async () => {
+    calls += 1;
+    // r1's forced first-edit check passes; the pre-seal check at r3 fails; the re-check after
+    // the fix passes.
+    const status = calls === 2 ? 'fail' : 'pass';
+    return { status, exitCode: status === 'pass' ? 0 : 65, diagnostics: status === 'pass' ? [] : ['boom', 'bang'] };
+  };
+  const engineer = scriptedEngineer([
+    { kind: 'edit', tokens: 100, value: '2' },
+    { kind: 'edit', tokens: 760, value: '3' },
+    { kind: 'check', tokens: 10 },
+    { kind: 'submit', tokens: 10, explanation: 'fixed after the pre-seal warning' },
+  ], worktree);
+
+  const result = await runStudentLoop({
+    engineer,
+    checkBuild,
+    snapshotState: worktree.snapshotState,
+    restoreState: worktree.restoreState,
+    policy: resolveBudgetPolicy({ ...LOOP_POLICY, preSealFraction: 0.85, extensionStep: 0 }),
+    tokenCap: 1_000,
+  });
+
+  const preSeal = result.buildChecks.find((entry) => entry.trigger === 'pre-seal');
+  assert.ok(preSeal, 'the pre-seal check must be recorded');
+  assert.equal(preSeal.round, 2, 'it fires at 0.85 of the cap, before the crossing');
+  assert.equal(preSeal.status, 'fail');
+  assert.equal(result.preSealBuildCheck, 'delivered');
+  assert.equal(result.preSealDeliveries, 1);
+  // DELIVERED, which is the point: the student was told, in time to act, and did.
+  assert.match(engineer.seen[2].message, /PRE-SEAL CHECK/);
+  assert.match(engineer.seen[2].message, /unverified edits are discarded when the budget seals/);
+  assert.equal(result.status, 'submitted');
+});
+
+test('the pre-seal check stays silent when there is nothing unverified to warn about', async () => {
+  const worktree = memoryWorktree('1');
+  const checks = checkAfter(0);
+  const engineer = scriptedEngineer([
+    { kind: 'edit', tokens: 900, value: '2' },
+    { kind: 'submit', tokens: 10, explanation: 'all verified' },
+  ], worktree);
+  const result = await runStudentLoop({
+    engineer,
+    checkBuild: checks.check,
+    snapshotState: worktree.snapshotState,
+    restoreState: worktree.restoreState,
+    policy: resolveBudgetPolicy({ ...LOOP_POLICY, preSealFraction: 0.85, extensionStep: 0 }),
+    tokenCap: 1_000,
+  });
+  // The first-edit check already assessed the only edit, so a pre-seal check would spend
+  // gate time telling the student what it already knows.
+  assert.equal(result.buildChecks.filter((entry) => entry.trigger === 'pre-seal').length, 0);
+  assert.equal(result.preSealBuildCheck, 'not-reached');
+
+  // And 'not-reached' is a different fact from 'disabled', which is why the field is not a
+  // boolean: an artifact that cannot tell those apart cannot say whether a treatment landed.
+  const disabled = await runStudentLoop({
+    engineer: scriptedEngineer([{ kind: 'edit', tokens: 900, value: '2' }, { kind: 'submit', tokens: 10, explanation: 'x' }], memoryWorktree('1')),
+    checkBuild: checkAfter(0).check,
+    snapshotState: async () => 'x',
+    restoreState: async () => {},
+    policy: resolveBudgetPolicy({ ...LOOP_POLICY, preSealFraction: null }),
+    tokenCap: 1_000,
+  });
+  assert.equal(disabled.preSealBuildCheck, null);
+});
+
+test('the pre-seal check is bounded, and after it is spent the boundary check still fires', async () => {
+  // THE DEAD-COVERAGE QUESTION, asked directly: with BOTH campaign defaults on, does the
+  // boundary check ever run, or does the pre-seal check always get there first? If the
+  // answer were never, ADR-0167's boundary check would be dead coverage in the shipped
+  // configuration, which is the exact condition ground rule 5 forbids.
+  //
+  // It is not dead. The pre-seal check is bounded to its deliveries; a sprint after they are
+  // spent reaches the crossing unchecked, and the boundary check is what verifies it there.
+  const worktree = memoryWorktree('1');
+  const checkBuild = async () => ({ status: 'fail', exitCode: 65, diagnostics: ['boom'] });
+  const engineer = scriptedEngineer([
+    { kind: 'edit', tokens: 100, value: '2' },   // forced first-edit check, fails
+    { kind: 'edit', tokens: 760, value: '3' },   // crosses 0.85: pre-seal delivery 1
+    { kind: 'edit', tokens: 10, value: '4' },    // re-arms: pre-seal delivery 2
+    { kind: 'edit', tokens: 10, value: '5' },    // deliveries spent, nothing checks this
+    { kind: 'read', tokens: 200 },               // crosses the cap: the boundary check runs
+  ], worktree);
+
+  const result = await runStudentLoop({
+    engineer,
+    checkBuild,
+    snapshotState: worktree.snapshotState,
+    restoreState: worktree.restoreState,
+    policy: resolveBudgetPolicy({ ...LOOP_POLICY, preSealFraction: 0.85, preSealMaxDeliveries: 2 }),
+    tokenCap: 1_000,
+  });
+
+  const triggers = result.buildChecks.map((entry) => entry.trigger);
+  assert.deepEqual(triggers, ['first-edit', 'pre-seal', 'pre-seal', 'extension-boundary'],
+    'both mechanisms fire, in their own conditions, in the shipped configuration');
+  assert.equal(result.preSealDeliveries, 2, 'bounded: a third delivery never happens');
+  assert.equal(result.buildChecks.filter((entry) => entry.trigger === 'pre-seal').length, 2);
+  // Every verdict failed, so no extension is earned and the run seals honestly.
+  assert.equal(result.usage.extensionsGranted, 0);
 });
 
 test('a reading loop crosses the cap and dies there, with no row-worthy diff', async () => {

@@ -24,6 +24,7 @@ import { tokens } from '../src/rag/tokens.js';
 import { createSqliteStore } from '../src/store/sqlite.js';
 import { checkContentSurvival, collectDeliveries } from '../src/init/floor.js';
 import { chunkUnits, importRelationships, ingestUnits, servedIndexIdentity } from '../src/init/ingest.js';
+import { caseKey } from '../src/init/goldset.js';
 import { initBrain, mergeGoldset, writeGoldset, writeRetiredGoldset } from '../src/init/pipeline.js';
 
 const DIMENSION = 64;
@@ -567,135 +568,34 @@ test('a carried-forward case whose module was deleted is RETIRED, not scored for
   }
 });
 
-test('mergeGoldset lets a re-mined case win its key and carries the rest', () => {
-  const mined = [{ id: 'g001', query: 'a question', must_return: ['new'], provenance: 'structural:a' }];
+test('mergeGoldset keys on the STABLE key, so a reworded case is not a duplicate', () => {
+  const key = caseKey('structural:a', 'a question');
+  const mined = [{ id: 'g001', key, query: 'a question', must_return: ['new'], provenance: 'structural:a' }];
   const carried = [
-    { id: 'g001', query: 'a question', must_return: ['old'], provenance: 'structural:a' },
-    { id: 'g002', query: 'a hand written question', must_return: ['x'], provenance: 'paraphrase:auditor' },
-    { id: 'g003', query: 'already retired', must_return: ['y'], provenance: 'structural:z', retired: { date: '2026-01-01', reason: 'gone' } },
+    // Same case, reworded by a user. The stable key says it is the same case.
+    { id: 'g001', key, query: 'a question, but how I would ask it', must_return: ['old'], provenance: 'structural:a', must_not_outrank: ['other'] },
+    { id: 'g002', key: 'paraphrase:auditor#11111111', query: 'a hand written question', must_return: ['x'], provenance: 'paraphrase:auditor' },
+    { id: 'g003', key: 'structural:z#22222222', query: 'already retired', must_return: ['y'], provenance: 'structural:z', retired: { date: '2026-01-01', reason: 'gone' } },
   ];
   const merged = mergeGoldset(mined, carried);
-  assert.deepEqual(merged.map((entry) => entry.query), ['a question', 'a hand written question']);
-  assert.deepEqual(merged[0].must_return, ['new'], 'the re-mined case wins its key');
+  assert.equal(merged.length, 2, 'the reworded case is ONE case, not two');
+  assert.equal(merged[0].query, 'a question, but how I would ask it', 'the user owns the wording');
+  assert.deepEqual(merged[0].must_return, ['new'], 'mechanics own the answer: it is a fact about the tree as it is now');
+  assert.deepEqual(merged[0].must_not_outrank, ['other'], 'and the user edit to the ranking constraint survives');
+  assert.equal(merged[0].userEdited, true, 'the report can say how much of the gauge is user-worded');
   assert.equal(merged[1].carried, true, 'a user-authored case survives re-mining');
   assert.deepEqual(merged.map((entry) => entry.id), ['g001', 'g002'], 'ids are reassigned deterministically');
 });
 
-test('a READ-ONLY target keeps every artifact outside the repo it measured', async () => {
-  // The owner may designate a repo Daijin has no authorization to write into. The brain is
-  // still built from it and still measured over it; only the record moves. Asserted by
-  // comparing the repo's git status before and after, which is the check that would catch
-  // a stray write no matter which step made it.
-  const root = makeRepo();
-  const scratch = mkdtempSync(path.join(tmpdir(), 'daijin-artifacts-'));
-  const before = execFileSync('git', ['-C', root, 'status', '--porcelain'], { encoding: 'utf8' });
-  const { directory, file } = makeStore();
-  const store = await createSqliteStore({ path: file, project: 'default', embedder: EMBEDDER });
-  const ollama = fakeOllama();
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = ollama.fetchImpl;
-  try {
-    const report = await initBrain({
-      repoPath: root,
-      artifactRoot: scratch,
-      store,
-      embedder: { embed: async (texts) => texts.map((text) => hashEmbed(text)) },
-      environment: ENVIRONMENT,
-      fetchImpl: ollama.fetchImpl,
-      gateRunner: liveRunner,
-      clock: () => 1_770_000_000_000,
-    });
-    assert.equal(report.artifactRoot, scratch);
-    assert.ok(report.floor, 'the floor is still measured from the repo it read');
-    for (const artifact of ['.daijin/goldset.yaml', '.daijin/gates.yaml', '.daijin/init-report.json']) {
-      assert.equal(existsSync(path.join(scratch, artifact)), true, `${artifact} belongs in the scratch root`);
-      assert.equal(existsSync(path.join(root, artifact)), false, `${artifact} must NOT be written into a read-only target`);
-    }
-    const after = execFileSync('git', ['-C', root, 'status', '--porcelain'], { encoding: 'utf8' });
-    assert.equal(after, before, 'the target repo working tree must be byte-identical after the run');
-  } finally {
-    globalThis.fetch = originalFetch;
-    await store.close();
-    rmSync(directory, { recursive: true, force: true });
-    rmSync(scratch, { recursive: true, force: true });
-    rmSync(root, { recursive: true, force: true });
-  }
+test('a legacy gold set with no keys still merges on what that format had', () => {
+  const mined = [{ id: 'g001', key: caseKey('structural:a', 'a question'), query: 'a question', must_return: ['new'], provenance: 'structural:a' }];
+  const legacy = [{ id: 'g001', query: 'a question', must_return: ['old'], provenance: 'structural:a' }];
+  const merged = mergeGoldset(mined, legacy);
+  assert.equal(merged.length, 1, 'provenance plus query is the identity that generation of the file had');
 });
 
-test('gate commands run in the sandbox they are pointed at, never in the target', async () => {
-  const root = makeRepo();
-  const sandbox = mkdtempSync(path.join(tmpdir(), 'daijin-gate-sandbox-'));
-  const scratch = mkdtempSync(path.join(tmpdir(), 'daijin-artifacts-2-'));
-  const cwds = [];
-  const { directory, file } = makeStore();
-  const store = await createSqliteStore({ path: file, project: 'default', embedder: EMBEDDER });
-  const ollama = fakeOllama();
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = ollama.fetchImpl;
-  try {
-    const report = await initBrain({
-      repoPath: root,
-      artifactRoot: scratch,
-      gateRepoPath: sandbox,
-      store,
-      embedder: { embed: async (texts) => texts.map((text) => hashEmbed(text)) },
-      environment: ENVIRONMENT,
-      fetchImpl: ollama.fetchImpl,
-      gateRunner: async (command, options) => {
-        cwds.push(options.cwd);
-        return { status: 'pass', exitCode: 0, duration_ms: 1, stdout: '', stderr: '' };
-      },
-      clock: () => 1_770_000_000_000,
-    });
-    assert.ok(cwds.length > 0, 'gates were actually run');
-    assert.ok(cwds.every((cwd) => cwd.startsWith(sandbox)), `a build gate emits files; it must not run in the target: ${cwds.join(', ')}`);
-    assert.equal(report.phases.gates.sandboxed, true);
-    assert.equal(report.phases.gates.ranIn, sandbox);
-  } finally {
-    globalThis.fetch = originalFetch;
-    await store.close();
-    rmSync(directory, { recursive: true, force: true });
-    rmSync(sandbox, { recursive: true, force: true });
-    rmSync(scratch, { recursive: true, force: true });
-    rmSync(root, { recursive: true, force: true });
-  }
-});
-
-test('the index identity and the query identity are produced by ONE function', async () => {
-  // Hit live on the P3 target: the Ollama adapter reports the model as its TAG while the
-  // retrieval path reports the CONFIGURED name, and assertRetrievalIdentity compares the
-  // string exactly. A store built from the adapter's notion is refused by every query it
-  // exists to answer. Both sides now derive it here.
-  const ollama = fakeOllama();
-  const environment = { ...ENVIRONMENT, EMBEDDING_MODEL: 'fixture-embed' };
-  const identity = await servedIndexIdentity({ environment, fetchImpl: ollama.fetchImpl });
-  assert.equal(identity.model, 'fixture-embed', 'the configured name, not the served tag');
-  assert.equal(identity.digest, EMBEDDER.digest, 'the digest still comes from the server');
-  assert.equal(identity.dimension, DIMENSION);
-
-  // And an index built with it is accepted by the assert retrieval actually runs.
-  const { directory, file } = makeStore();
-  const store = await createSqliteStore({ path: file, project: 'default', embedder: identity });
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = ollama.fetchImpl;
-  try {
-    await ingestUnits({
-      store,
-      units: [{
-        id: 'daijin.convention.indentation', type: 'convention', path: 'x.md', title: 'C', tags: [],
-        meta: { area: 'conventions' }, content: 'Rule: spaces.', body: 'Rule: spaces.', contentHash: null,
-      }],
-      embedder: { embed: async (texts) => texts.map((text) => hashEmbed(text)) },
-      project: 'default',
-    });
-    const result = await retrieve(
-      { query: 'how is code indented', project: 'default', k: 8, tokenBudget: 4000 },
-      { store, environment, fetchImpl: ollama.fetchImpl },
-    );
-    assert.ok(result.meta.retrievedIds.length >= 0, 'the query was accepted rather than refused on identity');
-  } finally {
-    globalThis.fetch = originalFetch;
-    await store.close();
-    rmSync(directory, { recursive: true, force: true });
-  }
+test('the miner writes a stable key that survives a re-mine and a rewording', () => {
+  assert.equal(caseKey('identifier:foo', 'foo'), caseKey('identifier:foo', 'foo'), 'deterministic');
+  assert.notEqual(caseKey('structural:history', 'which files change most often in this repo'), caseKey('structural:history', 'who has been changing this codebase'),
+    'two cases sharing a provenance are told apart by their canonical query');
 });

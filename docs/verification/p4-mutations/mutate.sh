@@ -214,3 +214,25 @@ run_mutation "the scanned set stops covering the engine" \
   test/gym-spend-gate.test.js \
   "s/  const SCANNED = \['gym', 'rpc'\];/  const SCANNED = ['gym'];/" \
   "test/gym-spend-gate.test.js"
+
+# ---- pre-seal check (ADR-0147) ----------------------------------------------------------
+
+run_mutation "the pre-seal check fires without unverified edits to warn about" \
+  src/gym/budget.js \
+  's/  if \(editsSinceAssessedCheck <= 0\) return false;//' \
+  "test/gym-budget.test.js"
+
+run_mutation "the pre-seal check is unbounded, so it never yields to the boundary check" \
+  src/gym/budget.js \
+  's/  if \(deliveries >= maxDeliveries\) return false;//' \
+  "test/gym-budget.test.js"
+
+run_mutation "the pre-seal verdict is not delivered to the student" \
+  src/gym/student-loop.js \
+  "s/        message = 'PRE-SEAL CHECK: your budget is nearly spent/        message = null \&\& ('PRE-SEAL CHECK: your budget is nearly spent/;s/ \+ 'Fix them now: unverified edits are discarded when the budget seals\.';/ + 'Fix them now: unverified edits are discarded when the budget seals.');/" \
+  "test/gym-budget.test.js"
+
+run_mutation "pre-seal constants drift (fraction 0.5, deliveries 5)" \
+  src/gym/budget.js \
+  's/  preSealFraction: 0\.85,/  preSealFraction: 0.5,/;s/  preSealMaxDeliveries: 2,/  preSealMaxDeliveries: 5,/' \
+  "test/gym-budget.test.js"

@@ -94,6 +94,18 @@ is the explicit override for someone debugging a test that depends on the tree's
 location, and it announces itself loudly. Proven per run rather than asserted: hashing the
 shared tree before and after a full battery gives an identical digest.
 
+THE BOUND ON THAT DIGEST CHECK, stated because it would otherwise be over-trusted. A
+before-and-after comparison CANNOT see a window fully contained inside the run: a file
+mutated and restored between the two samples hashes identically at both ends. So the digest
+is corroboration, not the containment itself. The containment is structural, and it is the
+private copy: with the copy, there is no window to miss, because the shared tree is never
+opened for writing at all. The digest catches the case where that structure is broken later,
+which is the job a corroborating check should have.
+
+The same bound applies to anyone sampling a tree to prove a battery behaved. If a run must be
+proven quiet DURING its execution rather than at its ends, the check has to be that no
+battery is executing, not that the bytes match afterwards.
+
 ## Reading mtimes after a run
 
 The battery restores each file with `mv file.bak file`. Content is byte-identical; mtime is

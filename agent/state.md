@@ -1,5 +1,53 @@
 # Daijin build state (authoritative)
 
+## 2026-08-17 00:30 - The live half lands: seven clauses demonstrated, four live-only defects
+
+TUI-BUILDER'S LIVE HALF IS DONE (its pin 468f6fb, suite green four
+consecutive runs) - THE LAST P8 PRECONDITION. Clauses (a) through (h)
+demonstrated against the real daemon, claimed only as demonstrated:
+all eight MODES screens live over stdio; the boot card in count form
+(floor 25 of 25, ratio 1.0000); a real layer1 init end to end (24.7s,
+21 events, nine phases); real documents and a real search (8 chunks,
+tokensUsed 920); the seeded ledger's five axes in canonical order at
+MIXED scores (4,5,2,3,2 - a circle of 5s would hide an axis-ordering
+bug); gymStart's -32050 refusal with the real gate path; two TUIs on
+one daemon with the lock refusal reaching the user through stderr
+(D-0022 working in the case it was built for); motion in all three
+modes against the live stream with identical end states (16/18/0
+animations, gauge 0.889 in all three). Clause (i) is the joint half,
+pending the final pin.
+
+FOUR DEFECTS ONLY THE LIVE RUN COULD FIND, all fixed: guessed phase
+manifest rendering never-run phases as done (now "skipped", manifest
+seeded only against the mock); completion inferred from a quiet stream
+now LABELLED as inferred, threshold set by measurement (30s, after the
+largest real inter-event gap measured 9.6s - the first guess of 8s
+would have declared a live run finished mid-run); five v5 contract
+rows omitting repoPath the engine requires; a UI filter sentinel
+("all") leaking to the wire plus field-name divergence crashing on
+real rows. The lesson, tui-builder's own words kept: every one was
+invisible against the mock BECAUSE I AUTHORED BOTH SIDES OF THE MOCK.
+
+CONTRACT AMENDED, dated, after verifying in engine bytes (all five
+methods resolve through requireAttached): gymStatus, examList,
+examDetail, examVeto, examUpdate rows gain repoPath. The contract now
+documents the reality it always documented around; no engine change.
+
+THE OWNER'S RETRIEVAL QUESTION is closed in the product: the tester
+now explains itself ("No case rate here: one query is not a
+measurement. The measured floor above scores the whole gold set, and
+it is the number") with a test asserting the sentence is present and
+no percent sign appears.
+
+Also from the run: --no-probe truncates an embedding init to 2 events
+(right for RPC-surface tests, wrong for anything that embeds) - a doc
+line owed wherever the flag is documented, assigned to the extractor.
+
+P8 ENDGAME OPENS: the extractor cuts the final claim pin at current
+HEAD, runs the five worktree runs and the chunking re-derivation
+there; tui-builder runs its suite five consecutive times at that same
+pin; the joint claim goes up; the verifier attacks all nine clauses at
+the current bytes.
 ## 2026-08-17 00:15 - init-miner's lane is empty; the battery caught itself within a minute
 
 REPORT 8: queue fully clear, all four commits path-scoped and clean

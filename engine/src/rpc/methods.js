@@ -11,6 +11,7 @@
 // they would do anything, so the refusal cannot regress into a call when their phases land.
 
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -228,6 +229,34 @@ export function attemptsNewestFirst(attempts) {
   });
 }
 
+/// Where the last measured range is kept, beside score-history.json for the same reason:
+/// it is a measurement OF this repo, and it belongs with the repo it describes.
+export const rangeFilePath = (repoPath) => path.join(repoPath, '.daijin', 'discriminating-range.json');
+
+/**
+ * What a stored range was measured UNDER, so a later read can tell whether it still applies.
+ *
+ * A range is a property of a corpus, a gold set and the settings it was measured at. Change
+ * any of them and the stored number describes a gauge that no longer exists, so the
+ * fingerprint carries all four and a mismatch is DISCLOSED rather than silently corrected.
+ * A stale range shown as current is worse than no range, because it is a number a reader
+ * will act on.
+ */
+export function rangeFingerprint({ k, tokenBudget, goldset, documents }) {
+  return { k, tokenBudget, goldsetHash: createHash('sha256').update(goldset).digest('hex').slice(0, 16), documents };
+}
+
+/// What changed since the range was measured, in a sentence, or null if nothing did.
+export function stalenessOf(stored, current) {
+  if (!stored) return 'the settings it was measured under were not recorded';
+  const changes = [];
+  if (stored.k !== current.k) changes.push(`k moved from ${stored.k} to ${current.k}`);
+  if (stored.tokenBudget !== current.tokenBudget) changes.push(`the token budget moved from ${stored.tokenBudget} to ${current.tokenBudget}`);
+  if (stored.goldsetHash !== current.goldsetHash) changes.push('the gold set changed');
+  if (stored.documents !== current.documents) changes.push(`the brain went from ${stored.documents} documents to ${current.documents}`);
+  return changes.length ? changes.join(', ') : null;
+}
+
 /**
  * Measure how much range the gauge has on this corpus, by re-scoring a permuted gold set.
  *
@@ -401,6 +430,30 @@ export function createMethods({
   }
 
   const historyFile = (repoPath) => path.join(repoPath, '.daijin', 'score-history.json');
+
+  /// Best effort on purpose: failing a diagnosis because its optional cache could not be
+  /// written would trade a good answer for a bookkeeping problem.
+  const writeRange = async (repoPath, record) => {
+    await mkdir(path.dirname(rangeFilePath(repoPath)), { recursive: true })
+      .then(() => writeFile(rangeFilePath(repoPath), `${JSON.stringify(record, null, 2)}\n`, 'utf8'))
+      .catch(() => {});
+  };
+
+  /// A previously measured range, with what has changed since it was taken.
+  ///
+  /// A corrupt or missing file reads as NEVER MEASURED rather than throwing: a cache that
+  /// can kill a diagnosis is a liability, and null already has an honest meaning here.
+  const recallRange = async (repoPath, fingerprint) => {
+    let stored;
+    try {
+      stored = JSON.parse(await readFile(rangeFilePath(repoPath), 'utf8'));
+    } catch {
+      return null;
+    }
+    if (!stored?.range) return null;
+    const staleBecause = stalenessOf(stored, fingerprint);
+    return { ...stored.range, measuredAt: stored.at ?? null, fresh: false, stale: Boolean(staleBecause), staleBecause };
+  };
 
   /// One history, whoever measured. init and retrievalScore both write here so the repo
   /// card's trend line cannot show half the measurements that were actually taken.
@@ -807,24 +860,37 @@ export function createMethods({
         // thing that differs between the arms is whether the answers are right. Anything
         // else varying would make the range a measurement of the difference rather than of
         // the gauge.
+        // The range is SHOWN wherever a sub-75 number is quoted, but MEASURING it is opt in,
+        // so the two cannot be the same switch. A measured range is written down and recalled
+        // on later diagnoses with the date it was taken and what has changed since; the
+        // checkbox governs only whether the expensive arm runs again.
+        const fingerprint = rangeFingerprint({
+          k: settings.retrieval?.k ?? 8,
+          tokenBudget: settings.retrieval?.tokenBudget ?? 4_000,
+          goldset: await readFile(goldsetPath, 'utf8').catch(() => ''),
+          documents: inventory.size,
+        });
         let control = null;
         if (params?.control === true) {
           control = await measureDiscriminatingRange({
             run, goldsetPath, store, environment,
-            k: settings.retrieval?.k ?? 8,
-            tokenBudget: settings.retrieval?.tokenBudget ?? 4_000,
-            score,
+            k: fingerprint.k, tokenBudget: fingerprint.tokenBudget, score,
           });
+          if (control.range) await writeRange(repoPath, { at: new Date(now()).toISOString(), ...fingerprint, range: control.range });
         }
+        const range = control?.range
+          ? { ...control.range, measuredAt: new Date(now()).toISOString(), fresh: true, stale: false, staleBecause: null }
+          : await recallRange(repoPath, fingerprint);
 
         return {
           caseRate: caseRateShape(run.results),
           violations: run.summary.violations,
           ...clustered,
-          // Null when not asked for, which is not the same as "measured and found to be
-          // nothing". A caller that renders a range must be able to tell the difference,
-          // so the unmeasured case carries no numbers at all rather than zeroes.
-          discriminatingRange: control?.range ?? null,
+          // Null means NEVER MEASURED, which is not the same as "measured and found to be
+          // nothing". A caller that renders a range must be able to tell the difference, so
+          // the unmeasured case carries no numbers at all rather than zeroes. A recalled
+          // range carries measuredAt and fresh: false, so nothing dated is mistaken for now.
+          discriminatingRange: range,
           controlSkipped: control?.skipped ?? null,
           // What the clusters do NOT say is worth saying: this names which cases missed and
           // how they group. Choosing between enriching docs, running Layer 2 on an area, or

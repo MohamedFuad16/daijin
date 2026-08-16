@@ -213,3 +213,107 @@ test('measureDiscriminatingRange cleans its temp directory even when the arm thr
     await rm(repoPath, { recursive: true, force: true });
   }
 });
+
+// ---- recall: shown wherever the floor is quoted, measured only on request ----------------
+//
+// The leader's ruling (2026-08-16): the TUI shows the range automatically beside any sub-75
+// diagnosis, and the checkbox governs only whether the expensive arm RUNS. Those cannot be
+// the same switch, so a measured range is written down and recalled, dated, with what has
+// changed since.
+
+test('a measured range is recalled on a later diagnosis that did not measure', async () => {
+  const repoPath = await fixture();
+  const seen = [];
+  const { methods, cleanup } = await methodsOver(repoPath, stubScore({ permutedHits: 2, seen }));
+  try {
+    const measured = await methods.diagnose({ repoPath, control: true });
+    assert.equal(measured.discriminatingRange.fresh, true);
+    assert.equal(measured.discriminatingRange.stale, false);
+
+    const recalled = await methods.diagnose({ repoPath });
+    assert.equal(seen.length, 3, 'the second call ran one arm, not two: recall is free');
+    assert.equal(recalled.discriminatingRange.caseRate.control, '2 of 3', 'the same numbers come back');
+    // fresh: false is the whole point. A dated measurement rendered as if it were taken now
+    // is a number a reader acts on believing it describes the brain in front of them.
+    assert.equal(recalled.discriminatingRange.fresh, false);
+    assert.equal(recalled.discriminatingRange.stale, false, 'nothing changed, so it still applies');
+    assert.match(recalled.discriminatingRange.measuredAt, /^\d{4}-\d{2}-\d{2}T/);
+  } finally {
+    await cleanup();
+    await rm(repoPath, { recursive: true, force: true });
+  }
+});
+
+test('a recalled range says WHAT CHANGED since it was measured', async () => {
+  // A range is a property of a corpus, a gold set and the settings it was taken at. A stale
+  // range shown as current is worse than no range at all.
+  const repoPath = await fixture();
+  const { methods, cleanup } = await methodsOver(repoPath, stubScore({ permutedHits: 2 }));
+  try {
+    await methods.diagnose({ repoPath, control: true });
+
+    // The gold set changes underneath it.
+    await writeFile(path.join(repoPath, '.daijin', 'goldset.yaml'),
+      YAML.stringify([...CASES, { id: 'g004', query: 'a new question', must_return: ['doc.a'] }]), 'utf8');
+    const afterGoldset = await methods.diagnose({ repoPath });
+    assert.equal(afterGoldset.discriminatingRange.stale, true);
+    assert.match(afterGoldset.discriminatingRange.staleBecause, /the gold set changed/);
+    assert.ok(afterGoldset.discriminatingRange.caseRate, 'and it is still shown, disclosed rather than hidden');
+  } finally {
+    await cleanup();
+    await rm(repoPath, { recursive: true, force: true });
+  }
+});
+
+test('settings moving under a stored range is disclosed by name', async () => {
+  const { stalenessOf, rangeFingerprint } = await import('../src/rpc/methods.js');
+  const base = rangeFingerprint({ k: 8, tokenBudget: 4000, goldset: 'a', documents: 3 });
+  assert.equal(stalenessOf(base, base), null);
+  assert.match(stalenessOf(base, { ...base, k: 10 }), /k moved from 8 to 10/);
+  assert.match(stalenessOf(base, { ...base, tokenBudget: 6000 }), /token budget moved from 4000 to 6000/);
+  assert.match(stalenessOf(base, { ...base, documents: 40 }), /3 documents to 40/);
+  // Several at once are all named: a reader deciding whether to remeasure needs the whole
+  // list, not the first thing that differed.
+  const many = stalenessOf(base, { ...base, k: 10, documents: 40 });
+  assert.match(many, /k moved/);
+  assert.match(many, /documents to 40/);
+  // A record with no fingerprint at all cannot be judged, and unjudgeable is stale.
+  assert.match(stalenessOf(null, base), /were not recorded/);
+});
+
+test('a corrupt range file reads as NEVER MEASURED, it does not kill the diagnosis', async () => {
+  // A cache that can fail a diagnosis is a liability, and null already has an honest meaning.
+  const repoPath = await fixture();
+  const { methods, cleanup } = await methodsOver(repoPath, stubScore({}));
+  const { rangeFilePath } = await import('../src/rpc/methods.js');
+  try {
+    await writeFile(rangeFilePath(repoPath), '{ not json at all', 'utf8');
+    const result = await methods.diagnose({ repoPath });
+    assert.equal(result.discriminatingRange, null);
+    assert.ok(result.caseRate, 'the diagnosis still answers');
+  } finally {
+    await cleanup();
+    await rm(repoPath, { recursive: true, force: true });
+  }
+});
+
+test('a skipped control does not overwrite a range that was measured earlier', async () => {
+  // The gold set shrinking below two answers must not erase a real measurement: losing a
+  // number because a later call could not take it is the cache making things worse.
+  const repoPath = await fixture();
+  const { methods, cleanup } = await methodsOver(repoPath, stubScore({ permutedHits: 2 }));
+  try {
+    await methods.diagnose({ repoPath, control: true });
+    await writeFile(path.join(repoPath, '.daijin', 'goldset.yaml'),
+      YAML.stringify([{ id: 'g001', query: 'only one', must_return: ['doc.a'] }]), 'utf8');
+
+    const result = await methods.diagnose({ repoPath, control: true });
+    assert.match(result.controlSkipped, /at least two distinct answers/);
+    assert.ok(result.discriminatingRange, 'the earlier measurement survives');
+    assert.equal(result.discriminatingRange.fresh, false);
+    assert.equal(result.discriminatingRange.stale, true, 'and it is stale, because the gold set is not the one it was taken on');
+  } finally {
+    await cleanup();
+    await rm(repoPath, { recursive: true, force: true });
+  }
+});

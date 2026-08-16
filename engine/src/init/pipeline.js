@@ -619,7 +619,47 @@ export async function initBrain({
   const deliveries = await collectDeliveries({
     cases: gated.active, retrieveFn, tokenBudget: sweep.chosen,
   });
-  const survival = checkContentSurvival(deliveries, { units, tokenBudget: sweep.chosen });
+  let survival = checkContentSurvival(deliveries, { units, tokenBudget: sweep.chosen });
+
+  // D-0003 names content survival as the MECHANICAL RAISE SIGNAL, and a signal that only
+  // says "something is wrong" is half an instrument. When it fires at the chosen budget the
+  // sweep is walked upward until cores survive, so the report can name the smallest budget
+  // that works instead of leaving the reader to guess.
+  //
+  // Measured on the curated arm of P3.5, which is the case this exists for: the case rate is
+  // FLAT across 3k/4k/6k/8k, so the rate rule picks 3000, while survival fails at 3000 and
+  // 4000 and passes at 6000. The rate says the small budget is free; the survival gate says
+  // it costs whole cores. Same repo, different corpus, different answer.
+  if (survival.status !== 'pass') {
+    for (const candidateBudget of [...budgets].sort((left, right) => left - right)) {
+      if (candidateBudget <= sweep.chosen) continue;
+      const raisedDeliveries = await collectDeliveries({
+        cases: gated.active, retrieveFn, tokenBudget: candidateBudget,
+      });
+      const raised = checkContentSurvival(raisedDeliveries, { units, tokenBudget: candidateBudget });
+      if (raised.status === 'pass') {
+        survival = {
+          ...survival,
+          raisedBudget: candidateBudget,
+          raisedSurvival: raised.survival,
+          recommendation: `The case rate is unchanged from ${sweep.chosen} to ${candidateBudget} tokens, so the rate rule `
+            + `chose ${sweep.chosen}; content survival FAILS there and PASSES at ${candidateBudget}. D-0003 makes this the `
+            + `mechanical raise signal, so ${candidateBudget} is the smallest budget this corpus can be served at without `
+            + 'delivering units whose cores were cut.',
+        };
+        await steps.emit({ step: 'survival-raise', detail: survival.recommendation, level: 'warn' });
+        break;
+      }
+    }
+    if (!survival.raisedBudget) {
+      survival = {
+        ...survival,
+        raisedBudget: null,
+        recommendation: 'Content survival fails at every budget in the sweep, so raising it is not the fix here; '
+          + 'the units themselves are the thing to change.',
+      };
+    }
+  }
 
   // D-0030: the floor never ships without the range it was measured inside. The control is
   // the SAME cases with deliberately wrong answers, so it measures this gauge on this

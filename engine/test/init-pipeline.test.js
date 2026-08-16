@@ -353,7 +353,13 @@ test('MUTATION: a 45-file module loses its cited core to the real budget trim at
     assert.equal(trimmed.perCandidateCap, 660);
     assert.equal(trimmed.status, 'fail', JSON.stringify({ checked: trimmed.checked, windowMissed: trimmed.windowMissed.length }));
     assert.ok(trimmed.truncatedAway.some((entry) => entry.id === 'daijin.architecture.src-bulk'));
-    assert.match(trimmed.raiseSignal, /mechanical signal to raise the budget or shorten the cards/);
+    // Finding 82: the diagnosis names WHICH constraint bit, because the fixes differ. This
+    // card's core is 785 tokens against a 660 token slot, so it cannot survive at this budget
+    // however much of it is free; that is a different instruction from "the budget ran out",
+    // which is what the curated arm actually hit.
+    assert.match(trimmed.raiseSignal, /core LARGER THAN ONE CANDIDATE SLOT/);
+    assert.equal(trimmed.truncatedAway[0].boundBy, 'core-larger-than-slot');
+    assert.equal(trimmed.events.units, 1, 'distinct units, not events');
 
     // The same delivery at a budget whose cap fits the core survives, which is what makes
     // the failure above a BUDGET finding rather than a broken instrument.
@@ -936,6 +942,49 @@ test('a unit that quotes a daijin marker is REFUSED rather than silently mangled
       /round trip changed/,
       'a unit the format cannot represent must stop the run, not enter the index half-written',
     );
+  } finally {
+    globalThis.fetch = originalFetch;
+    await store.close();
+    rmSync(directory, { recursive: true, force: true });
+    rmSync(scratch, { recursive: true, force: true });
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('when survival fails, the raise signal names the smallest budget that works', async () => {
+  // D-0003 calls content survival the mechanical raise signal. A signal that only says
+  // "something is wrong" is half an instrument, so the sweep is walked upward until cores
+  // survive. Measured on the P3.5 curated arm: the case rate is FLAT across 3k to 8k so the
+  // rate rule picks 3000, while survival fails at 3000 and 4000 and passes at 6000.
+  const bulk = {};
+  for (let index = 0; index < 45; index += 1) {
+    bulk[`src/bulk/module${String(index).padStart(4, '0')}.js`] = `export function bulkThing${index}() {\n  return ${index};\n}\n`;
+  }
+  const root = makeRepo(bulk);
+  const scratch = mkdtempSync(path.join(tmpdir(), 'daijin-raise-'));
+  const { directory, file } = makeStore();
+  const store = await createSqliteStore({ path: file, project: 'default', embedder: EMBEDDER });
+  const ollama = fakeOllama();
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = ollama.fetchImpl;
+  try {
+    const report = await initBrain({
+      repoPath: root,
+      artifactRoot: scratch,
+      store,
+      embedder: { embed: async (texts) => texts.map((text) => hashEmbed(text)) },
+      environment: ENVIRONMENT,
+      fetchImpl: ollama.fetchImpl,
+      scaffoldOptions: { filesPerCard: 45 },
+      budgets: [3000, 8000],
+      discoverRepoGates: false,
+      clock: () => 1_770_000_000_000,
+    });
+    const survival = report.floor.contentSurvival;
+    assert.equal(survival.status, 'fail', 'the 785-token core cannot fit a 660-token slot at 3000');
+    assert.equal(survival.raisedBudget, 8000, 'and the report names the budget at which it can');
+    assert.match(survival.recommendation, /mechanical raise signal/);
+    assert.match(survival.recommendation, /smallest budget this corpus can be served at/);
   } finally {
     globalThis.fetch = originalFetch;
     await store.close();

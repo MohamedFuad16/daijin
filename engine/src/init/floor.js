@@ -279,6 +279,7 @@ export function sourceContentFor(unit, entry, chunksByUnit) {
 export function checkContentSurvival(deliveries, { units, tokenBudget, perCandidateCapRatio = 0.22 }) {
   const unitsById = new Map(units.map((unit) => [unit.id, unit]));
   const chunksByUnit = new Map(chunkUnits(units).map((plan) => [plan.unit.id, plan.chunks]));
+  const nominalCap = Math.max(64, Math.floor(tokenBudget * perCandidateCapRatio));
   const truncatedAway = [];
   const windowMissed = [];
   let checked = 0;
@@ -295,35 +296,99 @@ export function checkContentSurvival(deliveries, { units, tokenBudget, perCandid
         continue;
       }
       const source = sourceContentFor(unit, entry, chunksByUnit);
+      const coreTokens = tokens(unit.core).length;
+      const deliveredTokens = tokens(delivered).length;
+      // WHICH constraint actually bit. The ranker's allowance is min(remaining budget,
+      // per-candidate cap), so the cap is an upper bound and not necessarily the binding
+      // one. Reporting the cap as the cause when the budget ran out sends a user to split
+      // units that were already comfortably under the cap, and nothing changes. The two
+      // diagnoses imply opposite fixes, so the record names which it was.
+      // THREE outcomes, because two of them imply opposite fixes and the third is the case
+      // where both constraints are live at once. Discovered by my own 45-file fixture, whose
+      // core is 785 tokens against a 660 cap AND was cut early with the budget nearly spent:
+      // a binary cap-or-budget classification called it budget-exhausted and would have told
+      // a user not to shorten a unit that cannot fit a slot at any budget.
+      const boundBy = coreTokens > nominalCap
+        ? 'core-larger-than-slot'
+        : deliveredTokens >= nominalCap ? 'per-candidate-cap' : 'budget-exhausted';
       const record = {
         caseId: delivery.caseId,
         id: unit.id,
         type: unit.type,
         ordinal: entry.ordinal ?? null,
-        coreTokens: tokens(unit.core).length,
-        deliveredTokens: tokens(delivered).length,
-        allowance: Math.max(64, Math.floor(tokenBudget * perCandidateCapRatio)),
+        coreTokens,
+        deliveredTokens,
+        // NOMINAL, and labelled as such: the applied allowance is min(remaining, this) and
+        // is not observable from outside the ranker.
+        nominalCap,
+        boundBy,
       };
       if (source.includes(unit.core)) truncatedAway.push(record);
       else windowMissed.push(record);
     }
   }
 
+  // Distinct UNITS and EVENTS are different numbers. One unit truncated on three queries is
+  // one thing to fix, not three, and reporting events as units overstates the surface.
+  const distinctUnits = [...new Set(truncatedAway.map((entry) => entry.id))];
+  const group = (name) => truncatedAway.filter((entry) => entry.boundBy === name);
+  const oversized = group('core-larger-than-slot');
+  const capBound = group('per-candidate-cap');
+  const budgetBound = group('budget-exhausted');
+  const consumption = deliveries
+    .map((delivery) => delivery.tokenCount)
+    .filter((value) => Number.isFinite(value));
+  const meanConsumed = consumption.length
+    ? Math.round(consumption.reduce((sum, value) => sum + value, 0) / consumption.length)
+    : null;
+  const unitCount = (rows) => new Set(rows.map((entry) => entry.id)).size;
+  const cores = (rows) => [...new Set(rows.map((entry) => entry.coreTokens))].sort((left, right) => left - right).join(', ');
+
+  const raise = [];
+  if (oversized.length > 0) {
+    raise.push(
+      `${oversized.length} event(s) across ${unitCount(oversized)} unit(s) have a core LARGER THAN ONE CANDIDATE SLOT `
+      + `(${cores(oversized)} tokens against a ${nominalCap} token cap at a ${tokenBudget} token budget): they cannot `
+      + 'survive intact at this budget however much of it is free, so shortening the unit or raising the budget is the fix.',
+    );
+  }
+  if (capBound.length > 0) {
+    raise.push(
+      `${capBound.length} event(s) across ${unitCount(capBound)} unit(s) were cut at the per-candidate cap of `
+      + `${nominalCap} tokens.`,
+    );
+  }
+  if (budgetBound.length > 0) {
+    raise.push(
+      `${budgetBound.length} event(s) across ${unitCount(budgetBound)} unit(s) were cut with the TOTAL BUDGET exhausted, `
+      + `not by the per-candidate cap: their cores are ${cores(budgetBound)} tokens against a ${nominalCap} token cap `
+      + 'they never reached'
+      + (meanConsumed !== null ? `, and a mean of ${meanConsumed} of ${tokenBudget} tokens was already spent per query` : '')
+      + '. Raising the budget or reducing how many units compete for it is the fix; splitting these units is not, '
+      + 'because they already fit the cap.',
+    );
+  }
+
   return {
     status: truncatedAway.length === 0 ? 'pass' : 'fail',
     tokenBudget,
-    perCandidateCap: Math.max(64, Math.floor(tokenBudget * perCandidateCapRatio)),
+    perCandidateCap: nominalCap,
+    meanTokensConsumed: meanConsumed,
     checked,
     survived,
     // Exact counts, no percentage: the denominator is the point.
     survival: `${survived} of ${checked}`,
     truncatedAway,
+    truncatedUnits: distinctUnits,
+    events: {
+      total: truncatedAway.length,
+      units: distinctUnits.length,
+      oversized: oversized.length,
+      capBound: capBound.length,
+      budgetBound: budgetBound.length,
+    },
     windowMissed,
-    raiseSignal: truncatedAway.length > 0
-      ? `${truncatedAway.length} delivered unit(s) lost their type core to the per-candidate cap of `
-        + `${Math.max(64, Math.floor(tokenBudget * perCandidateCapRatio))} tokens at a ${tokenBudget} token budget. `
-        + 'This is the mechanical signal to raise the budget or shorten the cards.'
-      : null,
+    raiseSignal: raise.length > 0 ? raise.join(' ') : null,
   };
 }
 
@@ -342,7 +407,13 @@ export async function collectDeliveries({ cases, retrieveFn, tokenBudget }) {
       ...(result.decisions || []), ...(result.lessons || []), ...(result.exemplars || []),
       ...(result.chunks || []), ...(result.standing || []),
     ].map((item) => ({ id: item.id, content: item.content, ordinal: item.ordinal ?? null }));
-    deliveries.push({ caseId: entry.id, entries });
+    deliveries.push({
+      caseId: entry.id,
+      entries,
+      // The consumption figures the diagnosis needs to tell a cap problem from a budget one.
+      tokenCount: result.meta?.tokenCount ?? null,
+      tokenBudget: result.meta?.tokenBudget ?? tokenBudget,
+    });
   }
   return deliveries;
 }

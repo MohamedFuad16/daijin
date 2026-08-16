@@ -75,7 +75,7 @@ function decodeAttributes(text) {
  * knows a title was human-authored rather than invented by the splitter. Both were lost in
  * the first version of this format and the miner's behaviour changed without any error.
  */
-export function unitMarker(unit) {
+export function unitMarker(unit, { shift = 0 } = {}) {
   return `<!-- daijin ${encodeAttributes({
     id: unit.id,
     type: unit.type,
@@ -87,6 +87,7 @@ export function unitMarker(unit) {
     split: unit.meta?.splitRule ?? '',
     source: unit.meta?.sourceFile ?? '',
     cites: (unit.citations || []).join(','),
+    shift: shift || '',
   })} -->`;
 }
 
@@ -95,28 +96,41 @@ function frontMatter({ generator }) {
 }
 
 /**
- * Shift every heading in a body down one level, and back.
+ * Shift a body's headings clear of the record separator, and back.
  *
- * A record is a `##` section, and unit bodies contain their own `##` sub-headings (a Layer 1
- * architecture card has "## Imports from"). Written without demotion, the reader's section
- * scan treats those sub-headings as NEW records: the unit is silently truncated to its first
- * section and the rest becomes orphan fragments with no marker. That is exactly the silent
- * loss D-0031 exists to prevent, and it is invisible to any check that compares unit IDS,
- * because the first fragment keeps the id.
+ * A record is a `##` section and unit bodies carry their own headings, so a body heading must
+ * never render at `##`. A FIXED one-level shift is not enough, and real content proved it:
+ * portfolio-mine's decisions.md carries an `# Decisions` h1 inside its index section, which a
+ * one-level shift turned into `## Decisions`, which the reader then took as a NEW record. The
+ * unit was truncated at that line and the remainder became an orphan fragment with no marker.
+ *
+ * So the shift is computed per record, enough to put the SHALLOWEST body heading at `###`,
+ * and it is recorded in the marker so the reader undoes exactly what the writer did rather
+ * than guessing. A body whose headings would pass `######` cannot be represented; that is not
+ * silently clipped, it is left to fail the round-trip check, which refuses the run.
  */
-export function demoteHeadings(body) {
-  return body.replace(/^(#{1,5})\s/gm, (match, hashes) => `${hashes}# `);
+export function headingShiftFor(body) {
+  const levels = [...String(body).matchAll(/^(#{1,6})\s/gm)].map((match) => match[1].length);
+  if (levels.length === 0) return 0;
+  return Math.max(0, 3 - Math.min(...levels));
 }
 
-export function promoteHeadings(body) {
-  return body.replace(/^(#{2,6})\s/gm, (match, hashes) => `${hashes.slice(1)} `);
+export function demoteHeadings(body, shift) {
+  if (!shift) return body;
+  return body.replace(/^(#{1,6})\s/gm, (match, hashes) => `${'#'.repeat(hashes.length + shift)} `);
+}
+
+export function promoteHeadings(body, shift) {
+  if (!shift) return body;
+  return body.replace(/^(#{1,6})\s/gm, (match, hashes) => `${'#'.repeat(Math.max(1, hashes.length - shift))} `);
 }
 
 /** A unit as one markdown record: heading, hidden marker, body. */
 export function renderUnit(unit) {
   const heading = `## ${unit.title}`;
-  const body = demoteHeadings(String(unit.content).replace(/^#\s+.*\n?/, '').trim());
-  return `${heading}\n\n${unitMarker(unit)}\n\n${body}`;
+  const raw = String(unit.content).replace(/^#\s+.*\n?/, '').trim();
+  const shift = headingShiftFor(raw);
+  return `${heading}\n\n${unitMarker(unit, { shift })}\n\n${demoteHeadings(raw, shift)}`;
 }
 
 function slugForFile(id) {
@@ -205,6 +219,7 @@ export function parseBrainFile(text, { file }) {
         .filter((line) => !MARKER.test(line.trim()))
         .join('\n')
         .trim(),
+      Number(attributes.shift || 0),
     );
     const citations = attributes.cites ? attributes.cites.split(',').filter(Boolean) : [];
     units.push({

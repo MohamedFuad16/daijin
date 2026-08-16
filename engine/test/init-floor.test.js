@@ -135,19 +135,61 @@ test('an intact delivery passes the survival check', () => {
   assert.equal(survival.raiseSignal, null);
 });
 
-test('MUTATION: a core cut by the per-candidate cap FAILS the gate and names the raise signal', () => {
-  // The delivered text is the source trimmed the way the ranker trims it: cut at a token
-  // boundary with the marker appended. The core is no longer present verbatim.
+test('MUTATION: a core cut short FAILS the gate, and the gate names WHICH constraint bit', () => {
+  // Finding 82: the two causes imply opposite fixes. A unit truncated at the per-candidate
+  // cap is too big and should be shortened; a unit truncated with the total budget spent was
+  // already under the cap, and shortening it changes nothing. Reporting the cap as the cause
+  // of a budget failure sends a user to do work that cannot help.
   const truncated = `Breadcrumb: Module: src/store\n\n${CORE.slice(0, 60)}\n[truncated]`;
-  const survival = checkContentSurvival(
-    [{ caseId: 'g001', entries: [{ id: UNIT.id, ordinal: 0, content: truncated }] }],
+
+  // Budget-bound: the delivered text is far under the 660 cap, so the cap did not bite.
+  const budgetBound = checkContentSurvival(
+    [{ caseId: 'g001', entries: [{ id: UNIT.id, ordinal: 0, content: truncated }], tokenCount: 2670, tokenBudget: 3000 }],
     { units: [UNIT], tokenBudget: 3000 },
   );
-  assert.equal(survival.status, 'fail', 'this is the mechanical raise signal, and a gate that cannot report it is dead coverage');
-  assert.equal(survival.truncatedAway.length, 1);
-  assert.equal(survival.windowMissed.length, 0, 'the source HELD the core, so this is a budget outcome, not a chunking one');
-  assert.match(survival.raiseSignal, /lost their type core to the per-candidate cap of 660 tokens at a 3000 token budget/);
-  assert.equal(survival.truncatedAway[0].coreTokens, tokens(CORE).length);
+  assert.equal(budgetBound.status, 'fail');
+  assert.equal(budgetBound.truncatedAway[0].boundBy, 'budget-exhausted');
+  assert.match(budgetBound.raiseSignal, /TOTAL BUDGET exhausted, not by the per-candidate cap/);
+  assert.match(budgetBound.raiseSignal, /a mean of 2670 of 3000 tokens was already spent/);
+  assert.match(budgetBound.raiseSignal, /splitting these units is not/);
+  assert.equal(budgetBound.truncatedAway[0].coreTokens, tokens(CORE).length);
+  assert.equal(budgetBound.truncatedAway[0].nominalCap, 660, 'reported as NOMINAL: the applied allowance is min(remaining, cap)');
+
+  // Cap-bound: a unit whose core genuinely exceeds one candidate slot. The source must
+  // CONTAIN the core, or the event is a chunking miss rather than a trim.
+  const bigCore = `Claim: oversized.\n${'alpha beta gamma delta '.repeat(200).trim()}`;
+  const big = {
+    ...UNIT,
+    core: bigCore,
+    content: `# Module: big\n\n${bigCore}`,
+    body: bigCore,
+    type: 'convention',
+  };
+  const capBound = checkContentSurvival(
+    // Delivered text at the cap: 700 word tokens, above the 660 allowance, which is what
+    // "the cap bit" looks like from outside the ranker.
+    [{ caseId: 'g001', entries: [{ id: big.id, ordinal: 0, content: `${bigCore.split(/\s+/).slice(0, 700).join(' ')}\n[truncated]` }], tokenCount: 700, tokenBudget: 3000 }],
+    { units: [big], tokenBudget: 3000 },
+  );
+  assert.equal(capBound.truncatedAway[0].boundBy, 'core-larger-than-slot', 'the core exceeds a slot at any budget');
+  assert.match(capBound.raiseSignal, /core LARGER THAN ONE CANDIDATE SLOT/);
+  assert.match(capBound.raiseSignal, /shortening the unit or raising the budget is the fix/);
+});
+
+test('events and distinct units are counted separately', () => {
+  // One unit truncated on three queries is one thing to fix, not three. Reporting events as
+  // units overstates the surface a user has to act on.
+  const truncated = `Breadcrumb: Module: src/store\n\n${CORE.slice(0, 60)}\n[truncated]`;
+  const survival = checkContentSurvival(
+    ['g001', 'g002', 'g003'].map((caseId) => ({
+      caseId, entries: [{ id: UNIT.id, ordinal: 0, content: truncated }], tokenCount: 2670, tokenBudget: 3000,
+    })),
+    { units: [UNIT], tokenBudget: 3000 },
+  );
+  assert.equal(survival.events.total, 3, 'three events');
+  assert.equal(survival.events.units, 1, 'one unit');
+  assert.deepEqual(survival.truncatedUnits, [UNIT.id]);
+  assert.match(survival.raiseSignal, /3 event\(s\) across 1 unit\(s\)/);
 });
 
 test('a window that never held the core is reported as CHUNKING, not as a budget failure', () => {

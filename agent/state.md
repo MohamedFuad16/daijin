@@ -1,5 +1,33 @@
 # Daijin build state (authoritative)
 
+## 2026-08-16 18:45 - Gate governance ruled; the D-0032 pattern ships as a module
+
+GOVERNANCE RULING on the scanner gate, from the verifier's EMISSIONS
+enumeration surfacing that a report-only agent owns a live CI gate
+(gate-scanner-plants.mjs at ci.yml:70, executed by every lane's push):
+the split it proposed is ADOPTED. The scanner's threshold and widening
+are gym-porter's (it owns the scanner); the plant set is the verifier's
+to extend; EITHER change goes through the leader and belongs in a
+freeze window like any other gate change - a fifth plant shape is a
+change to a gate other lanes depend on, never a casual append. The
+verifier's line worth keeping: of its emissions, the markdown is read
+by people who go looking; the .mjs is executed by every push whether
+anyone is looking or not.
+
+THE D-0032 PATTERN shipped as a tested drop-in module rather than a
+diff (docs/verification/p4-mutations/d0032-pattern.mjs, 45b0334):
+init-miner's mutate-all.mjs is NOT IN THE TREE - it lives uncommitted
+in session scratch - so a diff would have been written against guessed
+bytes. The module carries private-copy-by-default, structural refusal
+with loud override, the three-hash assertion, a self-test driving all
+four outcomes (killed, survived, dead-anchor, restore-failure), and
+NAMES ITS OWN BOUND: the restore writes back the captured original, so
+a mid-run meddling test is corrected, not detected. Relayed to
+init-miner by the leader (lane sessions cannot address each other
+directly). CONSEQUENCE RULED: init-miner's battery must be COMMITTED
+under its evidence scope - an uncommitted battery cannot carry a
+demonstrated refusal or be reviewed, and D-0032 compliance that lives
+in scratch is a claim, not bytes.
 ## 2026-08-16 18:35 - The drift is retracted; the race is traced; clause (i) goes to worktrees
 
 TWO CORRECTIONS ARRIVED IN ONE ROUND, pointing opposite directions, and

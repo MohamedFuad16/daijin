@@ -496,3 +496,19 @@ design question. init-miner's own verdict-line withdrawal (its script
 printed DISCRIMINATING from an invented 0.8 threshold; it now reports
 both ranges and no pass mark) is the discipline applied to its own
 instrument.
+
+[Addition to D-0025, 2026-08-16 12:36, recorded BEFORE any backend number
+exists, at init-miner's request and for its stated reason: once a number
+exists, "portfolio-mine returned neutral" would read as evidence that
+reranking does nothing, and it is not. THE PORTFOLIO-MINE ARM CAN ONLY
+FALSIFY, by construction: its control sits at 25 of 25, so caseDelta can
+only be zero or negative, and every possible verdict there is evidence
+about the GAUGE, not about reranking. The ceiling is measured from two
+independent directions: the permuted control (0.28 of discriminating
+range) and a deliberately worst-case full-order-inversion reranker driven
+through the real seam, which costs only 4 cases on the enforced metric
+while collapsing MRR by 0.76. Reading, binding: a regression on
+portfolio-mine is real and disqualifying; a win there is impossible; THE
+PROMOTION DECISION COMES FROM THE PLATFORM CORPUS ONLY (31 of 34, three
+cases of headroom). Promoting on MRR because it is the only metric with
+range on small corpora remains forbidden per D-0017.]

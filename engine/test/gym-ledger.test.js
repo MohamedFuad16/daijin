@@ -13,6 +13,7 @@ import Database from 'better-sqlite3';
 import { GymLedger, gymDatabasePath, openGymStore } from '../src/gym/ledger.js';
 import { drawnExamCount, loadResultFiles, writeResultFile } from '../src/gym/result-files.js';
 import { parseExamRecord } from '../src/gym/exams.js';
+import { AXES } from '../src/gym/grading.js';
 
 const SHA_BASE = 'a'.repeat(40);
 const SHA_GOLD = 'b'.repeat(40);
@@ -223,6 +224,161 @@ test('the exam bank round-trips through the ledger and filters on either axis', 
   assert.equal(row.quarantineReason, 'Cap death in every cycle that drew it.');
   assert.equal(store.getExam('exam-0002').heldOut, true);
   store.close();
+});
+
+/** A validated rubric, the shape grading.js hands the ledger. */
+function rubricFor(runId, overrides = {}) {
+  const axes = {};
+  for (const axis of AXES) axes[axis] = { score: 4, citations: ['src/sync.js:2'] };
+  return {
+    runId,
+    examId: 'exam-0001',
+    verdict: 'pass',
+    axes,
+    gaps: [{ tag: 'model-limit', note: 'shown and ignored' }],
+    author: 'teacher-model@https://provider.invalid',
+    authorRole: 'teacher',
+    taskDigest: 'task-digest',
+    submissionDigest: `submission-${runId}`,
+    ...overrides,
+  };
+}
+
+function ledgerWithRun(mode = 'evaluation') {
+  const store = ledger();
+  store.putExam(exam('exam-0001'));
+  const cycleId = store.startCycle({ mode });
+  const runId = store.recordRun({
+    cycleId, examId: 'exam-0001', mode, status: 'completed', applied: true, resultFile: `${mode}-r.json`,
+  });
+  return { store, cycleId, runId };
+}
+
+test('rubrics persist, and come back keyed by name for the daemon boundary to order', () => {
+  const { store, runId } = ledgerWithRun();
+  const batchId = store.importRubricBatch({ rubrics: [rubricFor(runId)], mode: 'evaluation', source: 'reply.json' });
+
+  const stored = store.rubricFor(runId);
+  assert.equal(stored.runId, runId);
+  assert.equal(stored.verdict, 'pass');
+  assert.equal(stored.batchId, batchId);
+  // BY NAME, because that is how grading.js authors and validates a rubric. The ordered wire
+  // list is the daemon's axesFor at the boundary (methods.md finding 79), not the store's.
+  assert.deepEqual(Object.keys(stored.axes).sort(), [...AXES].sort());
+  assert.equal(stored.axes.correctness_vs_gold.score, 4);
+  assert.deepEqual(stored.gaps, [{ tag: 'model-limit', note: 'shown and ignored' }]);
+  assert.equal(store.rubricFor(9_999), null, 'an ungraded run reads as null, never as empty axes');
+
+  const [batch] = store.gradeBatches();
+  assert.equal(batch.rubric_count, 1);
+  assert.equal(batch.source, 'reply.json');
+  store.close();
+});
+
+test('attemptsForExam attaches each rubric, so no caller needs its own SQL', () => {
+  const { store, cycleId, runId } = ledgerWithRun();
+  const second = store.recordRun({
+    cycleId, examId: 'exam-0001', mode: 'evaluation', status: 'completed', applied: true, resultFile: 'r2.json',
+  });
+  store.importRubricBatch({ rubrics: [rubricFor(runId)], mode: 'evaluation' });
+
+  const attempts = store.attemptsForExam('exam-0001');
+  assert.deepEqual(attempts.map((attempt) => attempt.id), [second, runId], 'newest first');
+  assert.equal(attempts[0].rubric, null, 'the ungraded attempt carries null, not an empty object');
+  assert.equal(attempts[1].rubric.verdict, 'pass');
+  assert.equal(attempts[1].rubric.axes.reasoning_quality.score, 4);
+  assert.deepEqual(store.attemptsForExam('exam-0404'), []);
+  store.close();
+});
+
+test('P7 clause 5 is STRUCTURAL in the schema: an unsubmitted run cannot be graded', () => {
+  // The property the rubric TABLE buys over a JSON column on run. `recordRun` refuses a row
+  // for a run with no applied diff, so the run table holds only gradeable attempts, and the
+  // foreign key makes a rubric for a cap-death impossible even if the validator were never
+  // called. Two independent mechanisms, and this one cannot be bypassed by a caller.
+  const { store } = ledgerWithRun();
+  assert.throws(
+    () => store.importRubricBatch({ rubrics: [rubricFor(4_242)], mode: 'evaluation' }),
+    /no such run row.*has no row by design/s,
+  );
+  assert.equal(store.gradeBatches().length, 0, 'and the batch row is rolled back with it');
+  store.close();
+});
+
+test('clause 9 on disk: a batch that fails partway writes NOTHING', () => {
+  const { store, cycleId, runId } = ledgerWithRun();
+  const second = store.recordRun({
+    cycleId, examId: 'exam-0001', mode: 'evaluation', status: 'completed', applied: true, resultFile: 'r2.json',
+  });
+
+  // Three rubrics, the third naming a run that does not exist. The first two are perfect.
+  assert.throws(() => store.importRubricBatch({
+    rubrics: [rubricFor(runId), rubricFor(second), rubricFor(7_777)],
+    mode: 'evaluation',
+  }), /no such run row/);
+
+  // The transaction is what makes half a graded cohort impossible, and half a graded cohort
+  // looks exactly like a graded cohort.
+  assert.equal(store.rubricFor(runId), null);
+  assert.equal(store.rubricFor(second), null);
+  assert.equal(store.gradeBatches().length, 0);
+
+  // The same batch minus the bad rubric lands whole.
+  store.importRubricBatch({ rubrics: [rubricFor(runId), rubricFor(second)], mode: 'evaluation' });
+  assert.ok(store.rubricFor(runId) && store.rubricFor(second));
+  assert.equal(store.gradeBatches()[0].rubric_count, 2);
+  store.close();
+});
+
+test('one rubric per run, and mode quarantine reaches the rubric store', () => {
+  const { store, runId } = ledgerWithRun();
+  store.importRubricBatch({ rubrics: [rubricFor(runId)], mode: 'evaluation' });
+  // A re-import cannot quietly double-grade an attempt.
+  assert.throws(() => store.importRubricBatch({ rubrics: [rubricFor(runId)], mode: 'evaluation' }), /UNIQUE/i);
+  assert.equal(store.gradeBatches().length, 1, 'and the second batch row rolls back too');
+
+  // Clause 21 at the storage layer: a harness-debug cohort is recorded and never graded.
+  const debug = ledgerWithRun('harness-debug');
+  assert.throws(
+    () => debug.store.importRubricBatch({ rubrics: [rubricFor(debug.runId)], mode: 'harness-debug' }),
+    /only evaluation and experiment runs are graded/,
+  );
+  // An experiment IS gradable, because its arm has to be comparable; it is still never scored.
+  const experiment = ledgerWithRun('experiment');
+  assert.ok(experiment.store.importRubricBatch({ rubrics: [rubricFor(experiment.runId)], mode: 'experiment' }));
+  assert.equal(experiment.store.summary().scoredWrites, 0);
+
+  // A rubric cannot cross modes: an evaluation batch may not carry an experiment run.
+  const mixed = ledgerWithRun('experiment');
+  assert.throws(
+    () => mixed.store.importRubricBatch({ rubrics: [rubricFor(mixed.runId)], mode: 'evaluation' }),
+    /arrived in a evaluation batch, but that run is experiment/,
+  );
+
+  store.close();
+  debug.store.close();
+  experiment.store.close();
+  mixed.store.close();
+});
+
+test('the rubric migration is appended, not edited, and the ledger refuses an edited one', async () => {
+  await withTemp(async (root) => {
+    const file = path.join(root, 'gym.sqlite');
+    const first = GymLedger.open(file);
+    assert.deepEqual(
+      first.database.prepare('SELECT id FROM schema_migration ORDER BY id').all().map((row) => row.id),
+      ['001-gym-base', '002-rubrics'],
+      'appended, so an existing ledger gains the tables without 001 being touched',
+    );
+    first.close();
+    // Re-opening applies nothing and refuses nothing: the checksums match.
+    assert.doesNotThrow(() => GymLedger.open(file).close());
+
+    const tampered = new Database(file);
+    tampered.prepare('UPDATE schema_migration SET checksum = ? WHERE id = ?').run('edited-after-the-fact', '002-rubrics');
+    tampered.close();
+    assert.throws(() => GymLedger.open(file), /Gym migration 002-rubrics was edited after it was applied/);
+  });
 });
 
 test('the drawn cohort is counted from result files, and a cap-death is inside the window', async () => {

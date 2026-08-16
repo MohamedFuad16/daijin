@@ -26,7 +26,7 @@ import { createHash } from 'node:crypto';
 import path from 'node:path';
 import Database from 'better-sqlite3';
 
-import { assertRunMode, assertScoredWrite, isScoreableRun } from './run-mode.js';
+import { assertRunMode, assertScoredWrite, isGradableRun, isScoreableRun } from './run-mode.js';
 import { examListRow, parseExamRecord } from './exams.js';
 import { drawnExamCount } from './result-files.js';
 import { hasExclusionRecord } from './provenance.js';
@@ -111,7 +111,71 @@ export const MIGRATIONS = [
       CREATE UNIQUE INDEX IF NOT EXISTS certification_run ON certification(run_id);
     `,
   },
+  {
+    // Rubric persistence. Appended, never edited into 001: an edited applied migration would
+    // apply to new ledgers and silently skip existing ones, leaving two schemas with one
+    // version number, and migrate() refuses it.
+    //
+    // A RUBRIC TABLE, not a JSON column on `run`, and the reason is a property rather than a
+    // preference. `recordRun` refuses a row for a run with no applied diff, so the `run`
+    // table contains ONLY gradeable attempts. A foreign key from rubric to run therefore
+    // makes P7 clause 5 structural at the storage layer: a rubric for a run that never
+    // answered cannot be written, independently of whether the validator was called. A JSON
+    // column would leave every row rubric-shaped and enforce nothing.
+    //
+    // The second reason is the same one certification is its own table: the run row is
+    // written at cycle time by the harness, and the rubric arrives later from a different
+    // actor. Two writers, two lifetimes, two tables.
+    id: '002-rubrics',
+    sql: `
+      CREATE TABLE IF NOT EXISTS grade_batch (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        mode         TEXT NOT NULL,
+        source       TEXT,
+        at           TEXT NOT NULL,
+        rubric_count INTEGER NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS rubric (
+        id                INTEGER PRIMARY KEY AUTOINCREMENT,
+        run_id            INTEGER NOT NULL REFERENCES run(id),
+        exam_id           TEXT NOT NULL,
+        batch_id          INTEGER NOT NULL REFERENCES grade_batch(id),
+        verdict           TEXT NOT NULL,
+        axes              TEXT NOT NULL,
+        gaps              TEXT NOT NULL DEFAULT '[]',
+        author            TEXT,
+        author_role       TEXT,
+        reported_author   TEXT,
+        task_digest       TEXT NOT NULL,
+        submission_digest TEXT NOT NULL,
+        at                TEXT NOT NULL
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS rubric_run ON rubric(run_id);
+      CREATE INDEX IF NOT EXISTS rubric_exam ON rubric(exam_id);
+      CREATE INDEX IF NOT EXISTS rubric_batch ON rubric(batch_id);
+    `,
+  },
 ];
+
+/** A stored rubric, back in the shape grading.js authored: axes keyed by name, gaps a list. */
+function hydrateRubric(row) {
+  return {
+    id: row.id,
+    runId: row.run_id,
+    examId: row.exam_id,
+    batchId: row.batch_id,
+    verdict: row.verdict,
+    axes: JSON.parse(row.axes),
+    gaps: JSON.parse(row.gaps),
+    author: row.author,
+    authorRole: row.author_role,
+    ...(row.reported_author ? { reportedAuthor: row.reported_author } : {}),
+    taskDigest: row.task_digest,
+    submissionDigest: row.submission_digest,
+    at: row.at,
+  };
+}
 
 function checksum(sql) {
   return createHash('sha256').update(sql).digest('hex');
@@ -279,6 +343,105 @@ export class GymLedger {
     return scoredOnly
       ? this.database.prepare("SELECT * FROM run WHERE cycle_id = ? AND mode = 'evaluation' ORDER BY id").all(cycleId)
       : this.database.prepare('SELECT * FROM run WHERE cycle_id = ? ORDER BY id').all(cycleId);
+  }
+
+  // Rubrics (P7 clauses 5, 9 and 21 at the storage layer).
+
+  /**
+   * Write a VALIDATED batch of rubrics, atomically.
+   *
+   * This is clause 9 becoming a real transaction on disk. `importRubrics` in grading.js
+   * validates the whole batch and returns it or throws; this writes the whole batch or
+   * writes nothing. A refused batch must leave the store byte-identical, and half a graded
+   * cohort looks like a graded cohort.
+   *
+   * It does NOT validate. Validation is grading.js's job and doing it twice in two places is
+   * how the two drift; what this enforces are the three things only storage can:
+   *  - a rubric for a run with no row is impossible (the foreign key, and `run` holds only
+   *    attempts that produced a diff, so clause 5 holds without asking the validator);
+   *  - one rubric per run (the unique index), so a re-import cannot quietly double-grade;
+   *  - a rubric only from a GRADABLE mode, so a harness-debug cohort cannot be graded into
+   *    the record (clause 21).
+   */
+  importRubricBatch({ rubrics, mode, source = null, at = null }) {
+    assertRunMode(mode);
+    if (!isGradableRun(mode)) {
+      throw new Error(
+        `Refusing to store rubrics from mode ${mode}; only evaluation and experiment runs are graded. `
+        + 'A harness-debug cohort is recorded and never graded into the record.',
+      );
+    }
+    if (!Array.isArray(rubrics) || rubrics.length === 0) throw new Error('A rubric batch must carry at least one rubric.');
+    const stamp = at || new Date().toISOString();
+
+    const write = this.database.transaction(() => {
+      const batchId = Number(this.database.prepare(
+        'INSERT INTO grade_batch (mode, source, at, rubric_count) VALUES (?, ?, ?, ?)',
+      ).run(mode, source, stamp, rubrics.length).lastInsertRowid);
+
+      const insert = this.database.prepare(`
+        INSERT INTO rubric (run_id, exam_id, batch_id, verdict, axes, gaps, author, author_role,
+                            reported_author, task_digest, submission_digest, at)
+        VALUES (@runId, @examId, @batchId, @verdict, @axes, @gaps, @author, @authorRole,
+                @reportedAuthor, @taskDigest, @submissionDigest, @at)
+      `);
+      for (const rubric of rubrics) {
+        const run = this.getRun(rubric.runId);
+        if (!run) {
+          // Named before the foreign key fires, because "FOREIGN KEY constraint failed" does
+          // not tell an operator that the run never produced a diff.
+          throw new Error(
+            `Refusing to store a rubric for run ${rubric.runId}: no such run row. `
+            + 'A run with no applied diff has no row by design, and a rubric may not be written for it.',
+          );
+        }
+        if (run.mode !== mode) {
+          throw new Error(`Rubric for run ${rubric.runId} arrived in a ${mode} batch, but that run is ${run.mode}.`);
+        }
+        insert.run({
+          runId: rubric.runId,
+          examId: rubric.examId ?? run.exam_id,
+          batchId,
+          verdict: rubric.verdict,
+          axes: JSON.stringify(rubric.axes ?? {}),
+          gaps: JSON.stringify(rubric.gaps ?? []),
+          author: rubric.author ?? null,
+          authorRole: rubric.authorRole ?? null,
+          reportedAuthor: rubric.reportedAuthor ?? null,
+          taskDigest: rubric.taskDigest,
+          submissionDigest: rubric.submissionDigest,
+          at: stamp,
+        });
+      }
+      return batchId;
+    });
+    return write();
+  }
+
+  /** One run's rubric, parsed, or null. `axes` comes back KEYED BY NAME, which is how
+   *  grading.js authors and validates it; the daemon's axesFor maps it to the ordered wire
+   *  list at the boundary (methods.md finding 79). */
+  rubricFor(runId) {
+    const row = this.database.prepare('SELECT * FROM rubric WHERE run_id = ?').get(runId);
+    return row ? hydrateRubric(row) : null;
+  }
+
+  /**
+   * An exam's attempts, newest first, each carrying its rubric or null.
+   *
+   * This exists so no caller has to reach past the ledger into the tables with its own SQL.
+   * The daemon's examDetail did exactly that, which coupled the RPC surface to a schema it
+   * does not own, and this schema just changed under it.
+   */
+  attemptsForExam(examId) {
+    const runs = this.database.prepare('SELECT * FROM run WHERE exam_id = ? ORDER BY id DESC').all(examId);
+    const rubrics = new Map(this.database.prepare('SELECT * FROM rubric WHERE exam_id = ?').all(examId)
+      .map((row) => [row.run_id, hydrateRubric(row)]));
+    return runs.map((run) => ({ ...run, rubric: rubrics.get(run.id) ?? null }));
+  }
+
+  gradeBatches() {
+    return this.database.prepare('SELECT * FROM grade_batch ORDER BY id DESC').all();
   }
 
   // Certification.

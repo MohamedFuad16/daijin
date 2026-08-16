@@ -119,10 +119,17 @@ state, not an error.
 ```js
 const exam = ledger.getExam(examId);
 if (!exam) throw invalidParams(...);
-const attempts = ledger.database.prepare(
-  'SELECT * FROM run WHERE exam_id = ? ORDER BY id DESC').all(examId);
-return { exam, attempts, provenance: exam.provenance, axes: gradesFor(attempts) };
+// ONE LINE CHANGES for rubric persistence: attemptsForExam replaces the raw SELECT.
+const attempts = ledger.attemptsForExam(examId);   // newest first, each with .rubric or null
+return { exam, attempts, provenance: exam.provenance, axes: axesFor(attempts.find(a => a.rubric)?.rubric) };
 ```
+
+`attemptsForExam` exists so the RPC surface does not carry its own SQL against a schema it
+does not own. The previous `SELECT * FROM run` was correct until the rubric tables landed, at
+which point it silently returned rows with no `rubric` field and every attempt read as
+ungraded. `axesFor(attempt.rubric)` is UNCHANGED and stays yours: the store hands back axes
+KEYED BY NAME, which is how a rubric is authored and validated, and the ordered wire list is
+made at your boundary.
 
 [REVISED 2026-08-16, after P7 landed. The previous text said grading was not built and told
 you to return an empty axes object. Grading exists now; what follows replaces that.]
@@ -161,10 +168,29 @@ axes: rubric ? AXES.map((name) => ({ name, score: rubric.axes[name].score, max: 
 `AXES` is exported in canonical order for exactly this, so the daemon never hand-writes the
 order and a sixth axis could not silently arrive out of place.
 
-The rubric and batch TABLES are not in the ledger yet, by ruling: they land with this wiring,
-and their shape is specified jointly by the daemon and the gym rather than invented ahead of
-the consumer. Until they exist, `examDetail` returns `axes: null` for every attempt, which is
-honest rather than empty.
+[UPDATED 2026-08-16: the rubric tables have LANDED, which is what makes the graded branch
+reachable in production. The paragraph below described them as pending.]
+
+Storage, now real: migration `002-rubrics` adds a `rubric` table (one row per run, unique)
+and a `grade_batch` table (the import record). Writing goes through ONE method:
+
+```js
+ledger.importRubricBatch({ rubrics, mode, source })   // rubrics already validated by grading.js
+```
+
+It is atomic: the whole batch lands or nothing does, which is P7 clause 9 on disk. It does
+NOT validate, because grading.js does and doing it twice is how the two drift. What it
+enforces is what only storage can:
+
+- a rubric for a run with NO ROW is impossible, and the `run` table holds only attempts that
+  produced a diff, so P7 clause 5 holds even if the validator were never called;
+- one rubric per run, so a re-import cannot quietly double-grade an attempt;
+- gradable modes only, so a harness-debug cohort cannot be graded into the record.
+
+Harvest batches are NOT in this migration. The same ruling applies to them as applied to
+these: they land with the wiring that consumes them, and harvest has no RPC method yet.
+Adding the table now would be building ahead of the consumer, which is the thing we agreed
+not to do.
 
 ## `examVeto({ examId, reason })` and `examUpdate({ examId, patch })`
 

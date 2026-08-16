@@ -1,4 +1,4 @@
-# Captured 2026-08-16T03:58:50Z (UTC)
+# Captured 2026-08-16T04:11:57Z (UTC)
 # Command: bash docs/verification/p4-mutations/mutate.sh
 
 KILLED   (4 failing): boundary check never fires (condition inverted)
@@ -67,6 +67,13 @@ KILLED   (1 failing): F77: identity stops stripping the trailing slash, so a sla
 KILLED   (1 failing): F77: normalization flattens the URL path too, conflating real deployments
 KILLED   (1 failing): F78: the router branch is deleted from the provider scan
 KILLED   (1 failing): F78: the lower-case key branch is deleted from the provider scan
+KILLED   (3 failing): rubric import is not a transaction, so a bad batch writes half a cohort
+KILLED   (2 failing): the rubric store stops checking the run exists
+KILLED   (1 failing): a harness-debug cohort may be graded into the record
+KILLED   (1 failing): a rubric may cross modes into another batch
+KILLED   (1 failing): the one-rubric-per-run index is dropped
+KILLED   (1 failing): attemptsForExam stops attaching rubrics, so graded reads as ungraded
 
+declared: 72   executed: 72
 All mutations killed.
 # exit=0

@@ -20,9 +20,12 @@ cd "$ENGINE" || exit 1
 # Anything that is not a KILL: a survivor (the code is not pinned) or a skip (the expression
 # matched nothing, so nothing was tested). Both are counted, and the script exits non-zero.
 PROBLEMS=0
+# Mutations that actually EXECUTED, compared against the declared count at the end.
+EXECUTED=0
 
 run_mutation() {
   local name="$1" file="$2" expr="$3" tests="$4"
+  EXECUTED=$((EXECUTED + 1))
   cp "$file" "$file.bak"
   perl -0pi -e "$expr" "$file"
   if cmp -s "$file" "$file.bak"; then
@@ -385,10 +388,56 @@ run_mutation "F78: the lower-case key branch is deleted from the provider scan" 
   "s/  \['lower-key', 'api_key'\],//" \
   "test/gym-discipline.test.js"
 
+
+# ---- rubric persistence (joint round with the extractor) ---------------------------------
+
+run_mutation "rubric import is not a transaction, so a bad batch writes half a cohort" \
+  src/gym/ledger.js \
+  's/    const write = this\.database\.transaction\(\(\) => \{/    const write = ((fn) => fn)(() => {/' \
+  "test/gym-ledger.test.js"
+
+run_mutation "the rubric store stops checking the run exists" \
+  src/gym/ledger.js \
+  's/        if \(!run\) \{\n          \/\/ Named before the foreign key fires/        if (false) {\n          \/\/ Named before the foreign key fires/' \
+  "test/gym-ledger.test.js"
+
+run_mutation "a harness-debug cohort may be graded into the record" \
+  src/gym/ledger.js \
+  's/    if \(!isGradableRun\(mode\)\) \{/    if (false) {/' \
+  "test/gym-ledger.test.js"
+
+run_mutation "a rubric may cross modes into another batch" \
+  src/gym/ledger.js \
+  's/        if \(run\.mode !== mode\) \{/        if (false) {/' \
+  "test/gym-ledger.test.js"
+
+run_mutation "the one-rubric-per-run index is dropped" \
+  src/gym/ledger.js \
+  's/      CREATE UNIQUE INDEX IF NOT EXISTS rubric_run ON rubric\(run_id\);/      CREATE INDEX IF NOT EXISTS rubric_run ON rubric(run_id);/' \
+  "test/gym-ledger.test.js"
+
+run_mutation "attemptsForExam stops attaching rubrics, so graded reads as ungraded" \
+  src/gym/ledger.js \
+  's/    return runs\.map\(\(run\) => \(\{ \.\.\.run, rubric: rubrics\.get\(run\.id\) \?\? null \}\)\);/    return runs.map((run) => ({ ...run, rubric: null }));/' \
+  "test/gym-ledger.test.js"
+
+# ---- summary. NOTHING MAY BE APPENDED BELOW THIS LINE ------------------------------------
+#
+# Six mutations were once appended AFTER this block and never ran, while the script still
+# printed "All mutations killed." That is the same defect the skip counter exists for, in a
+# new costume: an instrument reporting a result for a check that did not execute. The count
+# check below is the structural fix, since a comment asking people not to append is a habit.
+
+DECLARED=$(grep -c '^run_mutation ' "$0")
 echo
+echo "declared: $DECLARED   executed: $EXECUTED"
+if [ "$DECLARED" -ne "$EXECUTED" ]; then
+  echo "MISMATCH: $((DECLARED - EXECUTED)) declared mutation(s) never ran; something after an exit, or an early return."
+  PROBLEMS=$((PROBLEMS + 1))
+fi
 if [ "$PROBLEMS" -eq 0 ]; then
   echo "All mutations killed."
 else
-  echo "$PROBLEMS mutation(s) survived or were skipped; neither is evidence."
+  echo "$PROBLEMS problem(s): survived, skipped, or never executed. None of the three is evidence."
 fi
 exit $([ "$PROBLEMS" -eq 0 ] && echo 0 || echo 1)

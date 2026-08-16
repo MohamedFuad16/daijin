@@ -1,5 +1,39 @@
 # Daijin build state (authoritative)
 
+## 2026-08-17 07:00 - Four answers, zero engine changes; a third row failure mode named
+
+All four wire questions answered from the bytes and locked into the
+contract (50a6d7b, 619/619 + 18/18): baseline.status is
+pass|fail|timeout|unavailable (the client's assumed set was wrong
+twice - violations never occurs, because a tool with pre-existing
+violations is a MEASURED classification judged on movement, not a
+status; the test harvests the literals from the runner's source so a
+fifth value fails engine-side first); discovered and parseError are
+mutually exclusive BY CONSTRUCTION (all-or-nothing document parse; a
+malformed row inside a readable document passes through, because
+refusing a file over one odd row refuses a file the user may write);
+gatesSet accepts a full-content write over an unparseable file (the
+REPAIR PATH - the engine already did it; the worse failure cannot
+happen because structural patches are refused always) so the mock's
+refusal was simply wrong; carryingSignal = live + measured, the gates
+that can fail on a bad edit and pass on a good one.
+
+THE ROUND'S EXPORT, the THIRD row failure mode: not a wrong shape, not
+a stale claim, but A SHAPE DOCUMENTED WITHOUT ITS VALUES - a client
+left to guess an enum guesses wrong, and no instrument catches prose
+that never named the vocabulary. classification and status were both
+in that state. ASSIGNED: an enum sweep across the surface's rows -
+every enum-carrying field either names its values in the row or has
+them harvested-and-gated engine-side like status now is.
+
+Also self-caught, the snapshot habit's third form: asserting a word's
+ABSENCE from prose tests the prose, not the vocabulary. The pattern
+named across all three: "when I need something to assert, I reach for
+the nearest observable rather than the property."
+
+tui-builder's closing items: mock gatesSet accepts any { content } and
+refuses anything else; baseline column vocabulary corrected to the
+real four.
 ## 2026-08-17 06:20 - Gates table restored; the two empties no longer look alike
 
 tui-builder restored the table (739766a, 330 green, probed the daemon

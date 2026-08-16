@@ -649,3 +649,41 @@ later; and a claude-code provider preset is planned, a custom Claude
 Code sub-agent with proper instructions invoked by daijin for designated
 roles, using the owner's local authentication instead of an API key,
 spec'd when the owner returns.
+
+## D-0032 (2026-08-16) Batteries run against private copies, never the shared tree
+
+Verifier report 18 pinned the 1-in-5 suite flake with a controlled
+two-arm experiment (38 runs, 18-for-18 separation both directions): NOT
+nondeterminism. Mutation batteries mutate the shared working tree in
+place (copy aside, break, run one test file, restore), and every window,
+hundreds of milliseconds wide, is a period in which any other process's
+npm test reads deliberately broken source and fails on whatever the
+active mutation targets. The signature that found it: the tree's source
+hash oscillating between one settled value and one-off transients,
+RETURNING IDENTICALLY, which ordinary editing never does; an immutable
+snapshot arm ran 10-for-10 clean at the same code. Every prior
+observation is explained: a different test each time (whichever mutation
+was live), 1-in-5 (duty cycle against a 10-second suite), reproducing at
+concurrency 1 (cross-PROCESS, no in-process setting touches it), the
+extractor's lane clean (its files were not the ones being mutated), the
+chunk-count variance and the async-hop lever (a mutated source mid-read,
+and a longer run overlapping more windows). The verifier included its
+own instrument in the finding: the landed mutate.sh defaults to the live
+engine, and it endorsed that battery without noticing.
+
+RULING, the only shape that removes the window rather than scheduling
+around it: EVERY mutation battery, lane batteries and the landed
+p4-mutations/mutate.sh alike, runs against a PRIVATE COPY of the tree
+(the DAIJIN_ENGINE override already exists and becomes mandatory
+practice; batteries refuse to run when their target resolves to the
+shared tree unless an explicit override names the intent). The
+repo-lock and freeze-convention alternatives are declined: one
+serializes work with no reason to serialize, the other depends on
+everyone remembering, the property this project keeps proving does not
+hold. The gravest consequence named for the record: a gate failing
+1-in-5 toward failure only means every retry-until-green was
+indistinguishable from a real regression retried away. Earlier
+red-suite ATTRIBUTIONS (mid-edit readings) may have been battery
+windows; verdicts stand (all were taken in freeze windows with hash
+pins), and the verifier annotates the two attributions rather than
+re-running.

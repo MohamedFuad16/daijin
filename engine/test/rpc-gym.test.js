@@ -518,3 +518,67 @@ test('an ungraded attempt beside a graded one keeps its own answer', async () =>
     await kit.cleanup();
   }
 });
+
+// ---- the wire shape, asserted against the contract ----------------------------------------
+//
+// D-0035. The ledger's rows used to go straight out, so cycle_id, result_file, token_cap,
+// extensions_granted and sealed_state were on a frozen public surface by accident, while
+// the contract's own `tokens` and `grades` were absent entirely. A client written to the
+// contract could not work; tui-builder's crashed on real data and now reads both spellings
+// as a bridge.
+//
+// This is the shape test D-0033 asks for: what the engine EMITS is asserted against what
+// the contract DOCUMENTS, so the two cannot drift again without something failing.
+
+test('an attempt on the wire carries the contract\'s names, not the ledger\'s columns', async () => {
+  const kit = await harness({ exams: [exam()] });
+  try {
+    await kit.attach();
+    const ledger = GymLedger.open(gymDatabasePath(kit.repoPath));
+    const cycleId = ledger.startCycle({ mode: 'evaluation' });
+    const runId = ledger.recordRun({
+      cycleId, examId: 'exam-0001', mode: 'evaluation', status: 'completed', verdict: 'partial',
+      resultFile: 'runs/one.json', applied: true, workTokens: 41_200, tokenCap: 450_000, extensionsGranted: 0,
+    });
+    ledger.importRubricBatch({
+      mode: 'evaluation',
+      rubrics: [{
+        runId,
+        verdict: 'partial',
+        axes: Object.fromEntries(['correctness_vs_gold', 'convention_adherence', 'decision_awareness',
+          'reasoning_quality', 'blast_radius_awareness'].map((name, index) => [name, { score: index + 1, citations: ['x'] }])),
+        taskDigest: 'sha256:task',
+        submissionDigest: 'sha256:submission',
+      }],
+    });
+    ledger.close?.();
+
+    const detail = await kit.server.methods.examDetail({ repoPath: kit.repoPath, examId: 'exam-0001' });
+    const attempt = detail.attempts[0];
+
+    // The contract's row: { tokens, verdict, grades }, plus the finding-79 fields.
+    assert.equal(attempt.tokens, 41_200, 'the contract says tokens, not work_tokens');
+    assert.equal(attempt.verdict, 'partial');
+    assert.ok(Array.isArray(attempt.grades), 'the contract says grades');
+    // The cap travels with the count for the same reason max travels with an axis score:
+    // 41,200 means nothing without the 450,000 beside it.
+    assert.equal(attempt.tokenCap, 450_000);
+    assert.deepEqual(attempt.grades, attempt.axes, 'grades and axes are the SAME list, not two shapes');
+
+    // NO LEDGER COLUMN NAMES. This is the assertion that would have failed before the fix,
+    // and the one that keeps a schema the daemon does not own off a frozen surface.
+    const leaked = Object.keys(attempt).filter((key) => key.includes('_'));
+    assert.deepEqual(leaked, [], `ledger column names reached the wire: ${leaked.join(', ')}`);
+    for (const internal of ['cycle_id', 'exam_id', 'mode', 'result_file', 'sealed_state', 'extensions_granted', 'rubric']) {
+      assert.equal(Object.hasOwn(attempt, internal), false, `${internal} is a storage detail, not a wire field`);
+    }
+
+    // And the whole key set is CLOSED, so a field cannot be added by accident the way
+    // these were: adding one now means changing this list and saying why.
+    assert.deepEqual(Object.keys(attempt).sort(), [
+      'at', 'axes', 'grades', 'id', 'status', 'tokenCap', 'tokens', 'ungradedCode', 'ungradedReason', 'verdict',
+    ]);
+  } finally {
+    await kit.cleanup();
+  }
+});

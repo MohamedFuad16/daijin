@@ -214,6 +214,50 @@ export function ungradedExplanation(attempt) {
 }
 
 /**
+ * One attempt in the shape the WIRE owes, mapped from the shape the LEDGER keeps.
+ *
+ * The ledger's rows went straight out before this, so `cycle_id`, `result_file`,
+ * `token_cap`, `extensions_granted` and `sealed_state` were on a frozen public surface by
+ * accident: column names of a schema the daemon does not own, published as contract.
+ *
+ * This is the same argument that retired the raw `SELECT * FROM run` from examDetail, and
+ * it is the half I missed then. I fixed the query and left the leak, so the coupling the
+ * argument exists to prevent survived in the response. `axes` was mapped at this boundary
+ * from the start, for exactly this reason; nothing else on the row was.
+ *
+ * What each field is for, since a wire shape should be able to justify itself:
+ *  - `id`, `at`, `status`, `verdict`: what the attempt IS, and what a list renders.
+ *  - `tokens` and `tokenCap`: what it cost against what it was allowed. The cap travels
+ *    with the count for the same reason `max` travels with an axis score: 41,200 means
+ *    nothing without the 450,000 beside it.
+ *  - `grades`: the contract's name for the axis list, kept because a client was written
+ *    against it and the name is better than `axes` for a per-attempt field.
+ *  - `axes`: the finding-79 field, kept alongside `grades` as the SAME list, because the
+ *    top level already speaks of axes and a reader should not have to learn that two names
+ *    mean one thing at two levels.
+ *
+ * Deliberately NOT on the wire: `cycle_id` (a client cannot ask for a cycle), `mode` (a
+ * scored-versus-debug distinction the ledger enforces and no screen renders),
+ * `result_file` (a path into a directory the client does not read), `sealed_state` and
+ * `extensions_granted` (harness internals). Any of them can be added when something needs
+ * them, which is cheaper than removing a field a client started using.
+ */
+export function attemptForWire(attempt, { axes, ungradedCode, ungradedReason }) {
+  return {
+    id: attempt.id,
+    at: attempt.at,
+    status: attempt.status,
+    verdict: attempt.verdict ?? null,
+    tokens: attempt.work_tokens ?? null,
+    tokenCap: attempt.token_cap ?? null,
+    grades: axes,
+    axes,
+    ungradedCode,
+    ungradedReason,
+  };
+}
+
+/**
  * Attempts newest first, sorted EXPLICITLY rather than trusted from the query.
  *
  * The top-level axes are the most recent graded attempt's, so an order that is merely
@@ -1206,7 +1250,11 @@ export function createMethods({
           // Prose for humans, code for branching. A client that switches on the sentence
           // breaks the day the sentence is improved.
           const explanation = axes ? null : ungradedExplanation(attempt);
-          return { ...attempt, axes, ungradedCode: explanation?.code ?? null, ungradedReason: explanation?.reason ?? null };
+          return attemptForWire(attempt, {
+            axes,
+            ungradedCode: explanation?.code ?? null,
+            ungradedReason: explanation?.reason ?? null,
+          });
         });
         const latestGraded = graded.find((attempt) => attempt.axes);
         return {

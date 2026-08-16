@@ -236,3 +236,95 @@ run_mutation "pre-seal constants drift (fraction 0.5, deliveries 5)" \
   src/gym/budget.js \
   's/  preSealFraction: 0\.85,/  preSealFraction: 0.5,/;s/  preSealMaxDeliveries: 2,/  preSealMaxDeliveries: 5,/' \
   "test/gym-budget.test.js"
+
+# ---- P7: grading, rubric import, harvest (registered at 1cdc2b8) -------------------------
+
+run_mutation "P7 c1: an axis may be missing" \
+  src/gym/grading.js \
+  's/    if \(!entry\) throw new RubricRefused\(`Rubric for \$\{runId\} is missing axis \$\{axis\}\.`, \{ runId, field: axis \}\);/    if (!entry) continue;/' \
+  "test/gym-grading.test.js"
+
+run_mutation "P7 c1: a score outside 1 to 5 is accepted" \
+  src/gym/grading.js \
+  's/    if \(!Number\.isInteger\(score\) \|\| score < 1 \|\| score > 5\) \{/    if (false) {/' \
+  "test/gym-grading.test.js"
+
+run_mutation "P7 c2: a citation naming an untouched file is accepted" \
+  src/gym/grading.js \
+  's/  if \(!packet\.citableFiles\.includes\(path\)\) \{/  if (false) {/' \
+  "test/gym-grading.test.js"
+
+run_mutation "P7 c2: a withheld document may be cited" \
+  src/gym/grading.js \
+  's/    if \(packet\.excludedDocumentIds\.includes\(text\)\) \{/    if (false) {/' \
+  "test/gym-grading.test.js"
+
+run_mutation "P7 c3: binding to the task digest alone" \
+  src/gym/grading.js \
+  's/  if \(rubric\.submissionDigest !== packet\.submissionDigest\) \{/  if (false) {/' \
+  "test/gym-grading.test.js"
+
+run_mutation "P7 c4: the exam author may grade its own exam" \
+  src/gym/grading.js \
+  's/    if \(refusal\) throw new RubricRefused\(refusal, \{ runId, field: .author. \}\);//' \
+  "test/gym-grading.test.js"
+
+run_mutation "P7 c4: independence keyed on role, which can never fire" \
+  src/gym/exams.js \
+  's/  return \{ role: role \|\| null, model, endpoint, key: `\$\{model\}@\$\{endpoint\}` \};/  return { role: role || null, model, endpoint, key: `${role}` };/' \
+  "test/gym-mode-quarantine.test.js test/gym-grading.test.js"
+
+run_mutation "P7 c5: a measured-metric-only regression is not capped at partial" \
+  src/gym/grading.js \
+  's/  if \(metricOnly && proposed === .fail.\) return .partial.;//' \
+  "test/gym-grading.test.js"
+
+run_mutation "P7 c5: a run with no diff may carry a rubric" \
+  src/gym/grading.js \
+  's/  if \(!packet\.applied\) \{\n    throw new RubricRefused\(/  if (false) {\n    throw new RubricRefused(/' \
+  "test/gym-grading.test.js"
+
+run_mutation "P7 c6: a differing self-report is overwritten instead of preserved" \
+  src/gym/grading.js \
+  's/    \.\.\.\(reported && reported !== identity\.key \? \{ reportedAuthor: reported \} : \{\}\),//' \
+  "test/gym-grading.test.js"
+
+run_mutation "P7 c11: a no-write gap tag asks a question anyway" \
+  src/gym/harvest.js \
+  's/      if \(NO_WRITE_TAGS\.includes\(gap\.tag\)\) \{/      if (false) {/' \
+  "test/gym-harvest.test.js"
+
+run_mutation "P7 c12: a held-out run may be harvested" \
+  src/gym/harvest.js \
+  's/    if \(exam\?\.heldOut\) \{/    if (false) {/' \
+  "test/gym-harvest.test.js"
+
+run_mutation "P7 c13: an empty concern is accepted" \
+  src/gym/harvest.js \
+  's/    if \(!concern\) \{/    if (false) {/' \
+  "test/gym-harvest.test.js"
+
+run_mutation "P7 c14: a targeted answer may name a document that does not exist" \
+  src/gym/harvest.js \
+  's/      if \(!documentIds\.includes\(target\)\) \{/      if (false) {/' \
+  "test/gym-harvest.test.js"
+
+run_mutation "P7 c15: the citation backstop stops dropping unresolvable citations" \
+  src/gym/harvest.js \
+  's/      for \(const failure of citationFailures\) reasons\.push\(`citation-validation: \$\{failure\}`\);//' \
+  "test/gym-harvest.test.js"
+
+run_mutation "P7 c16: a deleted file still validates" \
+  src/gym/harvest.js \
+  "s/    if \(lines === null\) \{\n      failures\.push\(\`\\\$\{path\} no longer exists\`\);\n      continue;\n    \}/    if (lines === null) continue;/" \
+  "test/gym-harvest.test.js"
+
+run_mutation "P7 c10/21: a non-evaluation batch may teach the brain" \
+  src/gym/harvest.js \
+  "s/  if \(mode !== 'evaluation'\) \{/  if (false) {/" \
+  "test/gym-harvest.test.js"
+
+run_mutation "P7 c18: the provider scan stops seeing calls" \
+  test/gym-discipline.test.js \
+  's/const PROVIDER_CALL = \/\\bfetch\\s\*\\\(/const PROVIDER_CALL = \/\\bnever_matches_anything\\b|\\bfetch_disabled\\s*\\(/' \
+  "test/gym-discipline.test.js"

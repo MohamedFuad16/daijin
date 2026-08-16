@@ -1,4 +1,4 @@
-# Captured 2026-08-16T03:24:25Z (UTC)
+# Captured 2026-08-16T03:43:25Z (UTC)
 # Command: bash docs/verification/p4-mutations/mutate.sh
 
 KILLED   (4 failing): boundary check never fires (condition inverted)
@@ -40,3 +40,21 @@ KILLED   (2 failing): the pre-seal check fires without unverified edits to warn 
 KILLED   (1 failing): the pre-seal check is unbounded, so it never yields to the boundary check
 KILLED   (1 failing): the pre-seal verdict is not delivered to the student
 KILLED   (1 failing): pre-seal constants drift (fraction 0.5, deliveries 5)
+KILLED   (2 failing): P7 c1: an axis may be missing
+KILLED   (3 failing): P7 c1: a score outside 1 to 5 is accepted
+KILLED   (2 failing): P7 c2: a citation naming an untouched file is accepted
+KILLED   (1 failing): P7 c2: a withheld document may be cited
+KILLED   (3 failing): P7 c3: binding to the task digest alone
+KILLED   (2 failing): P7 c4: the exam author may grade its own exam
+KILLED   (10 failing): P7 c4: independence keyed on role, which can never fire
+KILLED   (1 failing): P7 c5: a measured-metric-only regression is not capped at partial
+KILLED   (2 failing): P7 c5: a run with no diff may carry a rubric
+KILLED   (1 failing): P7 c6: a differing self-report is overwritten instead of preserved
+KILLED   (1 failing): P7 c11: a no-write gap tag asks a question anyway
+KILLED   (1 failing): P7 c12: a held-out run may be harvested
+KILLED   (2 failing): P7 c13: an empty concern is accepted
+KILLED   (1 failing): P7 c14: a targeted answer may name a document that does not exist
+KILLED   (1 failing): P7 c15: the citation backstop stops dropping unresolvable citations
+KILLED   (1 failing): P7 c16: a deleted file still validates
+KILLED   (1 failing): P7 c10/21: a non-evaluation batch may teach the brain
+KILLED   (1 failing): P7 c18: the provider scan stops seeing calls

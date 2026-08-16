@@ -1,5 +1,32 @@
 # Daijin build state (authoritative)
 
+## 2026-08-17 03:05 - Dithered charts land; two chart defects fixed by the wiring
+
+tui-builder's dither work is in (bff59ce): texture.py is the single
+vocabulary (motion.py's discipline applied to fills - a test fails if
+any chart invents its own glyphs), bars render through Rich because a
+plotext fill is a color slab and PATTERN is the channel that survives,
+every series carries a glyph ramp with its own cap (a hatched bar
+capped with a shared block would lose exactly the identity a colorless
+reader needs), and legends show swatches, not colored squares. The
+exams screen now tells the natural-stop story in texture: eight
+hatched failures climbing in cost, then a shaded pass, readable
+without numbers and without color.
+
+TWO DEFECTS THE WIRING EXPOSED, both fixed: a PARTIAL verdict was not
+plotted at all (history filtered to pass/fail; the seeded ledger's
+actual content vanished); and a failed attempt drew at ZERO HEIGHT,
+rendering as absence - eight failures read as eight missing attempts.
+Outcome series now draw a minimum column (a chart that draws nothing
+where something happened is making a claim, and the claim is wrong -
+the ungraded-radar lesson in a new place); quantity series keep zero
+as nothing, because there zero really is nothing.
+
+Five mutations caught, including the widget ignoring its handed
+textures - the fourth-costume check applied ON THE WAY IN, the habit
+adopted. Rulings: the gym trend STAYS plotext (a genuine axis chart
+where the frame earns its place); the radar interior stipple proceeds
+as its own change, confirmed. Claim pin unaffected; sweeps green.
 ## 2026-08-17 02:50 - Findings 85 and the done-invariant both landed; gate scoped two-tier
 
 Both post-verdict engine items are in. THE DONE-INVARIANT (aedd617,

@@ -1,5 +1,38 @@
 # Daijin build state (authoritative)
 
+## 2026-08-17 12:00 - The terminal names become unforgeable; ASSUMPTIONS becomes a protocol
+
+The extractor answered tui-builder's three assumption-questions by
+measurement (8719b6a, 623/623 + 18/18) and one found a hole: the pair
+failed/info WAS PRODUCIBLE - any job could emit the failure step with
+the level clients are told to trust, so the corrected guidance rested
+on a property the engine did not have ("I fixed the sentence yesterday
+and the sentence was still writing a cheque the runner could not
+cash"). finished, failed and cancelled are now RESERVED to the runner:
+a job emitting one fails, with that as its reason; a job's own ending
+stays legal - the rule is not that jobs may not announce, it is that
+they may not announce using the three names whose level a client
+reads. detail verified never-empty across four throw shapes; cancelled
+always warn, single site, unforgeable.
+
+PROTOCOL ADOPTED from the round's export: A CLIENT'S ASSUMPTIONS
+SECTION IS A LIST OF PROPERTIES THE OWNER HAS NOT PROMISED - an
+assumption stated precisely is a testable claim about someone else's
+code, and the someone else is the only one who can check it. Standing
+rule from here: an ASSUMPTIONS entry naming another lane's property
+ROUTES TO THAT LANE for verify-or-refute; the section is a request for
+verification, not a disclaimer. First instance on record: tui-builder
+wrote one as a courtesy and it found a real engine defect.
+
+Also tallied: the fault split on the guidance (the extractor kept the
+larger share - "I removed their discriminator and then documented the
+removal as advice"); the three banner defects named as costumes three
+and four of same-rendering-for-happened-and-stopped-knowing; and the
+MOCK THAT CANNOT FAIL now at three instances (veto floor, gates parse,
+failing jobs) - same cause, three doubles, none found by a test.
+
+Tip moves to 8719b6a; the close holds; all lanes on call; the project
+waits on the owner's ultrareview.
 ## 2026-08-17 11:40 - Close corrected to ce889ab; the mock that could not fail
 
 CORRECTION to the 11:15 close: the board closed at 8b4e8d1 but the tip

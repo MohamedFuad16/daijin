@@ -18,6 +18,7 @@ SPINNER_FRAMES = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
 
 STATUS_GLYPH = {
     "pending": "○",
+    "skipped": "-",
     "active": "",  # replaced by the spinner frame
     "done": "✔",
     "warn": "!",
@@ -26,6 +27,7 @@ STATUS_GLYPH = {
 
 STATUS_STYLE = {
     "pending": "dim",
+    "skipped": "dim",
     "active": "bold cyan",
     "done": "green",
     "warn": "yellow",
@@ -56,6 +58,20 @@ PHASE_VERBS: dict[str, Sequence[str]] = {
 }
 DEFAULT_VERBS = ("working", "reading", "writing")
 
+# The step-event shape has no terminal marker. The mock emits a "done" phase;
+# the real engine does not, so a client cannot tell "finished" from "stalled"
+# from the stream alone. Raised with the leader as a contract gap. Until it is
+# answered, a run that goes quiet is reported as INFERRED complete, never as
+# reported complete, because the two are different claims.
+TERMINAL_PHASES = frozenset({"done", "complete", "finished"})
+
+# Generous on purpose. A false "finished" is worse than a late one: it tells
+# the user a run ended while it is still working. Measured on the P8 fixture,
+# the largest gap between two real step events is 9.6s (inside the floor
+# phase, between budget-measured and resolution-measured), so a threshold near
+# that would declare a live run complete in the middle of it.
+IDLE_UNTIL_INFERRED = 30.0
+
 
 class PhaseChecklist(Static):
     """Checklist of pipeline phases, advanced by step events."""
@@ -77,6 +93,8 @@ class PhaseChecklist(Static):
         self.started_at: float | None = None
         self.finished_at: float | None = None
         self.job_id: str | None = None
+        self.last_event_at: float | None = None
+        self.finish_is_inferred = False
         self.order: list[str] = []
         self.state: dict[str, dict[str, Any]] = {}
         for key, label in phases:
@@ -104,6 +122,8 @@ class PhaseChecklist(Static):
         self.job_id = job_id
         self.started_at = None
         self.finished_at = None
+        self.last_event_at = None
+        self.finish_is_inferred = False
         for entry in self.state.values():
             entry.update(
                 {"status": "pending", "detail": "", "counts": {}, "steps": 0, "warns": 0, "started": None, "ended": None}
@@ -124,16 +144,18 @@ class PhaseChecklist(Static):
         if self.job_id is None:
             self.job_id = event.get("jobId")
         now = self.clock()
+        self.last_event_at = now
         if self.started_at is None:
             self.started_at = now
 
-        if phase == "done":
+        if phase in TERMINAL_PHASES:
             for key in self.order:
                 entry = self.state[key]
                 if entry["status"] == "active":
                     entry["status"] = "warn" if entry["warns"] else "done"
                     entry["ended"] = now
             self.finished_at = now
+            self.finish_is_inferred = False
             if refresh:
                 self.refresh_view()
             return
@@ -152,8 +174,11 @@ class PhaseChecklist(Static):
                 other["status"] = "warn" if other["warns"] else "done"
                 other["ended"] = now
             elif other["status"] == "pending":
-                other["status"] = "done"
-                other["ended"] = now
+                # NOT done. A phase that never emitted an event never ran, and
+                # marking it done claims work the engine never reported. The
+                # client's phase list is a guess; this engine's pipeline may
+                # simply not have this phase.
+                other["status"] = "skipped"
 
         entry["steps"] += 1
         entry["detail"] = str(event.get("detail") or "")
@@ -183,6 +208,22 @@ class PhaseChecklist(Static):
     @property
     def running(self) -> bool:
         return self.started_at is not None and self.finished_at is None
+
+    def infer_finish_if_idle(self) -> bool:
+        """Call on a timer. Marks a quiet run finished, and says it inferred it."""
+        if not self.running or self.last_event_at is None:
+            return False
+        if (self.clock() - self.last_event_at) < IDLE_UNTIL_INFERRED:
+            return False
+        for key in self.order:
+            entry = self.state[key]
+            if entry["status"] == "active":
+                entry["status"] = "warn" if entry["warns"] else "done"
+                entry["ended"] = self.last_event_at
+        self.finished_at = self.last_event_at
+        self.finish_is_inferred = True
+        self.refresh_view()
+        return True
 
     # Rendering -----------------------------------------------------------
 
@@ -242,7 +283,13 @@ class PhaseChecklist(Static):
     def _header_text(self) -> str:
         done = sum(1 for key in self.order if self.state[key]["status"] in ("done", "warn"))
         job = self.job_id or "no job"
-        state = "complete" if self.finished_at is not None else ("running" if self.running else "idle")
+        if self.finished_at is None:
+            state = "running" if self.running else "idle"
+        elif self.finish_is_inferred:
+            # The engine never said it finished; the stream simply stopped.
+            state = "complete (inferred from an idle stream)"
+        else:
+            state = "complete"
         return f"{job}  {state}  phase {done}/{len(self.order)}  elapsed {self.elapsed:.1f}s"
 
     def render(self) -> Text:

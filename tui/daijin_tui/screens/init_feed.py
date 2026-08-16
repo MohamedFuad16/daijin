@@ -11,6 +11,7 @@ from textual.widgets import Button, Input, Select, Static
 from .. import mock_data
 from ..rpc import RpcError
 from ..stream import FLUSH_INTERVAL, StreamCoalescer
+from ..widgets.activity import IDLE_UNTIL_INFERRED
 from ..widgets import Banner, EventLog, PhaseChecklist, SectionTitle
 from .base import DaijinScreen
 from .dialogs import budget_estimate_lines
@@ -47,7 +48,12 @@ class InitFeedScreen(DaijinScreen):
                 id="init-scope",
             )
         yield SectionTitle("Phases")
-        yield PhaseChecklist(mock_data.INIT_PHASES, id="init-checklist")
+        # Seeded only against the mock. The real engine's pipeline is its own, and
+        # a guessed manifest renders phases the engine never ran.
+        yield PhaseChecklist(
+            mock_data.INIT_PHASES if getattr(self.app, "is_mock", False) else [],
+            id="init-checklist",
+        )
         yield SectionTitle("Step events", "the same jsonl stream the gym and gates views read")
         yield EventLog(id="init-events")
 
@@ -66,6 +72,7 @@ class InitFeedScreen(DaijinScreen):
             # Drains whatever the last burst left buffered. Without it the tail
             # of a stream waits for an event that never comes.
             self.set_interval(FLUSH_INTERVAL, self.coalescer.flush)
+            self.set_interval(1.0, self._check_idle)
             self._subscribed = True
 
     def on_unmount(self) -> None:
@@ -79,6 +86,20 @@ class InitFeedScreen(DaijinScreen):
         if not self.accepts_step_event(event):
             return
         self.coalescer.push(event)
+
+    def _check_idle(self) -> None:
+        """The stream has no terminal event, so a quiet run has to be inferred."""
+        if not self.is_mounted:
+            return
+        checklist = self.query_one('#init-checklist', PhaseChecklist)
+        if checklist.infer_finish_if_idle():
+            for widget in self.query("#init-notice"):
+                widget.set_notice(
+                    f"No step events for {IDLE_UNTIL_INFERRED:.0f}s, so this run is "
+                    f"treated as finished. The stream carries no terminal event, so "
+                    f"that is inferred, not reported by the engine.",
+                    "warn",
+                )
 
     def _render_events(self, batch: list[dict[str, Any]]) -> None:
         """Render a batch. A burst costs one repaint, not one per event."""

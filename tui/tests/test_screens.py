@@ -1001,3 +1001,21 @@ async def test_an_ungraded_attempt_is_not_plotted_as_a_failure():
         # Tokens are real for every attempt, graded or not.
         tokens = app.screen.query_one("#exam-tokens", PlotextBar)
         assert len(tokens.values) == 3
+
+
+@run_async
+async def test_the_retrieval_tester_says_why_it_has_no_percentage():
+    """A deliberate omission that looks like a missing feature is not done.
+
+    The owner asked why the tester shows no percentage when the floor does.
+    The distinction was carried by layout alone, which is not explaining.
+    """
+    async with running_app() as (app, pilot):
+        await goto(pilot, "3")
+        app.screen.query_one("#search-input", Input).value = "retry backoff upload queue"
+        await scroll_to(pilot, "#search-go")
+        await pilot.click("#search-go")
+        await settle(pilot)
+        summary = text_of(app.screen.query_one("#search-summary", Static))
+        assert "one query is not a measurement" in summary
+        assert "%" not in summary, "the tester must not invent a rate it cannot have"

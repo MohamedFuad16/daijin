@@ -12,6 +12,7 @@ from .. import mock_data
 from ..concurrency import gather_all
 from ..rpc import RpcError
 from ..stream import FLUSH_INTERVAL, StreamCoalescer
+from ..widgets.activity import IDLE_UNTIL_INFERRED
 from ..widgets import (
     Banner,
     EventLog,
@@ -197,6 +198,7 @@ class GymScreen(DaijinScreen):
             # Drains whatever the last burst left buffered. Without it the tail
             # of a stream waits for an event that never comes.
             self.set_interval(FLUSH_INTERVAL, self.coalescer.flush)
+            self.set_interval(1.0, self._check_idle)
             self._subscribed = True
 
     def on_unmount(self) -> None:
@@ -210,6 +212,20 @@ class GymScreen(DaijinScreen):
         if not self.accepts_step_event(event):
             return
         self.coalescer.push(event)
+
+    def _check_idle(self) -> None:
+        """The stream has no terminal event, so a quiet run has to be inferred."""
+        if not self.is_mounted:
+            return
+        checklist = self.query_one('#gym-checklist', PhaseChecklist)
+        if checklist.infer_finish_if_idle():
+            for widget in self.query("#gym-notice"):
+                widget.set_notice(
+                    f"No step events for {IDLE_UNTIL_INFERRED:.0f}s, so this run is "
+                    f"treated as finished. The stream carries no terminal event, so "
+                    f"that is inferred, not reported by the engine.",
+                    "warn",
+                )
 
     def _render_events(self, batch: list[dict[str, Any]]) -> None:
         """Render a batch. A burst costs one repaint, not one per event."""

@@ -4,7 +4,12 @@ from __future__ import annotations
 
 import pytest
 
-from daijin_tui.widgets.activity import SPINNER_FRAMES, EventLog, PhaseChecklist
+from daijin_tui.widgets.activity import (
+    IDLE_UNTIL_INFERRED,
+    SPINNER_FRAMES,
+    EventLog,
+    PhaseChecklist,
+)
 from daijin_tui.widgets.charts import plot_bar, plot_line
 from daijin_tui.widgets.common import (
     case_rate_value,
@@ -177,3 +182,51 @@ def test_formatters():
     assert format_ratio(None) == "not measured"
     assert health_glyph("ok")[1] == "health-ok"
     assert health_glyph(None)[1] == "health-none"
+
+
+def test_a_phase_that_never_ran_is_not_reported_as_done():
+    """The client's phase list is a guess; the engine's pipeline is its own.
+
+    Against the real engine the guessed manifest shares no phase names with
+    what actually runs, so marking passed-over phases done claimed nine phases
+    of work that never happened.
+    """
+    checklist = PhaseChecklist(
+        [("alpha", "Alpha"), ("beta", "Beta"), ("gamma", "Gamma")], clock=lambda: 0.0
+    )
+    checklist.apply_event({"jobId": "j", "phase": "gamma", "step": "s", "detail": "", "level": "info"})
+    assert checklist.state["gamma"]["status"] == "active"
+    for skipped in ("alpha", "beta"):
+        assert checklist.state[skipped]["status"] == "skipped", (
+            f"{skipped} never emitted an event and must not read as done"
+        )
+
+
+def test_an_inferred_finish_says_it_was_inferred():
+    """The stream has no terminal event, so completion is a client inference."""
+    now = [0.0]
+    checklist = PhaseChecklist([("alpha", "Alpha")], clock=lambda: now[0])
+    checklist.apply_event({"jobId": "j", "phase": "alpha", "step": "s", "detail": "", "level": "info"})
+    now[0] = 5.0
+    assert checklist.infer_finish_if_idle() is False, "inferred a finish mid-run"
+    now[0] = IDLE_UNTIL_INFERRED + 1
+    assert checklist.infer_finish_if_idle() is True
+    assert checklist.finish_is_inferred is True
+    assert "inferred" in checklist.snapshot_lines()[0]
+
+
+def test_a_reported_finish_is_not_labelled_inferred():
+    checklist = PhaseChecklist([("alpha", "Alpha")], clock=lambda: 0.0)
+    checklist.apply_event({"jobId": "j", "phase": "alpha", "step": "s", "detail": "", "level": "info"})
+    checklist.apply_event({"jobId": "j", "phase": "done", "step": "complete", "detail": "", "level": "info"})
+    assert checklist.finished_at is not None
+    assert checklist.finish_is_inferred is False
+    assert "inferred" not in checklist.snapshot_lines()[0]
+
+
+def test_the_idle_threshold_clears_the_measured_worst_gap():
+    """9.6s is the largest real gap seen on the P8 fixture, inside floor."""
+    assert IDLE_UNTIL_INFERRED > 9.6 * 2, (
+        f"{IDLE_UNTIL_INFERRED}s leaves no margin over the measured 9.6s gap; "
+        "a live run would be declared finished in the middle of it"
+    )

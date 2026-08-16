@@ -350,7 +350,13 @@ class BrainScreen(DaijinScreen):
         standing = sum(1 for chunk in self.chunks if chunk.get("standing"))
         summary.update(
             f"[b]{len(self.chunks)}[/b] chunks, tokensUsed [b]{result.get('tokensUsed')}[/b], "
-            f"{standing} standing unit(s) riding outside the budget"
+            f"{standing} standing unit(s) riding outside the budget\n"
+            # The owner asked why this has no percentage when the floor above
+            # does. It is deliberate, and the screen now says so: one query is
+            # not a measurement. The floor scores a whole gold set and reports
+            # a count; a single search has no denominator to be a fraction of.
+            f"[dim]No case rate here: one query is not a measurement. The measured "
+            f"floor above scores the whole gold set, and it is the number.[/dim]"
         )
         if self.chunks:
             self._show_chunk(self.chunks[0])

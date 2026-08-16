@@ -15,6 +15,7 @@ from textual.widgets import Button, DataTable, Static
 from .. import mock_data
 from ..rpc import RpcError
 from ..stream import FLUSH_INTERVAL, StreamCoalescer
+from ..widgets.activity import IDLE_UNTIL_INFERRED
 from ..widgets import Banner, EventLog, PhaseChecklist, SectionTitle, format_count
 from .base import DaijinScreen
 
@@ -167,6 +168,7 @@ class GatesScreen(DaijinScreen):
             # Drains whatever the last burst left buffered. Without it the tail
             # of a stream waits for an event that never comes.
             self.set_interval(FLUSH_INTERVAL, self.coalescer.flush)
+            self.set_interval(1.0, self._check_idle)
             self._subscribed = True
 
     def on_unmount(self) -> None:
@@ -180,6 +182,14 @@ class GatesScreen(DaijinScreen):
         if not self.accepts_step_event(event):
             return
         self.coalescer.push(event)
+
+    def _check_idle(self) -> None:
+        """The stream has no terminal event, so a quiet run has to be inferred."""
+        if not self.is_mounted:
+            return
+        checklist = self.query_one('#gates-checklist', PhaseChecklist)
+        if checklist.infer_finish_if_idle():
+            pass
 
     def _render_events(self, batch: list[dict[str, Any]]) -> None:
         """Render a batch. A burst costs one repaint, not one per event."""

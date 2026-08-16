@@ -1,5 +1,34 @@
 # Daijin build state (authoritative)
 
+## 2026-08-17 03:50 - Dither complete; tokenCap exposed a chart that lied; mode returns
+
+The dither brief is COMPLETE (8d32845, 320 tests): radar interior
+stippled denser toward the center (thresholds MEASURED after guessed
+ones failed a clean tree - 137 dots bare, 249 stippled, the
+stride-removal mutation lighting 48 solid cells where the stipple
+lights zero), both bridges out now that the engine fixes landed, the
+checklist keyed on the done phase with the double-done case rendering
+the later step so a failure after a done is not hidden.
+
+THE TOKENCAP CATCH is the round's finding: tui-builder's bars scaled
+to the TALLEST BAR, so the seeded attempt - 41,200 tokens against a
+450,000 cap, nine percent - drew a FULL-HEIGHT bar reading as a run at
+its limit. Same family as the zero-height fail: a chart whose shape
+carries no information while looking like it does. Bars now scale to
+the real cap, the cap prints under the legend, and the defect was
+invisible from inside a single exam because relative bars looked
+sensible - it took the extractor sending the denominator unasked. The
+count-without-its-cap argument proved itself in its first consumer.
+
+RULED: mode RETURNS to the attempts row - the comeback path fired
+exactly as designed, a screen now wants it, and tui-builder's reason
+is the scored-record protection surfacing in the UI: an evaluation
+attempt and a harness-debug attempt are different claims about the
+record, and a chart rendering them identically invites reading a debug
+run as a scored one. Added to the extractor's in-flight amendment
+batch. grades/axes ruling stands (both on the wire, tui reads axes).
+Gym trend stays plotext as ruled. Finding 84's calibration taken by
+its subject in the corrected form.
 ## 2026-08-17 03:35 - The gate mutated itself and found it was a mute button
 
 The extractor mutated its own gate (adc356f) and TWO MUTATIONS

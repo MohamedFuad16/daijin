@@ -1,5 +1,40 @@
 # Daijin build state (authoritative)
 
+## 2026-08-17 04:05 - The batch lands; the ratchet is EMPTY; the gate caught the leader's text
+
+The amendment batch landed in one commit as delegated (21990b8),
+cross-lane named. Coverage: 18 covered, 4 live, 5 prose, 3 refusing,
+ZERO DIVERGENT. Suite 611/611.
+
+READERSHIP, measured correctly on the second try and the method
+recorded: grepping field names lied (14 hits for "name" were the
+string elsewhere); the real question is WHAT THE SCREEN READS OFF THE
+RESULT, and the whole client has exactly one such site for analyze
+(hasBrainFolder). All five extras off the wire. The same standard,
+applied unasked to a row the ruling did not name, took examDetail's
+unread exam field off rather than pinning it - disclosed, and ratified.
+
+THE GATE CAUGHT THE LEADER'S OWN AMENDMENT TEXT: examVeto/examUpdate
+were returning the FULL exam record while the delegated ruling said
+"the examList row shape" - the approved text was factually wrong about
+the engine. The extractor checked what reads the return (nothing; the
+client calls reload_bank()), moved the ENGINE to the row, built with
+the gym's own examListRow imported so the two wire formats cannot
+drift. Eleven fields off each mutator, nothing any client reads
+removed, verified per field. The reader now follows shape references
+(with cyclic references returning null), which is what made the
+one-clause form checkable rather than decorative.
+
+Four mutations bite in every new direction, including the contract
+losing a field the engine sends. Assumption recorded: the TUI is the
+only wire client; MCP and the init pipeline consume analyze IN
+PROCESS and keep the full result.
+
+Crossed-message closures: the radar stipple was already accepted in
+8d32845 (tui-builder's note crossed the acceptance); the mode ruling
+(approved) crossed the batch, so MODE IS STILL OWED - it lands as its
+own small commit (shape + closed-set test + contract row), then the
+acceptance script, and the engine queue is empty.
 ## 2026-08-17 03:50 - Dither complete; tokenCap exposed a chart that lied; mode returns
 
 The dither brief is COMPLETE (8d32845, 320 tests): radar interior

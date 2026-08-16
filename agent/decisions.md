@@ -534,3 +534,20 @@ measurement worth running is on a corpus with real retrieval failures,
 and none exists yet; that re-measurement is the standing auditor-era
 item. The full write-up is engine/src/rag/RERANK-MEASUREMENT.md at
 1fe20f1.]
+
+[Final addition to D-0025, 2026-08-16 12:58, closing the ruling: the
+portfolio-mine falsification arm ran and returned NEUTRAL on all four
+budget/topK pairs (25 of 25 both arms, violations 0, MRR -0.01 which is
+exactly one case moving rank 2 to rank 4), read per the amendment: no
+regression, nothing disqualifying, no promotion possible at the ceiling.
+Combined with the platform arm (case rate identical to the last digit,
+MRR-only movement, the D-0017-distrusted signature), D-0025's verdict is
+complete: the knob ships OFF, documented measured-neutral on both
+corpora, at a cold cost of 6.7 to 15 seconds per query against a 0.24s
+control. Instrument note for the record: the first latency numbers
+measured llama-server's pair cache, not compute (1.5s cache-warm vs 15s
+cold for identical work), and the flattering number was WITHHELD; arms
+are now labeled cold or cache-warm and the headline price comes only
+from cold. The re-measurement trigger remains a corpus with real
+retrieval failures. The reranker server is stopped; the provisioning
+recipe lives in RERANK-MEASUREMENT.md.]

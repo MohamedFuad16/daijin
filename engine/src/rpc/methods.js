@@ -256,6 +256,31 @@ export function stalenessOf(stored, current) {
 }
 
 /**
+ * A digest of WHAT WAS INDEXED, so two measurements can be told apart after the fact.
+ *
+ * store-adapter's refinement, taken: one repo id is shared by every checkout of a project,
+ * which is the right identity (a trend is a property of the project, and splitting it forks
+ * the history invisibly and permanently). The cost is that two checkouts on different
+ * branches produce different brains and write their floors into ONE series. A series mixing
+ * measurements taken under different conditions with nothing marking the change is a
+ * reporting defect everywhere else in this build, so it is one here too.
+ *
+ * Over ids and content hashes rather than over the file: the database file's bytes move with
+ * vacuum, page layout and insertion order, so a file digest would report a change on every
+ * rebuild of identical content and mark every entry as a new condition. A content hash that
+ * is absent falls back to the id alone, which is honest: it says the row was there without
+ * claiming to know its contents.
+ */
+export async function indexContentDigest(store) {
+  const rows = await store.allDocuments({ project: null });
+  const hash = createHash('sha256');
+  // SORTED, because allDocuments' row order is the store's business and a digest that
+  // moved with it would mark every rebuild as a new condition.
+  for (const row of rows.map((entry) => `${entry.id}\t${entry.contentHash ?? ''}`).sort()) hash.update(`${row}\n`);
+  return { digest: `sha256:${hash.digest('hex').slice(0, 16)}`, documents: rows.length };
+}
+
+/**
  * Measure how much range the gauge has on this corpus, by re-scoring a permuted gold set.
  *
  * The permuted arm keeps every query and deliberately makes every answer wrong, so its
@@ -474,13 +499,20 @@ export function createMethods({
 
   /// One history, whoever measured. init and retrievalScore both write here so the repo
   /// card's trend line cannot show half the measurements that were actually taken.
-  async function appendScoreHistory(repoPath, floor) {
+  async function appendScoreHistory(repoPath, floor, { store = null } = {}) {
     const history = await readHistory(repoPath);
+    const layout = await layoutFor(repoPath);
     history.unshift({
       at: new Date(now()).toISOString(),
       caseRate: floor.caseRate,
       chosenBudget: floor.chosenBudget ?? null,
       embedding: floor.embedding ?? null,
+      // WHICH CHECKOUT AND WHICH BRAIN produced this number. Clones share one repoId and
+      // therefore one history, so without these two fields a series that mixes branches
+      // reads as a smooth trend. Null when unknown rather than guessed: a stamp invented
+      // for a row is worse than a row that admits it has none.
+      originPath: layout.repoPath,
+      index: store ? await indexContentDigest(store).catch(() => null) : (floor.index ?? null),
     });
     const file = await historyFile(repoPath);
     await mkdir(path.dirname(file), { recursive: true });
@@ -758,6 +790,10 @@ export function createMethods({
           caseRate: record.caseRate,
           chosenBudget: record.chosenBudget,
           embedding: chosen.record?.embedding ?? null,
+          // The same stamps init writes. Two writers into one series must agree on the
+          // shape, or half the rows explain themselves and half do not.
+          originPath: (await layoutFor(repoPath)).repoPath,
+          index: await indexContentDigest(store).catch(() => null),
         });
         // Through appendScoreHistory's path so the two writers cannot land in two places.
         await mkdir(path.dirname(await historyFile(repoPath)), { recursive: true })
@@ -1347,7 +1383,7 @@ export function createMethods({
           // A floor measured by init is the same measurement retrievalScore produces, so it
           // lands in the same history the repo card trend reads. Two sources writing two
           // histories would give a card that shows half its own measurements.
-          if (report?.floor?.caseRate) await appendScoreHistory(repoPath, report.floor);
+          if (report?.floor?.caseRate) await appendScoreHistory(repoPath, report.floor, { store });
         } finally {
           await store.close?.();
         }

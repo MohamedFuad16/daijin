@@ -345,3 +345,34 @@ test('two processes resolving the same repo get the SAME index directory, after 
     await cleanup();
   }
 });
+
+test('a history row says WHICH CHECKOUT and WHICH BRAIN produced it', async () => {
+  // store-adapter's refinement on the shared-id ruling. Clones share one repoId and
+  // therefore one score history, which is the right identity: a trend is a property of the
+  // project, and splitting it forks the history invisibly and permanently. The cost is that
+  // two checkouts on different branches write different brains' floors into one series, and
+  // a series that mixes conditions with nothing marking the change is a reporting defect
+  // everywhere else in this build.
+  const { indexContentDigest } = await import('../src/rpc/methods.js');
+
+  const rows = [{ id: 'b', contentHash: 'h2' }, { id: 'a', contentHash: 'h1' }];
+  const first = await indexContentDigest({ allDocuments: async () => rows });
+  assert.equal(first.documents, 2);
+  assert.match(first.digest, /^sha256:[0-9a-f]{16}$/);
+
+  // Row order is the store's business. A digest that moved with it would mark every
+  // rebuild of identical content as a new condition, which is the opposite of the point.
+  const shuffled = await indexContentDigest({ allDocuments: async () => [...rows].reverse() });
+  assert.equal(shuffled.digest, first.digest);
+
+  // It moves when the brain moves, which is the whole job.
+  const edited = await indexContentDigest({
+    allDocuments: async () => [{ id: 'a', contentHash: 'h1' }, { id: 'b', contentHash: 'DIFFERENT' }],
+  });
+  assert.notEqual(edited.digest, first.digest);
+
+  // A missing content hash falls back to the id alone rather than to a guess: it records
+  // that the row was there without claiming to know what was in it.
+  const partial = await indexContentDigest({ allDocuments: async () => [{ id: 'a' }] });
+  assert.match(partial.digest, /^sha256:/);
+});

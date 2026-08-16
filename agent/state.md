@@ -1,5 +1,57 @@
 # Daijin build state (authoritative)
 
+## 2026-08-16 22:45 - Race fixed as a PATTERN; a product defect underneath; worktree demonstrated
+
+THE EXTRACTOR CLEARED ITS P8 PRECONDITION, all three parts, plus one
+product defect nobody had assigned.
+
+(a) The race (1cd98b6): both rpc-surface sweeps get their own
+throwaway repo (sharing removed, not sequenced around; jobs CANCELLED,
+not abandoned - an un-awaited writer outliving its file is a writer
+with no owner). Isolation asserted POSITIVELY: the sweep asserts no
+gates.yaml appears in the shared fixture, and the assertions were
+proven by putting the fixture back and watching them fail.
+
+(b) The pattern check came back PATTERN, two instances: rpc-spend had
+the same shape with a LARGER blast radius (two un-awaited initBrain
+jobs write manifest, brain files, gates.yaml, score history; four
+later tests read them) - fixed in the same commit. rpc-events,
+init-pipeline, init-gates: clean on this shape, stated positively.
+Separate flag, deliberately not conflated: init-gates classifies
+against process.cwd(), so a test run executes the engine repo's own
+npm scripts - a second way for tests to write where nobody expects;
+init-miner's file; queued to init-miner, not touched.
+
+THE PRODUCT DEFECT (4f5ad9b, found underneath the CI failure):
+gatesDiscover wrote gates.yaml UNCONDITIONALLY at the end of a
+minutes-long job, destroying anything the user wrote meanwhile - in a
+file whose first line promises "edit it, and the engine obeys it".
+Discovery now reads at request time, compares at write time, keeps the
+user's version and says so on the stream (new step: kept-yours), with
+a test for the OTHER side so the refusal cannot become a feature that
+silently stopped working. Ruling on the step's level: stays default -
+"warn" would tell a user they did something wrong when the engine is
+KEEPING their work; the TUI styles by step name instead, which needs
+no contract change.
+
+(c) The worktree procedure DEMONSTRATED at pin e65cd2d
+(docs/verification/p8-worktree-procedure.md): five consecutive runs,
+590/590 each, run count recorded; the digest bound honestly stated
+(before/after proves ended-as-started, not never-changed; the
+worktree's strength is that nothing else has a reason to write there);
+report 21's re-derivation done properly - six chunking runs, ONE
+distinct decision list across all six, same decisions in the same
+order, not merely equal totals. Bound recorded for later: node_modules
+is symlinked, so the runs pin SOURCE against a shared install; a
+dependency-version claim would need a clean install instead.
+
+Also landed: store-adapter's history refinement (70e80f7) - rows stamp
+originPath and an index digest computed over ids and content hashes,
+NOT file bytes, because vacuum and page layout would mark every
+rebuild of identical content as a new condition.
+
+Suite is 590/590. P8 preconditions remaining: init-miner (committed
+battery + P3.5 re-run), tui-builder (live-half runs).
 ## 2026-08-16 22:35 - Ruling placed at its point of use; P7 manifest superseded
 
 gym-porter put the declaration-versus-widening ruling INSIDE the

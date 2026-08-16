@@ -10,15 +10,19 @@
 // enumerates (gymStart, rolePing, initBrain layer1+layer2, diagnoseNarrate) refuse BEFORE
 // they would do anything, so the refusal cannot regress into a call when their phases land.
 
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
+
+import YAML from 'yaml';
 
 import { analyze as analyzeRepo } from '../init/analyze.js';
 import { discoverGates, gatesFilePath, renderGatesYaml } from '../init/gate-discovery.js';
 import { embedderFromOllama, servedIndexIdentity } from '../init/ingest.js';
 import { initBrain as runInitPipeline } from '../init/pipeline.js';
-import { MCP_UNLOCK_THRESHOLD, mcpUnlock } from '../init/floor.js';
+import { caseRateOf, MCP_UNLOCK_THRESHOLD, mcpUnlock } from '../init/floor.js';
+import { discriminatingRange, permuteAnswers } from '../init/rerank-ab.js';
 import { scoreGoldset } from '../init/retrieval-score.js';
 import { createOllamaClient } from '../../../adapters/ollama/client.js';
 import { checkOllama } from '../rag/embed.js';
@@ -193,6 +197,55 @@ export function ungradedReason(attempt) {
   if (attempt?.status === 'unsubmitted') return 'the student never submitted, so there is no diff to grade';
   if (attempt?.status === 'apply-error') return 'the submitted diff did not apply, so there is nothing to grade';
   return 'this attempt produced a diff and has not been graded yet';
+}
+
+/**
+ * Measure how much range the gauge has on this corpus, by re-scoring a permuted gold set.
+ *
+ * The permuted arm keeps every query and deliberately makes every answer wrong, so its
+ * score is what this corpus returns for questions it should fail entirely. A high permuted
+ * score means k returns most of the corpus whatever is asked, and then the real number
+ * above it is not evidence about retrieval quality.
+ *
+ * The permuted file is written to a TEMP DIRECTORY, never beside the real gold set: a file
+ * named goldset.yaml holding deliberately wrong answers, sitting in a user's repo, is one
+ * mistaken read away from becoming the thing that measures them.
+ */
+export async function measureDiscriminatingRange({ run, goldsetPath, store, environment, k, tokenBudget, score }) {
+  const cases = YAML.parse(await readFile(goldsetPath, 'utf8'));
+  let permuted;
+  try {
+    permuted = permuteAnswers(cases);
+  } catch (error) {
+    // A corpus with fewer than two distinct answers cannot be permuted, and that is a fact
+    // about the corpus rather than a failure of the diagnosis. Reported, not thrown: the
+    // clusters above are still worth reading, and killing a whole diagnosis over an
+    // optional arm would punish the caller for asking a harder question.
+    return { range: null, skipped: error.message };
+  }
+
+  const directory = await mkdtemp(path.join(tmpdir(), 'daijin-control-'));
+  const file = path.join(directory, 'permuted-goldset.yaml');
+  try {
+    await writeFile(file, YAML.stringify(permuted, { lineWidth: 0 }), 'utf8');
+    const controlRun = await score({
+      corpus: {
+        id: 'permuted-control', project: null, root: path.dirname(goldsetPath), goldsetPath: file,
+        retrievalFixesPath: null, baselinePath: null, envFiles: [], databaseUrlEnv: 'DATABASE_URL',
+        retrieveOptions: {}, storeOptions: {},
+      },
+      k, store, environment, retrieveOptions: { tokenBudget },
+    });
+    return {
+      range: discriminatingRange(
+        { caseRate: caseRateOf(run.summary, run.results), mrr: run.summary.mrr },
+        { caseRate: caseRateOf(controlRun.summary, controlRun.results), mrr: controlRun.summary.mrr },
+      ),
+      skipped: null,
+    };
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 }
 
 function requireRepoPath(params) {
@@ -677,6 +730,14 @@ export function createMethods({
      * It RE-MEASURES rather than reading a stored record, because a diagnosis of a stale
      * measurement recommends work against a brain that has since changed. The auditor's
      * narration over these clusters is diagnoseNarrate, and that one spends.
+     *
+     * `control: true` adds a permuted arm and reports the gauge's discriminating range.
+     * OPT IN, never a default: it doubles the wall clock of an interactive call, and the
+     * caller staring at a sub-75 number is exactly the one who should choose to pay that
+     * deliberately. The range answers a question the case rate cannot: on a corpus small
+     * enough that retrieval returns most of it, a gold set with every answer deliberately
+     * WRONG still scores high (init-miner measured 18 of 25 against a real 25 of 25), and
+     * then no number from this brain separates a good retrieval from a lucky one.
      */
     async diagnose(params) {
       const repoPath = await requireAttached(params);
@@ -713,10 +774,29 @@ export function createMethods({
           .map((row) => [row.id, row.arms?.[run.results.find((item) => item.id === row.id)?.misses?.[0]] ?? null]));
         const clustered = clusterCases(run.results, inventory, armsByCase);
 
+        // The permuted arm runs over the SAME store, embedder, k and budget, so the only
+        // thing that differs between the arms is whether the answers are right. Anything
+        // else varying would make the range a measurement of the difference rather than of
+        // the gauge.
+        let control = null;
+        if (params?.control === true) {
+          control = await measureDiscriminatingRange({
+            run, goldsetPath, store, environment,
+            k: settings.retrieval?.k ?? 8,
+            tokenBudget: settings.retrieval?.tokenBudget ?? 4_000,
+            score,
+          });
+        }
+
         return {
           caseRate: caseRateShape(run.results),
           violations: run.summary.violations,
           ...clustered,
+          // Null when not asked for, which is not the same as "measured and found to be
+          // nothing". A caller that renders a range must be able to tell the difference,
+          // so the unmeasured case carries no numbers at all rather than zeroes.
+          discriminatingRange: control?.range ?? null,
+          controlSkipped: control?.skipped ?? null,
           // What the clusters do NOT say is worth saying: this names which cases missed and
           // how they group. Choosing between enriching docs, running Layer 2 on an area, or
           // bootstrapping through the gym is the auditor's call, and that one spends.

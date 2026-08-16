@@ -1,4 +1,4 @@
-# Captured 2026-08-16T04:11:57Z (UTC)
+# Captured 2026-08-16T08:21:16Z (UTC)
 # Command: bash docs/verification/p4-mutations/mutate.sh
 
 KILLED   (4 failing): boundary check never fires (condition inverted)
@@ -73,7 +73,11 @@ KILLED   (1 failing): a harness-debug cohort may be graded into the record
 KILLED   (1 failing): a rubric may cross modes into another batch
 KILLED   (1 failing): the one-rubric-per-run index is dropped
 KILLED   (1 failing): attemptsForExam stops attaching rubrics, so graded reads as ungraded
+KILLED   (1 failing): certify takes axes from its caller again, so {} can reach the strictest record
+KILLED   (1 failing): certify stops requiring a rubric, so a pass claim has nothing behind it
+KILLED   (1 failing): certify stops checking the caller assertion against the stored verdict
+KILLED   (1 failing): the certification stops naming the rubric it snapshotted
 
-declared: 72   executed: 72
+declared: 76   executed: 76
 All mutations killed.
 # exit=0

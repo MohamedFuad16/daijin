@@ -5,23 +5,23 @@ instrument, and the captured output of both. Session scratch dies; the evidence 
 
 | file | what it is |
 | --- | --- |
-| `mutate.sh` | the 72-mutation battery, P4 and P7. Exits non-zero on any survivor, skip, or declared-but-unexecuted mutation. Every line must read KILLED. |
+| `mutate.sh` | the 76-mutation battery, P4 and P7. Exits non-zero on any survivor, skip, or declared-but-unexecuted mutation. Every line must read KILLED. |
 | `mutate-output.txt` | its captured output, with the run timestamp in the header. |
 | `gate-scanner-plants.mjs` | THE ARBITER for D-0023, authored by the VERIFIER, unmodified. Exit 0 is acceptance. |
 | `gate-scanner-plants-output.txt` | its captured output run against the landed scanner. |
 | `gate-plants.mjs` | gym-porter's extended plant set (12 plants, 4 controls), per the verifier's standing note that four plants is ten minutes of thought and not a bound. |
 | `gate-plants-output.txt` | its captured output. |
 
-## Measured 2026-08-16 13:12 JST (2026-08-16 04:12Z)
+## Measured 2026-08-16 17:22 JST (2026-08-16 08:22Z)
 
 - `node docs/verification/p4-mutations/gate-scanner-plants.mjs`: caught 4/4 plants, control
   clean, ACCEPTANCE MET, exit 0. The verifier's four plants are also pinned inside
   `engine/test/gym-spend-gate.test.js` so `npm test` enforces the same bar; if the two ever
   disagree, the script wins and the test copy is the stale one.
 - `node docs/verification/p4-mutations/gate-plants.mjs`: 12 plants, 4 controls, 0 failures.
-- `bash docs/verification/p4-mutations/mutate.sh`: 72 mutations, 72 KILLED, exit 0, declared 72
-  and executed 72 (six added for rubric persistence).
-- `node --test "test/gym-*.test.js"` from `engine/`: tests 129, pass 129, fail 0.
+- `bash docs/verification/p4-mutations/mutate.sh`: 76 mutations, 76 KILLED, exit 0, declared 76
+  and executed 76 (four added for the derived certification axes).
+- `node --test "test/gym-*.test.js"` from `engine/`: tests 130, pass 130, fail 0.
 - `npm test` from `engine/`: 503 tests, 503 pass, 0 fail. Suite-count caveat per D-0014: the
   engine suite is written by several workers at once, so every total here is a timestamped
   snapshot of a moving number.
@@ -102,14 +102,14 @@ Regenerate with:
 a233c422750bd1a88c65fbfe7a14938bc895ca20e75379fece3fed0e9a2065ab  engine/src/gym/gates.js
 56dc33f9a4fc107f58446911c33a830eef8bcb94c44b27556d4ebba2350c344f  engine/src/gym/grading.js
 e1500a6e6f7f6829a9fd85d227a94cf8276d6cda275b8b82a36d05c2857281f5  engine/src/gym/harvest.js
-5ab4a42ad44009e927833cfce146944b0e5a562ee33e1f4c5d7f1883432fc5a8  engine/src/gym/ledger.js
+08e020422b0ec248561a87512abceac205d28f9e1bfe767196bdd105ef8974d8  engine/src/gym/ledger.js
 0dfa4cd31200abb73dac41e8b93cf8d2ecb09130f098963814966327e28c8297  engine/src/gym/mining.js
 6a1ea7e9d6845b7b93b2c6a8fd97ea4ccf96a0ba2e39269b41e66bb08c128768  engine/src/gym/prompt.js
 cc967362c8e6e8ba8286caae25a2c6b0cebedfe03b21d504a942914bcc4a2440  engine/src/gym/provenance.js
 78b0aa8224ebac6fbacc382a9394924be9115d34220d9a6a55d0ac3a16f60597  engine/src/gym/result-files.js
 57ca7b4bb4946c29f85e044f497f3d619e8f276315f0377ffdbadfa5533a0a3b  engine/src/gym/run-mode.js
 e1151dc4f7ca74f462043af607d575db63eaee4f287d069f59923380afa17c68  engine/src/gym/sandbox.js
-8037cf9d631169b21244298356e0f8b1e3ad4d9974a79119a8f500e7e4fd61b2  engine/src/gym/spend-gate.js
+425693fd833231e1e20530c250b9a4545f62f5d07556a7265b27aacd8fe97d6e  engine/src/gym/spend-gate.js
 17daa19c7a0cd9d34a90220545ef83d879c3ff05d70dbf7cd1b4722dfe50b005  engine/src/gym/student-loop.js
 a25f2336cfc8c9090cdadfd76e498241e6da4451c69dfced4d3cd64676043ffb  engine/src/gym/superseding.js
 df9b5cecc85f5f31b17fb638b22222e98283aecba5c8ab812744a11c10dabc9e  engine/src/gym/RPC-SHAPES.md
@@ -119,24 +119,24 @@ f6f70c93ee4107298c86f1d75beb26b11a3fcce2ed9c28fd4c7027ef35c924e3  engine/src/gym
 f7b8e3dae1400d84bc6ca619a6dc2ccc0d72f24fad3a675d12742f4124bfa657  engine/src/gym/agents-defaults/watcher.md
 10f00af4ed71a5e9d1e819117dc17222334846d931530020232fea13710d7e0e  engine/test/gym-agent-files.test.js
 daf8e57d3ca351ed5457f061ae44c8247c98b0ac534178970c123da1dab38404  engine/test/gym-budget.test.js
-d96314398fff24b3237d15d4d40a705c1a138b4ee5f97d32b5041bd5daa3f2a1  engine/test/gym-cycle.test.js
+b5488c6ec01edc05dcbe9efcbd7c82b85b198ec1653d998257b45a9c38a20bc3  engine/test/gym-cycle.test.js
 045aff93e4f7cce13bae3b0101f9510c06a219d52f6678e613640b80d79733b7  engine/test/gym-discipline.test.js
 dfe587fb7f9eb8133e7debe4d90c44f1d216b3b236ef339042f6d2436819a3c5  engine/test/gym-grading.test.js
 4834bba9aa63bbeb4b2ac3608a99fbb63f09dbf671cf18afde5e0532e09f69ca  engine/test/gym-harness.test.js
 e6650cdb2eae627c12bbcbfb1aaf2bea7bcc030703e261d9fb77a9f6a3467494  engine/test/gym-harvest.test.js
-7a5e1e7777091ad57fbcc02881e7e967d94108666b6fe262e85310fa551498a2  engine/test/gym-ledger.test.js
+9dfeb5451940cc3009e45d392c62fd473162ee0232e038423024a230f192a839  engine/test/gym-ledger.test.js
 574fd593a48afd80dd31b8b3e8c79f15f99c840f97027705314ea2b32767dbc3  engine/test/gym-mining.test.js
 4915ea53510dca9f9174bb66c476cd99bdf6cbac2bed43fa62af26ececf6e4d6  engine/test/gym-mode-quarantine.test.js
 7e9bfce6e5c663579fa712d72451510955e530cd6939d8b4dacf21dca4ae0809  engine/test/gym-provenance.test.js
-a95c032655750ff701dc5c13c0de8610f236e60f7c2512c5832c09b548da77d5  engine/test/gym-spend-gate.test.js
+bb14cd67ad0887efeb55e31008cd10716f86ef86ad39cf1fc0ff381aeaae5fda  engine/test/gym-spend-gate.test.js
 e6affd28f7130eb34bedca68e785744fee946bdc70bc2492019975ee62f377c9  docs/verification/p7-grading-harvest-acceptance-draft.md
 8a1289e65707a5ba3b39ef9b599f899cd468e2af3b72233c5b9f40638ce7fe15  docs/verification/p7-grading-harvest-acceptance.md
 f2ff54b05ae07116ac5f763fa7cc4f15457d826e7d6936dd780807feaab4ec34  docs/verification/p4-mutations/gate-plants-output.txt
 e66ab1295c82a9c0a3ec6aa5fd9eb6dc87baf83dd6fbc0b4259b4578def35b8c  docs/verification/p4-mutations/gate-plants.mjs
 5f9c2255ce54fb3ba743458a198098eb98ddf4eca8b50d73706509ad075f6b55  docs/verification/p4-mutations/gate-scanner-plants-output.txt
 285369273763bd75ee7ec8b7732955cc8fe9dd8ab267ab979284d5f418b7d7ed  docs/verification/p4-mutations/gate-scanner-plants.mjs
-73a71b665808a01e710309b7a5ca27f6ad91e545450f29aaaa29816506f9ff8b  docs/verification/p4-mutations/mutate-output.txt
-680d36f4f3a3269a9bd3bc2773973d63c8155bcd579c7e081ed1d0c1670445d1  docs/verification/p4-mutations/mutate.sh
+337853db221e63207117f1065abc3a37c1a23ea41672e0af84cda74d2313503b  docs/verification/p4-mutations/mutate-output.txt
+58bf1f3ddf88be497d12590298c6abf41275ffb111877a266acc18796355a56f  docs/verification/p4-mutations/mutate.sh
 ```
 
 `gates.js` and `sandbox.js` are the extractor's ports, consumed unchanged and hashed here

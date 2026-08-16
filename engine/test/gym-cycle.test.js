@@ -19,6 +19,7 @@ import { runExamAttempt, runGymCycle } from '../src/gym/cycle.js';
 import { GymLedger } from '../src/gym/ledger.js';
 import { parseExamRecord, quarantineExam } from '../src/gym/exams.js';
 import { loadResultFiles } from '../src/gym/result-files.js';
+import { AXES } from '../src/gym/grading.js';
 import { gymSpendGatePath } from '../src/gym/spend-gate.js';
 import { readDefaultAgentFile } from '../src/gym/agent-files.js';
 
@@ -424,6 +425,22 @@ test('a run with no brain is runnable and NOT certifiable', async () => {
     const runId = ledger.recordRun({
       examId: drawn.examId, mode: 'evaluation', status: result.status, applied: true, resultFile: result.resultFile,
     });
+    // Two independent refusals now stand between this run and a certification, and the
+    // rubric one fires first. Store a rubric so the test reaches the refusal it is about,
+    // rather than passing on the nearest one.
+    assert.throws(
+      () => ledger.certify({ runId, verdict: 'pass', harness: { policy: 'adr-0167' }, artifact: result }),
+      /no rubric is stored for it/,
+    );
+    ledger.importRubricBatch({ rubrics: [{
+      runId,
+      examId: drawn.examId,
+      verdict: 'pass',
+      axes: Object.fromEntries(AXES.map((name) => [name, { score: 4, citations: ['app.js:2'] }])),
+      gaps: [],
+      taskDigest: 'task',
+      submissionDigest: 'submission',
+    }], mode: 'evaluation' });
     assert.throws(
       () => ledger.certify({ runId, verdict: 'pass', harness: { policy: 'adr-0167' }, artifact: result }),
       /carries no gold-provenance exclusion record/,

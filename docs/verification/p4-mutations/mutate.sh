@@ -224,7 +224,7 @@ run_mutation "an unknown gold commit fails OPEN instead of loud" \
 
 run_mutation "the scanned set stops covering the engine" \
   test/gym-spend-gate.test.js \
-  "s/  const SCANNED = \['gym', 'rpc'\];/  const SCANNED = ['gym'];/" \
+  "s/  const SCANNED = \['gym', 'rpc', 'state'\];/  const SCANNED = ['gym'];/" \
   "test/gym-spend-gate.test.js"
 
 # ---- pre-seal check (ADR-0147) ----------------------------------------------------------
@@ -419,6 +419,28 @@ run_mutation "the one-rubric-per-run index is dropped" \
 run_mutation "attemptsForExam stops attaching rubrics, so graded reads as ungraded" \
   src/gym/ledger.js \
   's/    return runs\.map\(\(run\) => \(\{ \.\.\.run, rubric: rubrics\.get\(run\.id\) \?\? null \}\)\);/    return runs.map((run) => ({ ...run, rubric: null }));/' \
+  "test/gym-ledger.test.js"
+
+# ---- certification axes derived from the rubric (extractor handover defect) --------------
+
+run_mutation "certify takes axes from its caller again, so {} can reach the strictest record" \
+  src/gym/ledger.js \
+  's/  certify\(\{ runId, verdict = null, harness = \{\}, artifact = null \}\) \{/  certify({ runId, verdict = null, axes = {}, harness = {}, artifact = null }) {/;s/      JSON.stringify\(rubric.axes\), JSON.stringify\(harness\),/      JSON.stringify(axes), JSON.stringify(harness),/' \
+  "test/gym-ledger.test.js"
+
+run_mutation "certify stops requiring a rubric, so a pass claim has nothing behind it" \
+  src/gym/ledger.js \
+  's/    if \(!rubric\) \{/    if (false) {/' \
+  "test/gym-ledger.test.js"
+
+run_mutation "certify stops checking the caller assertion against the stored verdict" \
+  src/gym/ledger.js \
+  's/    if \(verdict !== null \&\& verdict !== rubric.verdict\) \{/    if (false) {/' \
+  "test/gym-ledger.test.js"
+
+run_mutation "the certification stops naming the rubric it snapshotted" \
+  src/gym/ledger.js \
+  's/      runId, run.exam_id, rubric.id, new Date\(\).toISOString\(\), rubric.verdict,/      runId, run.exam_id, null, new Date().toISOString(), rubric.verdict,/' \
   "test/gym-ledger.test.js"
 
 # ---- summary. NOTHING MAY BE APPENDED BELOW THIS LINE ------------------------------------

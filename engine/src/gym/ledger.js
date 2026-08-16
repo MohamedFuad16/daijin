@@ -30,10 +30,24 @@ import { assertRunMode, assertScoredWrite, isGradableRun, isScoreableRun } from 
 import { examListRow, parseExamRecord } from './exams.js';
 import { drawnExamCount } from './result-files.js';
 import { hasExclusionRecord } from './provenance.js';
+import { repoPaths } from '../state/layout.js';
 
-/** Where a repo's gym ledger lives. Beside the brain, never inside it. */
+/**
+ * Where a repo's gym ledger lives: REPO-SIDE, and it does not follow the index relocation.
+ *
+ * D-0031 moves the machine-local INDEX out of the repo because it is disposable and
+ * regenerable from the brain markdown. This is not that. The ledger holds certifications,
+ * which are claims, and rubrics, which exist nowhere else; delete it and the project loses
+ * its record rather than a cache it can rebuild. The extractor reached the same conclusion
+ * independently in src/state/LAYOUT.md and left it unmoved, flagged rather than moved
+ * quietly, which is why this still resolves under the repo.
+ *
+ * DELEGATED to the layout module rather than recomputed here. Two places computing one path
+ * can disagree, which is exactly the defect just removed from certify(), and a storage path
+ * that drifts between two modules is found the day a ledger silently starts empty.
+ */
 export function gymDatabasePath(repoPath) {
-  return path.join(path.resolve(repoPath), '.daijin', 'gym.sqlite');
+  return repoPaths(repoPath).gymDatabasePath;
 }
 
 /** Tables whose presence means this file is a BRAIN, not a gym ledger. */
@@ -154,6 +168,16 @@ export const MIGRATIONS = [
       CREATE UNIQUE INDEX IF NOT EXISTS rubric_run ON rubric(run_id);
       CREATE INDEX IF NOT EXISTS rubric_exam ON rubric(exam_id);
       CREATE INDEX IF NOT EXISTS rubric_batch ON rubric(batch_id);
+    `,
+  },
+  {
+    // A certification names the rubric it snapshotted, so "these two agree" is checkable
+    // rather than assumed. Nullable rather than NOT NULL because a column added by migration
+    // cannot be required of rows that predate it; null means a certification written before
+    // the axes were derived, and there are none in any shipped ledger.
+    id: '003-certification-rubric',
+    sql: `
+      ALTER TABLE certification ADD COLUMN rubric_id INTEGER REFERENCES rubric(id);
     `,
   },
 ];
@@ -451,14 +475,46 @@ export class GymLedger {
    * that outlives the person who remembers it:
    *  - non-evaluation mode: an experiment arm that certifies is a scored record with no
    *    cohort behind it;
+   *  - no rubric: a pass claim with nothing behind it;
    *  - non-pass verdict: a certification is a claim that the student passed;
    *  - quarantined exam: measurement integrity, checked AT certification time because an
    *    exam can be quarantined between the run and the grade.
+   *
+   * THE AXES ARE COPIED FROM THE STORED RUBRIC, never supplied by the caller.
+   *
+   * `certification.axes` predates the rubric table and was written from a caller-supplied
+   * value that DEFAULTED TO `{}`, so a certification could persist finding 79's forbidden
+   * value into the strictest record in the ledger: an empty axes set renders on a radar
+   * exactly like a set of measured zeros. Found by the extractor while reading this file.
+   *
+   * The fix is to delete the parameter rather than validate it. Two records holding the same
+   * five numbers can disagree; one record DERIVED from the other cannot. So the certification
+   * keeps its immutable snapshot, because a claim should carry its evidence beside the
+   * harness provenance, and the snapshot is taken from the grading record rather than written
+   * independently. `rubric_id` records which rubric it was taken from, so the agreement is
+   * checkable later rather than assumed.
+   *
+   * `verdict` follows the same rule: the STORED verdict comes from the rubric, and a verdict
+   * the caller supplies is treated as an ASSERTION to check, not as a value to store. That is
+   * the general shape worth keeping: assertions are checked, records are derived.
    */
-  certify({ runId, verdict, axes = {}, harness = {}, artifact = null }) {
+  certify({ runId, verdict = null, harness = {}, artifact = null }) {
     const run = this.getRun(runId);
     if (!run) throw new Error(`Cannot certify unknown run ${runId}.`);
     assertScoredWrite(run.mode, 'a certification');
+    const rubric = this.rubricFor(runId);
+    if (!rubric) {
+      throw new Error(
+        `Refusing to certify run ${runId}: no rubric is stored for it. A certification is a claim that the `
+        + 'student passed, and a pass with no grading record behind it has nothing to show.',
+      );
+    }
+    if (verdict !== null && verdict !== rubric.verdict) {
+      throw new Error(
+        `Refusing to certify run ${runId}: the caller asserts ${verdict} and the stored rubric says ${rubric.verdict}. `
+        + 'The rubric is the record; a disagreement means the caller is certifying something it has not read.',
+      );
+    }
     // D-0020: a scored run must be able to SHOW what it withheld from the student. Without a
     // computed gold-provenance exclusion record, "the student never saw gold" is a hope
     // about this run rather than a property of it, and a certification is exactly the claim
@@ -469,7 +525,9 @@ export class GymLedger {
         + 'A certification asserts the student never saw gold, and that assertion needs the computed exclusion behind it.',
       );
     }
-    if (verdict !== 'pass') throw new Error(`Refusing to certify run ${runId} with verdict ${verdict}; a certification records a pass.`);
+    if (rubric.verdict !== 'pass') {
+      throw new Error(`Refusing to certify run ${runId} with verdict ${rubric.verdict}; a certification records a pass.`);
+    }
     const exam = this.getExam(run.exam_id);
     if (!exam) throw new Error(`Cannot certify run ${runId}: exam ${run.exam_id} is not in the bank.`);
     if (exam.benchmarkStatus !== 'active') {
@@ -479,9 +537,14 @@ export class GymLedger {
       throw new Error('A certification must carry the harness provenance it was earned under; an uncontextualized pass is not reproducible.');
     }
     const info = this.database.prepare(`
-      INSERT INTO certification (run_id, exam_id, at, verdict, axes, harness)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(runId, run.exam_id, new Date().toISOString(), verdict, JSON.stringify(axes), JSON.stringify(harness));
+      INSERT INTO certification (run_id, exam_id, rubric_id, at, verdict, axes, harness)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      runId, run.exam_id, rubric.id, new Date().toISOString(), rubric.verdict,
+      // Copied from the rubric, never from a parameter: the snapshot cannot disagree with
+      // the record it was taken from.
+      JSON.stringify(rubric.axes), JSON.stringify(harness),
+    );
     return Number(info.lastInsertRowid);
   }
 

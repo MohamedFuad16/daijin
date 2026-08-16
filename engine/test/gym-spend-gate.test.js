@@ -122,10 +122,13 @@ test('the closure never normalizes a malformed gate into a valid one', async () 
 });
 
 const rpcRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/rpc');
+// src/state names the gate (layout.js computes its path), so it is SCANNED rather than
+// exempted: a directory that knows where the gate is must be held to not writing it.
+const stateRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/state');
 
 async function engineSources() {
   const scanned = [];
-  for (const root of [gymRoot, rpcRoot]) {
+  for (const root of [gymRoot, rpcRoot, stateRoot]) {
     for (const name of (await readdir(root)).filter((entry) => entry.endsWith('.js'))) {
       scanned.push({ path: name, source: await readFile(path.join(root, name), 'utf8') });
     }
@@ -429,7 +432,7 @@ test('the scanned set covers every engine source directory', async () => {
   // The scanned set is declared here rather than derived, so ADDING a directory to the
   // engine forces a decision about whether the gate scan should cover it. Deriving it would
   // make this test pass by construction and prove nothing.
-  const SCANNED = ['gym', 'rpc'];
+  const SCANNED = ['gym', 'rpc', 'state'];
   const UNSCANNED = [
     // Each exemption states why it cannot reach the gate. An exemption is a claim someone
     // has to defend, exactly like an allowlist entry.

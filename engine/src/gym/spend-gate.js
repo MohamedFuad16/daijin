@@ -231,6 +231,14 @@ export const GATE_SCAN_ALLOWLIST = Object.freeze([
       + 'agent files and gates.yaml. It never writes the gate, and the near-write rule below '
       + 'still holds it to that.',
   },
+  {
+    path: 'layout.js',
+    reason: 'The state-layout module DEFINES where the gate lives (D-0031), so it necessarily '
+      + 'names it, and it writes manifest.json and origin.json. It never writes the gate '
+      + 'itself, and the near-write rule still holds it to that. Added when the scanned-set '
+      + 'test caught src/state appearing, which is the test doing its job rather than a '
+      + 'nuisance: a new directory that knows where the gate is must be decided about.',
+  },
 ]);
 
 /** Lines that are wholly prose: a line comment, or a line inside a JSDoc block. */

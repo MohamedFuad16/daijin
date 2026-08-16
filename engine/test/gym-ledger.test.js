@@ -143,6 +143,7 @@ test('only evaluation rows are scored, and a certification refuses every other m
   assert.deepEqual(store.cycleRuns(debugCycle, { scoredOnly: false }).map((row) => row.id), [debugRun]);
 
   assert.throws(() => store.certify({ runId: debugRun, verdict: 'pass', harness: { policy: 'adr-0167' }, artifact: certifiableArtifact() }), /may not write a certification/);
+  store.importRubricBatch({ rubrics: [rubricFor(scoredRun)], mode: 'evaluation' });
   const certification = store.certify({
     runId: scoredRun, verdict: 'pass', harness: { policy: 'adr-0167', extensionsGranted: 1 }, artifact: certifiableArtifact(),
   });
@@ -160,16 +161,59 @@ test('a certification needs a pass, an unquarantined exam, and its harness prove
     cycleId, examId: 'exam-0001', mode: 'evaluation', status: 'completed', applied: true, resultFile: 'r.json',
   });
   const artifact = certifiableArtifact();
-  assert.throws(() => store.certify({ runId, verdict: 'partial', harness: { x: 1 }, artifact }), /a certification records a pass/);
-  assert.throws(() => store.certify({ runId, verdict: 'pass', harness: {}, artifact }), /must carry the harness provenance/);
+  // A pass claim with no grading record behind it has nothing to show.
+  assert.throws(() => store.certify({ runId, verdict: 'pass', harness: { x: 1 }, artifact }), /no rubric is stored for it/);
+  store.importRubricBatch({ rubrics: [rubricFor(runId, { verdict: 'partial' })], mode: 'evaluation' });
+  assert.throws(() => store.certify({ runId, harness: { x: 1 }, artifact }), /with verdict partial; a certification records a pass/);
+  assert.throws(() => store.certify({ runId, verdict: 'pass', harness: { x: 1 }, artifact }),
+    /the caller asserts pass and the stored rubric says partial/);
   assert.throws(() => store.certify({ runId: 999, verdict: 'pass', harness: { x: 1 }, artifact }), /unknown run 999/);
+
+  store.close();
+
+  // The remaining refusals need a PASSING rubric, and one rubric per run means a fresh run
+  // for each: the store refuses a second rubric for a run that already has one.
+  const provenanceCase = ledgerWithRun();
+  provenanceCase.store.importRubricBatch({ rubrics: [rubricFor(provenanceCase.runId)], mode: 'evaluation' });
+  assert.throws(() => provenanceCase.store.certify({ runId: provenanceCase.runId, harness: {}, artifact }),
+    /must carry the harness provenance/);
+  provenanceCase.store.close();
 
   // Quarantine is checked AT certification time, because an exam can be quarantined between
   // the run and the grade, and a certification is a claim made now.
-  store.putExam(exam('exam-0001', {
+  const quarantineCase = ledgerWithRun();
+  quarantineCase.store.importRubricBatch({ rubrics: [rubricFor(quarantineCase.runId)], mode: 'evaluation' });
+  quarantineCase.store.putExam(exam('exam-0001', {
     benchmarkStatus: 'quarantined', quarantineReason: 'Gold defect found after the run was graded.',
   }));
-  assert.throws(() => store.certify({ runId, verdict: 'pass', harness: { x: 1 }, artifact }), /Refusing to certify exam-0001: it is quarantined/);
+  assert.throws(() => quarantineCase.store.certify({ runId: quarantineCase.runId, harness: { x: 1 }, artifact }),
+    /Refusing to certify exam-0001: it is quarantined/);
+  quarantineCase.store.close();
+});
+
+test('a certification COPIES its axes from the rubric, and names which rubric', () => {
+  // The defect this replaces, found by the extractor reading ledger.js: certify() took
+  // `axes` from its caller and DEFAULTED IT TO {}, so a certification could persist finding
+  // 79's forbidden value into the strictest record in the ledger, where an empty axes set
+  // renders on a radar exactly like a set of measured zeros.
+  //
+  // The fix deletes the parameter rather than validating it. Two records holding the same
+  // five numbers can disagree; one derived from the other cannot.
+  const { store, runId } = ledgerWithRun();
+  store.importRubricBatch({ rubrics: [rubricFor(runId)], mode: 'evaluation' });
+  const rubric = store.rubricFor(runId);
+  store.certify({ runId, verdict: 'pass', harness: { policy: 'adr-0167' }, artifact: certifiableArtifact() });
+
+  const [certification] = store.certifications();
+  assert.deepEqual(certification.axes, rubric.axes, 'the snapshot IS the rubric, not a parameter');
+  assert.equal(certification.verdict, rubric.verdict, 'and so is the verdict');
+  assert.equal(certification.rubric_id, rubric.id, 'and it names which rubric, so the agreement is checkable');
+  assert.notDeepEqual(certification.axes, {}, 'never the forbidden empty value');
+  assert.equal(Object.keys(certification.axes).length, 5);
+
+  // There is no parameter to pass, which is what makes the defect unreachable rather than
+  // merely unlikely.
+  assert.ok(!/axes\s*=/.test(String(store.certify)), 'certify takes no axes parameter');
   store.close();
 });
 
@@ -184,6 +228,7 @@ test('a scored run with no gold-provenance exclusion record cannot be certified'
     cycleId, examId: 'exam-0001', mode: 'evaluation', status: 'completed', applied: true, resultFile: 'r.json',
   });
   const harness = { policy: 'adr-0167' };
+  store.importRubricBatch({ rubrics: [rubricFor(runId)], mode: 'evaluation' });
 
   for (const [label, artifact] of [
     ['no artifact at all', null],
@@ -202,7 +247,7 @@ test('a scored run with no gold-provenance exclusion record cannot be certified'
   // An EMPTY exclusion is a legitimate and common result (a brain with nothing downstream of
   // that commit) and certifies fine. Only an ABSENT record refuses, because the two mean
   // opposite things: "we checked and there was nothing" against "we never checked".
-  assert.equal(typeof store.certify({ runId, verdict: 'pass', harness, artifact: certifiableArtifact([]) }), 'number');
+  assert.equal(typeof store.certify({ runId, harness, artifact: certifiableArtifact([]) }), 'number');
   assert.equal(store.certifications().length, 1);
   store.close();
 });
@@ -367,7 +412,7 @@ test('the rubric migration is appended, not edited, and the ledger refuses an ed
     const first = GymLedger.open(file);
     assert.deepEqual(
       first.database.prepare('SELECT id FROM schema_migration ORDER BY id').all().map((row) => row.id),
-      ['001-gym-base', '002-rubrics'],
+      ['001-gym-base', '002-rubrics', '003-certification-rubric'],
       'appended, so an existing ledger gains the tables without 001 being touched',
     );
     first.close();

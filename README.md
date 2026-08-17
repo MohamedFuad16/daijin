@@ -107,11 +107,35 @@ docs/
 agent/                   # Build records: state.md (authoritative), decisions.md (ADRs)
 ```
 
-## Getting Started
+## Install
 
-Prereqs: Node 22+, Python 3.12+, and a local [Ollama](https://ollama.com) with
+Prereqs: Node 22+, Python 3.10+, and a local [Ollama](https://ollama.com) with
 `bge-m3` pulled (only needed for real indexing; the TUI runs without it in
 mock mode).
+
+```bash
+git clone https://github.com/MohamedFuad16/daijin.git
+cd daijin
+bash install/install.sh
+```
+
+That installs both halves into one self-contained prefix
+(`~/.local/share/daijin`), puts a single `daijin` command on your PATH, and
+keeps its Python environment private, so nothing fights whatever you already
+have. Re-runnable: installing twice lands in the same state as once. Then:
+
+```bash
+daijin /path/to/your/repo    # connect to a real repo (spawns the engine daemon)
+daijin . --mock              # or explore the full UI with no engine and no Ollama
+```
+
+A hosted `curl | bash` one-liner ships with the first release. `uninstall.sh`
+removes the program and tells you, honestly, which data it will not touch and
+why.
+
+## Development
+
+To hack on Daijin itself rather than install it:
 
 ```bash
 # Engine
@@ -123,12 +147,7 @@ npm test                 # 600+ tests, zero network, zero spend
 cd ../tui
 python -m venv .venv && .venv/bin/pip install -e '.[dev]'
 .venv/bin/python -m pytest   # 320+ tests
-
-# Explore the full UI with no engine and no Ollama
-.venv/bin/daijin . --mock
-
-# Point it at a real repo (spawns the engine daemon)
-.venv/bin/daijin /path/to/your/repo
+.venv/bin/daijin . --mock    # run the dev checkout directly
 ```
 
 Everything above runs at zero spend. The only provider-calling paths in the

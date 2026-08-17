@@ -94,17 +94,24 @@ SPEND_GATE = {"open": False, "path": ".daijin/GATE"}
 
 SERVE_STATUS: dict[str, Any] = {
     "repos": REPOS,
+    # Shape verified against the daemon on 2026-08-17. The key set is FIXED:
+    # every key always present, unknown is null rather than absent. endpoint,
+    # model and dimension are configuration rather than probe results, so they
+    # stay real when ollama is down; version and digest go null and hint fills
+    # in, naming the host actually probed.
     "ollama": {
         "reachable": True,
         "endpoint": "http://127.0.0.1:11434",
-        "embedder": "bge-m3",
+        "model": "bge-m3:latest",
         "dimension": 1024,
+        "version": "0.32.1",
+        "digest": "7907646426070047a77226ac3e684fbbe8410524f7b4a74d02837e43f2146bab",
+        "hint": None,
     },
     "db": {
-        "driver": "sqlite-vec",
-        "path": "~/.daijin/stores",
-        "sizeBytes": 48_233_984,
-        "indexDigest": "sha256:41c0d9",
+        "backend": "sqlite",
+        "repos": 3,
+        "stateRoot": "~/.daijin",
     },
     "spendGate": dict(SPEND_GATE),
 }

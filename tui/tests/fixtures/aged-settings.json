@@ -1,0 +1,39 @@
+{
+  "_why_this_file_is_out_of_date": [
+    "THE STALENESS IS THE FIXTURE. Do not update this to match the current",
+    "settings shape: the moment it matches, it stops testing anything.",
+    "",
+    "This is a settings.json as an early build wrote it, kept so the suite has",
+    "one system WITH A PAST. Every other fixture here is created fresh in a",
+    "temp directory, which makes every claim they support a claim about a",
+    "machine with no history, and the machines that matter all have one.",
+    "",
+    "Two real defects were found by a file like this and by nothing else: the",
+    "engine's shallow settings merge, where a stored section replaced a default",
+    "outright instead of filling in around it, and the client's role table",
+    "printing the literal word None because .get(key, default) does not help",
+    "when the key is present and the VALUE is null.",
+    "",
+    "When the shape moves, ADD a newer fixture beside this one rather than",
+    "editing this one forward."
+  ],
+  "roles": [
+    {
+      "role": "engineer",
+      "preset": "GLM",
+      "model": "glm-4.6",
+      "keyRef": "env:DAIJIN_ENGINEER_KEY"
+    },
+    {
+      "role": "teacher",
+      "preset": "Claude",
+      "model": "claude-opus-5"
+    }
+  ],
+  "retrieval": {
+    "tokenBudget": 4000
+  },
+  "charts": {
+    "motion": "full"
+  }
+}

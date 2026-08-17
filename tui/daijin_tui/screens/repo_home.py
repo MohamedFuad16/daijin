@@ -28,10 +28,17 @@ from .attach_dialog import AttachRepoScreen
 ENGINE_WALK_BUDGET_SECONDS = 10.0
 CARD_TIMEOUT_SECONDS = ENGINE_WALK_BUDGET_SECONDS + 2.0
 
-# How long the SKELETON waits before saying so. The status block is painted
-# immediately either way; this is only when its placeholder stops saying
-# "reading" and starts saying how long it has been.
-STATUS_PATIENCE_SECONDS = 3.0
+# A SECOND, INDEPENDENT number, and it is NOT the walk budget above.
+# serveStatus does not walk: its cost is an embedder probe bounded at
+# PROBE_TIMEOUT_MS = 1_500 (engine/src/rag/embed.js), so its worst case is
+# about 1.5s cold and milliseconds warm. This is that ceiling doubled, and it
+# only decides WHEN THE WORDING CHANGES: the status block is painted before
+# the call either way and this screen never gives up on it.
+#
+# Tying this to the 10s walk deadline would have been wrong today and would
+# have misled whoever moves either number later.
+ENGINE_PROBE_TIMEOUT_SECONDS = 1.5
+STATUS_PATIENCE_SECONDS = ENGINE_PROBE_TIMEOUT_SECONDS * 2
 from .base import DaijinScreen
 
 
@@ -254,6 +261,15 @@ class RepoHomeScreen(DaijinScreen):
             f"spend gate {gate_state} at {cls._said(gate.get('path'), 'no gate file')}  "
             f"[dim]observable here before anything is attempted[/dim]",
         ]
+        if not reachable:
+            # The engine caches its probe for a few seconds, failures included,
+            # so a check made immediately after starting ollama can still read
+            # unreachable. That is the cache rather than a lie, and saying so
+            # stops a user concluding the button is broken when they retry.
+            lines.append(
+                "[dim]this reading is cached briefly, so a check straight after "
+                "starting ollama may still say unreachable[/dim]"
+            )
         hint = ollama.get("hint")
         if hint:
             # The engine's own sentence, and it names the host it actually

@@ -2624,3 +2624,54 @@ async def test_the_status_block_says_something_from_the_first_frame():
             repo_home.STATUS_PATIENCE_SECONDS = original_patience
 
         assert "ollama" in text_of(screen.query_one("#engine-status", Static))
+
+
+def test_the_two_bounds_are_derived_from_two_different_engine_numbers():
+    """analyze walks; serveStatus probes. They are unrelated ceilings.
+
+    Tying the status patience to the 10s walk deadline would be wrong today
+    and would mislead whoever moves either number later, so each constant
+    names its own source.
+    """
+    import inspect
+
+    from daijin_tui.screens import repo_home
+
+    assert repo_home.CARD_TIMEOUT_SECONDS == repo_home.ENGINE_WALK_BUDGET_SECONDS + 2.0
+    assert repo_home.STATUS_PATIENCE_SECONDS == repo_home.ENGINE_PROBE_TIMEOUT_SECONDS * 2
+    assert repo_home.ENGINE_WALK_BUDGET_SECONDS != repo_home.ENGINE_PROBE_TIMEOUT_SECONDS, (
+        "the two ceilings collapsed into one, which is the mistake this guards"
+    )
+    # Each derivation names the engine constant it came from.
+    source = inspect.getsource(repo_home)
+    assert "timeBudgetMs" in source, "the card bound does not say where it came from"
+    assert "PROBE_TIMEOUT_MS" in source, "the patience window does not say where it came from"
+
+
+def test_an_unreachable_reading_says_it_may_be_cached():
+    """The engine caches its probe for a few seconds, failures included.
+
+    A user who starts ollama and immediately re-checks can read unreachable
+    from the cache. Without saying so, the retry looks like a broken button.
+    """
+    from daijin_tui.screens.repo_home import RepoHomeScreen
+
+    down = RepoHomeScreen._engine_markup({
+        "ollama": {"reachable": False, "endpoint": "http://gpu:11434", "model": "bge-m3",
+                   "dimension": 1024, "version": None, "digest": None,
+                   "hint": "not reachable at http://gpu:11434"},
+        "db": {"backend": "sqlite", "repos": 0, "stateRoot": "~/.daijin"},
+        "spendGate": {"open": False, "path": ".daijin/GATE"},
+    })
+    assert "cached briefly" in down, "an unreachable reading does not admit it may be stale"
+    assert "may still say unreachable" in down
+
+    # And a REACHABLE reading does not carry the caveat: it would be noise on
+    # the state where nobody is about to retry.
+    up = RepoHomeScreen._engine_markup({
+        "ollama": {"reachable": True, "endpoint": "http://localhost:11434", "model": "bge-m3",
+                   "dimension": 1024, "version": "0.32.1", "digest": "ab", "hint": None},
+        "db": {"backend": "sqlite", "repos": 1, "stateRoot": "~/.daijin"},
+        "spendGate": {"open": False, "path": ".daijin/GATE"},
+    })
+    assert "cached briefly" not in up

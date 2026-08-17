@@ -1,5 +1,57 @@
 # Daijin build state (authoritative)
 
+## 2026-08-17 20:20 - Owner rounds 4 and 5, solo batch: rolePing real, sub-agent provider, seven UI fixes
+
+The owner closed all team agents ("i closed them so you fix these personally");
+everything below is the leader's own work, engine and TUI both green after it
+(engine 740+9+4 pass; TUI suite pass; exit codes checked, not tails).
+
+ENGINE. rolePing is implemented (D-0047: one-token generation per provider
+shape, stored record returned, failures stored not thrown, mock-HTTP tested).
+claude-code is the sixth provider and agentCatalog scans sub-agent files
+(D-0048). role rows gained tools and agentRef (D-0049); zai carries a
+web_search tools offer with the shared-quota disclosure. The catalog tests
+moved from "five providers" to six and from "ollama is the only keyless" to
+"the two local-auth providers"; rolePing left the deferral lists in
+rpc-surface and rpc-spend. Contract amended in the same batch (rolePing row,
+agentCatalog row, roles shape, providerCatalog tools).
+
+TUI, the owner's round-4/5 list, each landed with a test that fails without
+it:
+- Title is the brand ("DAIJIN, a project brain for any repo"), never the
+  transport.
+- The BIG dithered wordmark is back at the top of the home screen: full
+  approved letterforms when width and height allow (ladder: full mark, word,
+  nothing; mask pinned to the splash's hand-written expectation). Capture
+  rendered and checked; sent to the owner with this batch.
+- Case rate shows count AND percentage everywhere (D-0051), one formatter.
+- Selection follows attachment on home load: a selected_repo not among the
+  attached repos moves to the first attached (with a notice) or clears, which
+  was the owner's "attached but cannot initialize" bug.
+- Attach dialog tables scroll inside the dialog so the buttons stay visible
+  under 24 discovered repos.
+- mcp-saturation renders as "1 note" (cyan), not "1 warn" (D-0050); the
+  owner's "why 1 warn on a successful init" question dissolves.
+- MCP unlock panel says the decision: engine's own reason sentence, the
+  threshold, and once unlocked the snippet plus where to paste it and which
+  brain.* tools the agent gets.
+- Role dialog: endpoint field auto-fills the catalog default on provider pick
+  and names the move (old to new); matching the default stores null so roles
+  follow the catalog; claude-code swaps endpoint for a sub-agent picker fed
+  by agentCatalog; zai shows the web-search checkbox; settings gained a
+  reset-endpoints-to-defaults action; verify flow keys on ping.ok (a CLI ping
+  has no HTTP status and must not render as FAILED).
+- Budget sweep chart restyled into the dither vocabulary (DitherBars,
+  chosen budget wears the pass texture, ceiling = case total).
+
+Mock engine and mock data mirror all of it (agentCatalog, claude-code,
+tools, ok-carrying pings) so every branch is testable offline.
+
+Still open, deliberately: the gym engineer driver (createEngineer) does not
+exist, so the claude-code per-task launch adapter waits for it (D-0048
+consequence); reinstall + owner re-test, then the release sequence
+(repo public, release + checksum, portfolio-mine redirect).
+
 ## 2026-08-17 16:45 - CORRECTION: the actionCode discrimination claim was wrong
 
 DATED CORRECTION striking a claim from the record and from commit

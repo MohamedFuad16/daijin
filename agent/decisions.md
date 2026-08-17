@@ -1099,3 +1099,79 @@ measure.
 
 Consequences: repositories between 12 and 24 cases now init and measure where
 they were refused. Their numbers are coarse and say so.
+
+## D-0047 (2026-08-17) rolePing is real: one token, the stored record is the return
+
+The deferral stub is gone. A ping is one real generation against the role's
+configured provider: chat-completions shape for openai/xai/zai/deepseek/ollama
+(with /v1 appended where the endpoint lacks it, and max_completion_tokens for
+openai's reasoning models), the messages shape for anthropic, and a headless
+claude CLI turn for claude-code.
+
+Three rulings inside it:
+
+1. THE RETURN IS THE STORED RECORD. The contract row froze four measurement
+   fields; the implementation returns the stored ping object (ok, at, hint
+   riding along), because the settings screen renders the stored record and a
+   return that differs from it is two truths for one fact. The contract row
+   is amended to say so.
+2. PROVIDER FAILURES RETURN, REFUSALS THROW. A 401 or a down host is a
+   completed, billed verification worth storing (ok: false, hint from the
+   provider's own sentence, never echoing a key). No-consent, no-provider and
+   unresolvable-pointer refuse before any request leaves the machine.
+3. ttftMs is the FIRST RESPONSE BODY BYTE, measured off the stream reader.
+   With max_tokens 1 that is effectively first-token time. claude-code has
+   no observable first token through -p json, so it carries null rather than
+   an invented number, and httpStatus null because there is no HTTP.
+
+recordRolePing enters state through its own method: patchSettings still
+refuses `ping` from clients, because a client writing its own ping is a client
+marking its roles verified without a provider answering.
+
+Verified by: cd engine && node --test test/role-ping.test.js (9 tests, mock
+HTTP servers and injected exec; no network).
+
+## D-0048 (2026-08-17) claude-code is a provider; sub-agents come from agentCatalog
+
+The owner runs roles through Claude Code sub-agents on their own login auth.
+Encoded as a sixth provider id (claude-code) rather than a parallel mechanism,
+because a role stores exactly one provider whatever transport answers it:
+keyRequired false, endpointDefault null (nothing to dial), models are the
+Claude models the CLI accepts. Which AGENT plays the role is a separate fact,
+stored per role as `agentRef` and discovered by the new zero-spend
+`agentCatalog` method scanning ~/.claude/agents and each attached repo's
+.claude/agents (frontmatter name/description/model; unreadable frontmatter
+lists the file under its filename rather than hiding it). The role dialog
+swaps the endpoint field for the sub-agent picker when claude-code is chosen.
+
+The gym's engineer driver still does not exist (createEngineer remains null);
+when it lands, the claude-code branch launches `claude -p` per task with the
+agent body as system prompt. Building that adapter now would be dead code
+behind a seam nothing calls, so it waits for the driver.
+
+## D-0049 (2026-08-17) Role tools are stored per role, offered by the catalog
+
+zai's web_search (whose quota is shared with Web Reader and Zread, disclosed
+in the catalog note) is stored as `role.tools: ["web_search"] | null`. The
+catalog's provider `tools` key is what a dialog may offer; the role's list is
+what the user turned on. Null never an empty list, same encoding rule as
+reasoningEffort. No call path consumes it yet beyond storage and display;
+the gym driver will thread it into the request's tools block.
+
+## D-0050 (2026-08-17) Advisories are not warnings in the init checklist
+
+mcp-saturation arrives at level warn so an unknowing client still surfaces
+it, but a checklist that counts it into "1 warn" on a successful init sends
+the owner hunting for a problem that does not exist (owner field round 5,
+verbatim). The TUI classes it as an ADVISORY: counted and rendered as
+"1 note" in cyan (the palette level no severity owns, same rule as
+kept-yours), never escalating the phase to warn status. The engine's wire
+level is unchanged; the classification is a client rendering decision keyed
+on the step name.
+
+## D-0051 (2026-08-17) The case rate shows count AND percentage together
+
+Owner override of the count-only display rule: "I want the accuracy rate to
+be shown." The count keeps the denominator honest (31 of 34), the percentage
+beside it (91.2%) is glanceable; neither alone. format_case_rate is the one
+formatter, so every surface moved together.

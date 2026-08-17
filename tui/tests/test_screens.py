@@ -1724,3 +1724,38 @@ def test_the_mode_and_ungraded_vocabularies_match_the_contract_both_ways():
     )
     for code in UNGRADED_NOTE:
         assert UNGRADED_NOTE[code].strip(), f"{code} has no sentence to show"
+
+
+def test_engine_status_never_shows_a_bare_question_mark():
+    """A lone ? reads as a rendering fault, not as a state.
+
+    It was also covering two different absences with one glyph, and only one of
+    them: .get(key, "?") fires when the KEY is missing and prints the word None
+    when the value is null, which is the shape the engine actually sends for a
+    field it has not measured.
+    """
+    from daijin_tui.screens.repo_home import RepoHomeScreen
+
+    for status in (
+        {},
+        {"ollama": {"reachable": False}, "db": {}, "spendGate": {}},
+        {"ollama": {"reachable": True, "endpoint": None, "embedder": None, "dimension": None},
+         "db": {"driver": None, "path": None, "sizeBytes": None, "indexDigest": None},
+         "spendGate": {"open": False, "path": None}},
+    ):
+        markup = RepoHomeScreen._engine_markup(status)
+        assert "?" not in markup, f"a bare question mark reached the user: {markup!r}"
+        assert "None" not in markup, f"a null printed as the word None: {markup!r}"
+        assert "not measured yet" in markup or "not reachable" in markup or "not reported" in markup
+
+    # And a fully reported status still shows the values themselves.
+    full = RepoHomeScreen._engine_markup({
+        "ollama": {"reachable": True, "endpoint": "http://localhost:11434",
+                   "embedder": "bge-m3", "dimension": 1024},
+        "db": {"driver": "sqlite", "path": "~/.daijin/store.db",
+               "sizeBytes": 4210, "indexDigest": "ab12cd"},
+        "spendGate": {"open": True, "path": ".daijin/GATE"},
+    })
+    for value in ("http://localhost:11434", "bge-m3", "1024", "sqlite", "4,210", "ab12cd"):
+        assert value in full, f"{value} was replaced by a placeholder"
+    assert "not measured" not in full and "not reported" not in full

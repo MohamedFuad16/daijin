@@ -137,18 +137,40 @@ class RepoHomeScreen(DaijinScreen):
             pass
 
     @staticmethod
-    def _engine_markup(status: dict[str, Any]) -> str:
+    def _said(value: Any, absent: str) -> str:
+        """A field the engine did not report, said in words.
+
+        A bare "?" reads as a rendering fault rather than as a state, and it
+        was doing double duty for two different absences: a key the response
+        omitted and a key whose value was null. The default in .get() only
+        covered the first, so a null printed the word None.
+        """
+        if value is None or value == "":
+            return f"[dim]{absent}[/dim]"
+        return str(value)
+
+    @classmethod
+    def _engine_markup(cls, status: dict[str, Any]) -> str:
         ollama = status.get("ollama") or {}
         db = status.get("db") or {}
         gate = status.get("spendGate") or {}
-        reach = "[green]reachable[/green]" if ollama.get("reachable") else "[red]unreachable[/red]"
+        reachable = bool(ollama.get("reachable"))
+        reach = "[green]reachable[/green]" if reachable else "[red]unreachable[/red]"
         gate_state = "[green]open[/green]" if gate.get("open") else "[yellow]blocked[/yellow]"
+        # An unreachable embedder has no endpoint or dimension to report, and
+        # saying so is different from saying the engine failed to tell us.
+        missing = "not reachable" if not reachable else "not reported"
+        size = db.get("sizeBytes")
         return (
-            f"ollama {reach} at {ollama.get('endpoint', '?')}, embedder {ollama.get('embedder', '?')} "
-            f"dim {ollama.get('dimension', '?')}\n"
-            f"store {db.get('driver', '?')} at {db.get('path', '?')}, "
-            f"{format_count(db.get('sizeBytes'))} bytes, index digest {db.get('indexDigest', '?')}\n"
-            f"spend gate {gate_state} at {gate.get('path', '?')}  "
+            f"ollama {reach} at {cls._said(ollama.get('endpoint'), missing)}, "
+            f"embedder {cls._said(ollama.get('embedder'), missing)} "
+            f"dim {cls._said(ollama.get('dimension'), missing)}\n"
+            f"store {cls._said(db.get('driver'), 'not reported')} at "
+            f"{cls._said(db.get('path'), 'no store yet')}, "
+            f"{format_count(size) if size is not None else '[dim]size not measured yet[/dim]'}"
+            f"{' bytes' if size is not None else ''}, "
+            f"index digest {cls._said(db.get('indexDigest'), 'not measured yet')}\n"
+            f"spend gate {gate_state} at {cls._said(gate.get('path'), 'no gate file')}  "
             f"[dim]observable here before anything is attempted[/dim]"
         )
 

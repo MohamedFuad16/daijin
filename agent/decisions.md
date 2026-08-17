@@ -1175,3 +1175,26 @@ Owner override of the count-only display rule: "I want the accuracy rate to
 be shown." The count keeps the denominator honest (31 of 34), the percentage
 beside it (91.2%) is glanceable; neither alone. format_case_rate is the one
 formatter, so every surface moved together.
+
+## D-0052 (2026-08-17) Key discovery is names, never values, and never a disk scan
+
+The owner asked for "scan the entire machine for keys". What shipped is a
+picker of POINTER SOURCES: *.key files under the state root's keys/
+directory, and environment variable NAMES matching a credential shape
+(API_KEY / TOKEN / SECRET). Names only; no value is read, rendered, or
+stored. A machine-wide filesystem walk hunting key-shaped files is refused
+on three grounds: it is slow, it is invasive, and a program that greps a
+disk for credentials is indistinguishable from malware to anyone watching
+it. The picker fills the visible field rather than saving behind it, so
+what you read is what you save.
+
+## D-0053 (2026-08-17) Step-event stamps are rebased by the client
+
+The engine stamps step events with epoch milliseconds (jobs.js now());
+the mock streams job-relative milliseconds; the elapsed column claimed
+seconds-into-the-job for both. Fixed in the CLIENT: EventLog rebases any
+first-stamp past 1e10 ms against the job's first event. The wire is
+unchanged because an epoch is the honest fact and relative time is a
+rendering; the threshold is unambiguous (no job runs 116 relative days, no
+epoch is below it). The alternative, changing the engine to emit relative
+stamps, would have broken any consumer doing its own wall-clock joins.

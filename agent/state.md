@@ -1,5 +1,44 @@
 # Daijin build state (authoritative)
 
+## 2026-08-17 20:55 - Owner round 6: placement, dialog anatomy, key discovery, epoch stamps
+
+Solo batch on the owner's sixth field test. TUI-only except records; suites
+green before commit.
+
+- The wordmark moves ABOVE the nav (a brand() slot in the base screen), and a
+  one-row DAIJIN word sits at the nav's left on every screen, logo-in-header
+  style. Both were the owner's own suggestions, taken literally.
+- The role dialog got anatomy: dim field labels, breathing room, notes that
+  wrap inside the frame, a scrolling field list under a fixed Save row. The
+  web-search checkbox caption shrank to two words with its shared-quota note
+  as its own wrapped line.
+- Key UX: a discovered-sources picker (saved *.key files under the state
+  root, credential-shaped env var NAMES; names only, never values, and
+  deliberately no machine-wide scan) fills the pointer field; the settings
+  notice now names the file a pasted key was saved to. The owner watched a
+  pasted key "turn into" a pointer with no explanation of where it went.
+- EventLog rebases epoch-millisecond stamps against the job's first event:
+  the real engine stamps wall-clock ms while the mock streams job-relative,
+  and the gates screen rendered "1786966347.08s" (owner screenshot). Both
+  dialects now read as seconds into the job; regression test pins both.
+- PHASE_VERBS learned the REAL engine's phase names (reindex, evidence,
+  adopt, scaffold, narrate, ingest, gates, goldset, floor, probe, classify,
+  clone): against the daemon only two mock-dialect names matched, so real
+  inits cycled "working, reading, writing" for their whole run, which is
+  what the owner watched. Defaults are now six varied words.
+- The Brain screen got a hero: status word (HEALTHY / BELOW FLOOR /
+  UNHEALTHY, derived from threshold + violations), the retrieval percentage
+  large, a gauge against the threshold, and the other numbers as a dim facts
+  line. UNHEALTHY on any violation whatever the rate says.
+
+Owner questions answered in chat, not code: the 429 was Z.ai's own
+"insufficient balance" answer (the ping worked; the account has no credit);
+100% on a small repo is the gauge saturating (that is exactly what the
+mcp-saturation note warns; the permuted control exists to measure it);
+veto/quarantine explained; the roles do NOTHING automatically today - no
+24/7 watcher, no self-healing auditor; they act only inside gym runs behind
+the owner gate.
+
 ## 2026-08-17 20:20 - Owner rounds 4 and 5, solo batch: rolePing real, sub-agent provider, seven UI fixes
 
 The owner closed all team agents ("i closed them so you fix these personally");

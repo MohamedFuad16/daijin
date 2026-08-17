@@ -178,9 +178,37 @@ class InitFeedScreen(DaijinScreen):
             f"[b][yellow]{event.get('phase', 'a phase')} blocked.[/yellow][/b]\n{detail}"
         )
         label = self.BLOCK_ACTIONS.get(str(code)) if code else None
-        button.display = bool(label)
+        # The code is necessary and NOT sufficient. Measured on a real daemon
+        # 2026-08-17: a standalone one-file repo and a nested subdirectory BOTH
+        # block with too-little-material, and the standalone one has no parent
+        # at all (repoAttach returns warning null). Offering "attach the
+        # repository root instead" there is an action that cannot be performed,
+        # which is the inert control wearing a label.
+        button.display = False
         if label:
-            button.label = label
+            self._offer_root_if_there_is_one(label)
+
+    @work
+    async def _offer_root_if_there_is_one(self, label: str) -> None:
+        """Show the action only when a root exists to attach.
+
+        analyze carries the same warning repoAttach does, so the root is read
+        rather than guessed, and a repo with no parent simply gets no button.
+        """
+        repo = getattr(self.app, "selected_repo", None)
+        if not repo:
+            return
+        try:
+            result = await self.client.call("analyze", {"repoPath": repo})
+        except Exception:  # noqa: BLE001 - no root known is not an error
+            return
+        root = ((result or {}).get("warning") or {}).get("repositoryRoot")
+        if not root or not self.is_mounted:
+            return
+        self.blocked_root = root
+        button = self.query_one("#init-attach-root", Button)
+        button.label = label
+        button.display = True
 
     def _render_events(self, batch: list[dict[str, Any]]) -> None:
         """Render a batch. A burst costs one repaint, not one per event."""
@@ -224,12 +252,19 @@ class InitFeedScreen(DaijinScreen):
             )
 
     async def _attach_root(self) -> None:
-        """Hand the user back to the home screen with the root to attach.
-
-        The root comes from repoAttach's warning, which the home screen already
-        holds, so this does not re-derive a path the engine worked out.
-        """
-        self.app.switch_mode("home")
+        """Attach the root the engine named, then hand the user to it."""
+        root = getattr(self, "blocked_root", None)
+        if not root:
+            return
+        try:
+            await self.client.call("repoAttach", {"repoPath": root})
+        except RpcError as error:
+            self.report_rpc_error(error)
+            self._say(error.hint, "error")
+            return
+        self.app.selected_repo = root
+        self._say(f"Attached {root}. Start init again from here.")
+        self.query_one("#init-attach-root", Button).display = False
 
     async def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "init-attach-root":

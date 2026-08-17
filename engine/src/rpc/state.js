@@ -211,6 +211,24 @@ export class EngineState {
     if (!stored) return structuredClone(DEFAULT_SETTINGS);
     const merged = { ...structuredClone(DEFAULT_SETTINGS), ...stored };
     merged.roles = normalizeRoles(merged.roles);
+    // EVERY OBJECT-VALUED SECTION GETS ITS DEFAULTS BACK, for the same reason roles do and
+    // as the same defect: the spread above is SHALLOW, so a stored `retrieval` replaces the
+    // default one entirely rather than filling in around it. A settings.json written before
+    // `embeddingDimension` existed therefore lost that default, and serveStatus sent
+    // `dimension: null` on exactly the machines with the longest history: aged state, which
+    // is the only state a real owner has.
+    //
+    // Done for the CLASS rather than for retrieval alone. Three other sections have the
+    // same shape, and fixing the one with a visible symptom would leave the next one to be
+    // found by whoever adds a key to `storage` or `charts`.
+    //
+    // ARRAYS ARE NOT MERGED, deliberately: a stored list REPLACES its default, because a
+    // list is data rather than a shape and a merge cannot express removing an entry. The
+    // owner who deleted a scan root must not have it handed back.
+    for (const [key, value] of Object.entries(DEFAULT_SETTINGS)) {
+      if (Array.isArray(value) || value === null || typeof value !== 'object') continue;
+      merged[key] = { ...structuredClone(value), ...(merged[key] || {}) };
+    }
     return merged;
   }
 

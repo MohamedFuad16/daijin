@@ -118,3 +118,38 @@ test('DEFAULT_SETTINGS has no preset and every role carries the new trio', () =>
     assert.equal(role.reasoningEffort, null);
   }
 });
+
+test('a settings file predating a key inside retrieval still gets that default back', async () => {
+  // THE SHALLOW MERGE, one level up from the roles hole and the same defect. A stored
+  // `retrieval` used to replace the default outright, so a file written before
+  // embeddingDimension existed lost it, and the wire carried dimension: null on the
+  // machines with the longest history. Aged state is the only state a real owner has.
+  const state = await stateWith({ retrieval: { tokenBudget: 6000, k: 8 } });
+  const settings = await state.settings();
+
+  assert.equal(settings.retrieval.tokenBudget, 6000, 'the stored value wins');
+  assert.equal(settings.retrieval.embeddingDimension, DEFAULT_SETTINGS.retrieval.embeddingDimension,
+    'and a key the file predates comes back from the defaults');
+  assert.equal(settings.retrieval.embeddingModel, DEFAULT_SETTINGS.retrieval.embeddingModel);
+  assert.deepEqual(Object.keys(settings.retrieval).sort(), Object.keys(DEFAULT_SETTINGS.retrieval).sort());
+});
+
+test('every object-valued section is filled in, not just retrieval', async () => {
+  // Fixed for the CLASS. Three other sections have the same shape, and repairing only the
+  // one with a visible symptom leaves the next for whoever adds a key to storage or charts.
+  const state = await stateWith({ retrieval: {}, storage: {}, charts: {}, spendGate: {} });
+  const settings = await state.settings();
+  for (const [key, value] of Object.entries(DEFAULT_SETTINGS)) {
+    if (Array.isArray(value) || typeof value !== 'object' || value === null) continue;
+    assert.deepEqual(Object.keys(settings[key]).sort(), Object.keys(value).sort(),
+      `${key} lost its defaults to a shallow merge`);
+  }
+});
+
+test('arrays are REPLACED by the stored file, never merged back to their defaults', async () => {
+  // The other half of the rule, and the one a careless fix breaks: a list is data, not a
+  // shape. An owner who removed a scan root must not be handed it back on the next read.
+  const state = await stateWith({ repoScanRoots: ['/only/this/one'] });
+  const settings = await state.settings();
+  assert.deepEqual(settings.repoScanRoots, ['/only/this/one']);
+});

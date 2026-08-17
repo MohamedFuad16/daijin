@@ -2017,8 +2017,14 @@ async def test_a_pasted_key_is_refused_before_it_is_sent():
         screen.query_one("#role-keyref", Input).value = "sk-ant-abc123def456"
         await settle(pilot)
         note = text_of(screen.query_one("#role-key-note", Static))
-        assert "does not look like a pointer" in note
-        assert "never crosses the wire" in note
+        # The ENGINE's sentence now, so this asserts the PROPERTY rather than
+        # my wording: it explains what a pointer is, it never claims the value
+        # IS a key (a claim the shape whitelist cannot support), and above all
+        # it does not echo what was typed.
+        assert "never the key" in note, f"the refusal does not explain itself: {note!r}"
+        assert "sk-ant-abc123def456" not in note, "the warning echoed the pasted value"
+        for overclaim in ("looks like a key", "that is a key", "is a secret"):
+            assert overclaim not in note
 
         # And Save does not dismiss with it.
         await pilot.click("#role-save")

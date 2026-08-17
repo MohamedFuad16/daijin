@@ -1198,3 +1198,30 @@ unchanged because an epoch is the honest fact and relative time is a
 rendering; the threshold is unambiguous (no job runs 116 relative days, no
 epoch is below it). The alternative, changing the engine to emit relative
 stamps, would have broken any consumer doing its own wall-clock joins.
+
+## D-0054 (2026-08-17) The watcher is universal; the auditor's hand is a closed catalog
+
+Owner ruling, field round 7: watcher and auditor watch the whole tool, not
+the gym. Mechanised as systemCheck (zero-spend sweep, board-shaped findings,
+computed fresh and never stored - a stored finding keeps reporting a fixed
+problem) and systemFix (confirm: true always; the catalog is CLOSED in
+watch.js so a fix runs only commands or values written in this codebase).
+The severity of leaving the catalog open is concrete: an unavailableHint is
+repo-authored text, and executing anything derived from it hands every
+attached repo a shell on the owner's machine. Detection selects a fix by
+pattern; the fix's command is ours. Paid narration (watcher summaries,
+auditor prioritisation) can ride on these rows later; detection itself must
+stay free or it will never run. No background loop: the sweep rides every
+board load, and action requires the owner's click.
+
+## D-0055 (2026-08-17) The Z.ai realm trap is a detected pattern, not a support answer
+
+Z.ai bills api/paas/v4 (pay-as-you-go) and api/coding/paas/v4 (GLM Coding
+Plan) separately; a key subscribed on one answers 429 "insufficient balance"
+on the other, which reads exactly like a broken key. The platform's own
+driver (ZAI_CODING_BASE_URL) proved the owner's key lives on the coding
+realm. Ruled: the catalog default stays api/paas/v4 (the vendor's documented
+default; the coding realm 404s for non-subscribers), the catalog note names
+both realms, and the watcher flags zai + 429 + default-endpoint as the trap
+with the endpoint fix attached. Diagnosed from the platform's committed
+config at zero spend; no provider call was made to confirm.

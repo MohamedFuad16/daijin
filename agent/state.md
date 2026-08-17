@@ -1,5 +1,48 @@
 # Daijin build state (authoritative)
 
+## 2026-08-17 21:45 - Owner round 7: the universal watcher, the zai realm trap, pnpm
+
+Three owner directives, all landed solo.
+
+THE ZAI 429 WAS DIAGNOSED, NOT GUESSED. The owner insisted the key works, and
+they were right: the platform's own zai driver dials
+https://api.z.ai/api/coding/paas/v4 (ZAI_CODING_BASE_URL,
+platform/exam/engineer-provider.js) - the GLM CODING PLAN realm. Daijin's
+catalog default is api/paas/v4, the pay-as-you-go realm, where the same key
+has no package: 429 "insufficient balance". Two billing realms, one key,
+wrong door. Fixed three ways: the owner's engineer endpoint patched to the
+coding realm (settings.json, atomic replace); the catalog's zai note now
+documents the realms; and the watcher detects the trap pattern (zai + 429 +
+catalog-default endpoint) and offers the endpoint fix.
+
+THE WATCHER AND AUDITOR ARE UNIVERSAL (owner ruling verbatim: "they watch
+the entire tool daijin itself not just the gym"). New engine surface:
+- systemCheck: zero-spend mechanical sweep over the whole product - embedder
+  reachability, spend gate, brainless repos, every repo's gates file
+  (unavailable gates, zero-signal summaries), role verifications, the realm
+  trap. Findings are BOARD-SHAPED rows (source watcher), computed fresh per
+  call, never stored.
+- systemFix: the auditor's hand under two locks - confirm: true on every
+  call, and a CLOSED catalog (watch.js): install-pnpm, install-yarn (both
+  npm -g, commands written in this codebase), zai-coding-endpoint (patches
+  one role to a value written in this codebase). Nothing from a repo's
+  gates.yaml or a provider response is ever executed - an open catalog would
+  let any repo write a shell command into a button the owner is invited to
+  press.
+The board runs the sweep on every load and renders fixes as a button behind
+a confirmation dialog. Counted apart from stored rows ("9 of 6 shown" is
+what merging the denominators reads like).
+
+pnpm 11.22.0 installed globally at the owner's explicit request - exactly
+the finding-to-fix path the watcher now automates with consent.
+
+Autonomy boundary held: the watcher DETECTS mechanically for free; the
+auditor ACTS only through the closed catalog and only on an explicit
+confirmation. No background daemon loop, no unattended installs.
+
+Suites: engine 747 pass, TUI green, both exit-code checked. The owner's
+running install predates round 6; told to pull + reinstall.
+
 ## 2026-08-17 20:55 - Owner round 6: placement, dialog anatomy, key discovery, epoch stamps
 
 Solo batch on the owner's sixth field test. TUI-only except records; suites

@@ -10,6 +10,7 @@ from textual.screen import Screen
 from textual.widgets import Button, Footer, Header, Static
 
 from ..rpc import RpcError
+from ..widgets.activity import EventLog
 from .dialogs import SpendConfirmScreen
 
 # Order matches the number keys, so 1 through 8 and the mouse reach the same
@@ -76,6 +77,9 @@ class DaijinScreen(Screen):
         ("7", "goto('board')", "Board"),
         ("8", "goto('settings')", "Settings"),
         ("ctrl+r", "reload", "Reload"),
+        # Most tokens in the step stream are paths, so the truncation the
+        # columns need is undoable rather than a policy the reader must accept.
+        ("ctrl+t", "toggle_detail_truncation", "Full paths"),
     ]
 
     def compose(self) -> ComposeResult:
@@ -85,6 +89,34 @@ class DaijinScreen(Screen):
         with VerticalScroll(id="screen-body"):
             yield from self.content()
         yield Footer()
+
+    def action_toggle_detail_truncation(self) -> None:
+        """Show step-event details whole, or back inside their column.
+
+        Applies to the rows ALREADY on screen, because a setting that only
+        affected future events would leave the path the reader is looking at
+        exactly as shortened as it was.
+        """
+        logs = list(self.query(EventLog))
+        if not logs:
+            self._say("This screen has no step-event stream to expand.")
+            return
+        wanted = not logs[0].truncate
+        for log in logs:
+            log.set_truncate(wanted)
+        self._say(
+            "Step details shortened to fit their column again."
+            if wanted
+            else "Step details shown in full; long paths scroll rather than shorten."
+        )
+
+    def _say(self, text: str, tone: str = "info") -> None:
+        """Put a line in this screen's banner, if it has one."""
+        if not self.notice_id:
+            self.app.notify(text)
+            return
+        for banner in self.query(self.notice_id):
+            banner.set_notice(text, tone)
 
     def _heading_markup(self) -> str:
         line = f"[b]{self.heading}[/b]"

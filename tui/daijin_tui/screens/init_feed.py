@@ -25,6 +25,7 @@ MODE_OPTIONS = [
 
 class InitFeedScreen(DaijinScreen):
     mode_name = "init"
+    notice_id = "#init-notice"
     heading = "Initialize brain"
     subheading = "phase checklist and the raw step-event stream"
 

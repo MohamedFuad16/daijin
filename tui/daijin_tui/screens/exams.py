@@ -133,6 +133,7 @@ def attempt_cap(attempt: dict[str, Any]) -> int | None:
 
 class ExamsScreen(DaijinScreen):
     mode_name = "exams"
+    notice_id = "#exam-notice"
     heading = "Exams"
     subheading = "bank and draft queue, five axis radar, per attempt token bars"
 

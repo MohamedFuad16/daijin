@@ -436,3 +436,18 @@ def test_the_widget_does_not_re_wrap_what_the_formatter_already_laid_out():
     assert log.wrap is False, (
         "the widget wraps as well as the formatter, so the two can disagree"
     )
+
+
+def test_truncation_is_a_default_the_reader_can_undo():
+    from daijin_tui.widgets.activity import EventLog
+
+    shortened = EventLog.format_event(LONG_EVENT, 100, truncate=True)
+    whole = EventLog.format_event(LONG_EVENT, 100, truncate=False)
+    assert "..." in shortened, "the sample does not truncate, so this checks nothing"
+    assert "..." not in whole, "the untruncated form still shortened a token"
+    full_path = "/Users/owner/code/orchard-web/src/features/upload/queue/ordering-guarantee.ts"
+    assert full_path in whole, "the whole path is not recoverable"
+    assert full_path not in shortened
+    # Untruncated rows overrun rather than breaking the path across lines,
+    # because breaking it is what the truncation existed to prevent.
+    assert any(len(line) > 100 for line in whole.split("\n"))

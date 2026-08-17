@@ -1759,3 +1759,95 @@ def test_engine_status_never_shows_a_bare_question_mark():
     for value in ("http://localhost:11434", "bge-m3", "1024", "sqlite", "4,210", "ab12cd"):
         assert value in full, f"{value} was replaced by a placeholder"
     assert "not measured" not in full and "not reported" not in full
+
+
+@run_async
+async def test_the_full_path_toggle_applies_to_rows_already_on_screen():
+    """A setting that only changed future rows would leave the path being read
+    exactly as shortened as it was."""
+    from daijin_tui.widgets import EventLog
+
+    long_detail = (
+        "reading /Users/owner/code/orchard-web/src/features/upload/queue/"
+        "ordering-guarantee.ts against the baseline"
+    )
+    # Narrow enough that the path genuinely does not fit its column. At the
+    # default test width it does, and the toggle would have nothing to undo.
+    async with running_app(size=(100, 40)) as (app, pilot):
+        await goto(pilot, "2")
+        log = app.screen.query_one("#init-events", EventLog)
+        log.append_event({"ts": 10, "jobId": "j", "phase": "brain", "step": "embed",
+                          "detail": long_detail, "level": "info"})
+        await settle(pilot)
+        assert log.truncate is True
+
+        def rendered(widget) -> str:
+            return "\n".join(
+                "".join(segment.text for segment in strip) for strip in widget.lines
+            )
+
+        before = rendered(log)
+        assert "..." in before, "the sample did not truncate, so the toggle proves nothing"
+
+        await pilot.press("ctrl+t")
+        await settle(pilot)
+        assert log.truncate is False, "the toggle did not fire"
+        assert log._events, "the events were dropped, so nothing could be redrawn"
+        # The FLAG is not the point. Asserting it alone passes for a toggle
+        # that changes a boolean and redraws nothing.
+        after = rendered(log)
+        assert "ordering-guarantee.ts" in after, f"the rows were not redrawn: {after[:200]!r}"
+        assert after != before, "the toggle changed a flag and left the screen alone"
+        notice = text_of(app.screen.query_one("#init-notice", Banner))
+        assert "in full" in notice, f"the toggle said nothing: {notice!r}"
+
+        await pilot.press("ctrl+t")
+        await settle(pilot)
+        assert log.truncate is True
+        assert "shortened" in text_of(app.screen.query_one("#init-notice", Banner))
+
+
+@run_async
+async def test_clearing_the_log_forgets_its_events_but_redrawing_does_not():
+    """The two look alike and one of them would empty the log on a toggle."""
+    from daijin_tui.widgets import EventLog
+
+    async with running_app() as (app, pilot):
+        await goto(pilot, "2")
+        log = app.screen.query_one("#init-events", EventLog)
+        log.append_event({"ts": 1, "jobId": "j", "phase": "brain", "step": "embed",
+                          "detail": "x", "level": "info"})
+        await settle(pilot)
+        log.set_truncate(False)
+        assert len(log._events) == 1, "a redraw dropped the events it was redrawing"
+        log.clear()
+        assert log._events == [], "clear left events behind for the next job to inherit"
+
+
+def test_every_screen_with_a_banner_declares_which_banner_is_its_notice():
+    """The base class silently drops a pending notice when notice_id is unset.
+
+    Five screens had a Banner and no declaration, so set_pending_notice on any
+    of them would have done nothing at all and said nothing about it. Only two
+    screens used it, so nothing was being lost yet; it was a trap laid for the
+    next caller, and the toggle added in this change walked straight into it.
+    """
+    import inspect
+
+    from daijin_tui import screens as package
+    from daijin_tui.screens.base import DaijinScreen
+
+    for name in dir(package):
+        screen = getattr(package, name)
+        if not (inspect.isclass(screen) and issubclass(screen, DaijinScreen)):
+            continue
+        if screen is DaijinScreen:
+            continue
+        source = inspect.getsource(screen)
+        if "Banner(" not in source:
+            continue
+        assert screen.notice_id, (
+            f"{name} composes a Banner but declares no notice_id, so every "
+            f"pending notice it sets is discarded in silence"
+        )
+        assert screen.notice_id.startswith("#"), f"{name}'s notice_id is not a selector"

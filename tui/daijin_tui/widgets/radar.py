@@ -15,6 +15,7 @@ from __future__ import annotations
 import math
 from typing import Any, Sequence
 
+from textual.message import Message
 from textual.widgets import Static
 
 BRAILLE_BASE = 0x2800
@@ -196,8 +197,20 @@ class RadarChart(Static):
         self.set_mode("bars" if self.mode == "radar" else "radar")
         return self.mode
 
+    class ModeChanged(Message):
+        """The chart changed mode from a mouse click.
+
+        The keyboard path persists through the screen, so a click that only
+        flipped the local widget reverted on the next reload. Three comments in
+        this file claimed both input paths were equal; only the code decided.
+        """
+
+        def __init__(self, mode: str) -> None:
+            super().__init__()
+            self.mode = mode
+
     def on_click(self) -> None:
-        self.toggle_mode()
+        self.post_message(self.ModeChanged(self.toggle_mode()))
 
     @property
     def lines(self) -> list[str]:

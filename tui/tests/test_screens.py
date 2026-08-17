@@ -34,6 +34,23 @@ MODE_KEYS = list("12345678")
 def text_of(widget) -> str:
     return str(widget.render())
 
+async def pick_an_exam(app, pilot, index: int = 0) -> str:
+    """Choose an exam before starting a cycle.
+
+    The gym used to hard-code mock_data.EXAMS[0], so the spend dialog named a
+    fixture exam whatever the user had in mind. Now the choice is the user's
+    and these tests have to make it, which is the point rather than a chore.
+    """
+    from textual.widgets import Select
+
+    select = app.screen.query_one("#gym-exam", Select)
+    options = [v for _, v in select._options if isinstance(v, str) and v]
+    assert options, "the exam picker is empty, so no cycle can be started"
+    select.value = options[index]
+    await settle(pilot)
+    return options[index]
+
+
 
 # Spend discipline, checked at the screen layer -----------------------------
 
@@ -980,6 +997,7 @@ async def test_a_gym_cycle_that_broke_after_spending_is_not_called_complete():
     async with running_app(gate_open=True) as (app, pilot):
         app.client.engine.fail_next_cycle()
         await goto(pilot, "5")
+        await pick_an_exam(app, pilot)
         await pilot.click("#gym-start")
         await settle(pilot)
         if isinstance(app.screen, SpendConfirmScreen):
@@ -998,6 +1016,7 @@ async def test_a_gym_cycle_that_broke_after_spending_is_not_called_complete():
 async def test_gym_shows_the_spend_gate_refusal_hint_verbatim():
     async with running_app(gate_open=False) as (app, pilot):
         await goto(pilot, "5")
+        await pick_an_exam(app, pilot)
         await pilot.click("#gym-start")
         await settle(pilot)
         assert isinstance(app.screen, SpendConfirmScreen), "a cycle is confirmed before it is attempted"
@@ -1013,6 +1032,7 @@ async def test_gym_shows_the_spend_gate_refusal_hint_verbatim():
 async def test_gym_live_stream_fills_the_checklist_when_the_gate_is_open():
     async with running_app(gate_open=True) as (app, pilot):
         await goto(pilot, "5")
+        await pick_an_exam(app, pilot)
         await pilot.click("#gym-start")
         await settle(pilot)
         assert isinstance(app.screen, SpendConfirmScreen)
@@ -1030,6 +1050,7 @@ async def test_gym_live_stream_fills_the_checklist_when_the_gate_is_open():
 async def test_declining_the_gym_dialog_never_reaches_the_engine():
     async with running_app(gate_open=True) as (app, pilot):
         await goto(pilot, "5")
+        await pick_an_exam(app, pilot)
         await pilot.click("#gym-start")
         await settle(pilot)
         await pilot.click("#spend-cancel")
@@ -1327,6 +1348,7 @@ async def test_the_client_always_echoes_the_estimate_it_displayed():
 async def test_the_gym_echoes_its_estimate_too():
     async with running_app(gate_open=True) as (app, pilot):
         await goto(pilot, "5")
+        await pick_an_exam(app, pilot)
         await pilot.click("#gym-start")
         await settle(pilot)
         await pilot.click("#spend-confirm")

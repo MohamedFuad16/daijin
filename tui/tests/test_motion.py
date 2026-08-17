@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 from conftest import run_async, running_app, settle
+from test_screens import pick_an_exam
 
 from daijin_tui import motion as M
 from daijin_tui.stream import FLUSH_INTERVAL, StreamCoalescer
@@ -201,6 +202,7 @@ async def test_the_token_gauge_climbs_during_a_cycle_and_lands_on_the_value():
         await settle(pilot)
         await app.screen.wait_for_load()
         app.motion.invocations = 0
+        await pick_an_exam(app, pilot)
         await pilot.click("#gym-start")
         await settle(pilot)
         await pilot.click("#spend-confirm")
@@ -227,6 +229,7 @@ async def test_with_motion_off_the_gauge_still_lands_on_the_value():
         await app.screen.wait_for_load()
         app.motion.set_mode(M.OFF)
         app.motion.invocations = 0
+        await pick_an_exam(app, pilot)
         await pilot.click("#gym-start")
         await settle(pilot)
         await pilot.click("#spend-confirm")

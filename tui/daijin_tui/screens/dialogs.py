@@ -150,6 +150,14 @@ class GatesFileEditScreen(ModalScreen[str | None]):
                 yield Button("Save", id="gates-file-save", variant="primary")
                 yield Button("Cancel", id="gates-file-cancel")
 
+    def action_cancel(self) -> None:
+        """Escape is bound in BINDINGS; without this it was a dead key.
+
+        All three sibling modals implement it, so the gates editor was the only
+        place the same keystroke did nothing.
+        """
+        self.dismiss(None)
+
     def on_button_pressed(self, event: Button.Pressed) -> None:
         event.stop()
         if event.button.id == "gates-file-save":

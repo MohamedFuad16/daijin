@@ -16,11 +16,18 @@ from ..widgets import Banner, EventLog, Gauge, PhaseChecklist, SectionTitle
 from .base import DaijinScreen
 from .dialogs import budget_estimate_lines
 
+# SHORT labels in the control, full sentences in the note beside it: a Select
+# is one row tall, and the long forms wrapped inside it (owner field round 8).
 MODE_OPTIONS = [
-    ("Ingest the existing agent folder as is", "ingest"),
-    ("Layer 1 only, deterministic, no key, no spend", "layer1"),
-    ("Layer 1 then Layer 2 narration, SPENDS on the engineer key", "layer1+layer2"),
+    ("Ingest existing brain", "ingest"),
+    ("Layer 1 (free)", "layer1"),
+    ("Layer 1 + 2 (SPENDS)", "layer1+layer2"),
 ]
+MODE_NOTES = {
+    "ingest": "Adopt the existing agent folder as the brain, as is.",
+    "layer1": "Deterministic build and measurement. No key, no spend.",
+    "layer1+layer2": "Layer 1, then LLM narration on the engineer key. Spend-gated and confirmed first.",
+}
 
 
 class InitFeedScreen(DaijinScreen):
@@ -37,17 +44,18 @@ class InitFeedScreen(DaijinScreen):
 
     def content(self) -> Iterable[Any]:
         yield Banner("Pick a repo on the repo home, then start.", tone="info", id="init-notice")
+        yield Static("mode", classes="field-label")
         with Horizontal(id="init-controls"):
             yield Select(MODE_OPTIONS, value="layer1", id="init-mode", allow_blank=False)
             yield Button("Start init", id="init-start", variant="primary")
             yield Button("Cancel job", id="init-cancel")
             yield Button("Clear", id="init-clear")
-        with Horizontal(id="init-scope-row"):
-            yield Static("Layer 2 scope", classes="kv-label")
-            yield Input(
-                placeholder="optional, comma separated areas, used by the sub-75 path",
-                id="init-scope",
-            )
+        yield Static(MODE_NOTES["layer1"], id="init-mode-note", classes="field-note", markup=True)
+        yield Static("Layer 2 scope", classes="field-label")
+        yield Input(
+            placeholder="optional, comma separated areas, used by the sub-75 path",
+            id="init-scope",
+        )
         # A block is the outcome the field test hit, and it used to be one
         # line in a scrolling log. It gets its own panel, above the stream.
         yield Static("", id="init-blocked", markup=True)
@@ -68,6 +76,12 @@ class InitFeedScreen(DaijinScreen):
         )
         yield SectionTitle("Step events", "the same jsonl stream the gym and gates views read")
         yield EventLog(id="init-events")
+
+    def on_select_changed(self, event: Any) -> None:
+        if getattr(event.select, "id", "") == "init-mode":
+            event.stop()
+            note = MODE_NOTES.get(str(event.value), "")
+            self.query_one("#init-mode-note", Static).update(note)
 
     def on_mount(self) -> None:
         # Hidden until something blocks: an empty panel and a dead button above

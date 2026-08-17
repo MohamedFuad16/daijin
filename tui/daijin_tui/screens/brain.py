@@ -65,8 +65,18 @@ class BrainScreen(DaijinScreen):
         yield Static("", id="brain-hero-facts", markup=True)
         with TabbedContent(id="brain-tabs"):
             with TabPane("Retrieval", id="brain-tab-retrieval"):
-                yield SectionTitle("Measured floor", "from retrievalScore, re-derived, not read off a filename")
-                yield Static("", id="floor-summary", markup=True)
+                # The floor numbers live in the HERO now; repeating them here
+                # as a second block was the duplication the owner read twice
+                # (field round 8). What this tab adds is the control the hero
+                # cannot carry: choosing the budget.
+                yield SectionTitle(
+                    "Token budget",
+                    "the recommendation comes from the sweep below; re-measuring applies and stores your choice",
+                )
+                with Horizontal(id="budget-row"):
+                    yield Select([], id="brain-budget", prompt="budget", allow_blank=True)
+                    yield Button("Re-measure at this budget", id="brain-remeasure", variant="primary")
+                yield Static("", id="brain-budget-note", markup=True, classes="field-note")
                 yield SectionTitle(
                     "Budget sweep",
                     "one measurement across budgets, not a trend over time; the card sparkline is the trend",
@@ -118,7 +128,7 @@ class BrainScreen(DaijinScreen):
         repo = getattr(self.app, "selected_repo", None)
         if not repo:
             notice.set_notice("No repo selected. Press 1 for the repo home and pick one.", "warn")
-            self.query_one("#floor-summary", Static).update("[dim]no repo selected[/dim]")
+            self.query_one("#brain-hero", Static).update("[dim]no repo selected[/dim]")
             return
         notice.set_notice(f"Serving {repo}.", "info")
         # Four independent panels, each already owning its own error handling,
@@ -144,24 +154,17 @@ class BrainScreen(DaijinScreen):
                 table.add_columns(*columns)
 
     async def _load_floor(self, repo: str) -> None:
-        summary = self.query_one("#floor-summary", Static)
         try:
             score = await self.client.call("retrievalScore", {"repoPath": repo, "sweep": True})
         except RpcError as error:
-            summary.update(f"[yellow]{error.hint}[/yellow]")
+            self.query_one("#brain-hero", Static).update(f"[yellow]{error.hint}[/yellow]")
             return
         self.score = score
         case_rate = score.get("caseRate")
         value = case_rate_value(case_rate)
         tone = "green" if (value or 0) >= MCP_THRESHOLD else "yellow"
         self._paint_hero(score, value, tone)
-        summary.update(
-            f"case rate [{tone}]{format_case_rate(case_rate)}[/{tone}]  "
-            f"[dim]ratio {format_ratio(value)}, threshold {MCP_THRESHOLD}[/dim]\n"
-            f"MRR {score.get('mrr')} [dim]recorded for movement only, never a floor[/dim]\n"
-            f"violations {score.get('violations')} [dim]enforced floor, must-not pairs[/dim]\n"
-            f"chosen budget {score.get('chosenBudget')}  [dim]{score.get('rationale', '')}[/dim]"
-        )
+        self._fill_budget_control(score)
         table = self.query_one("#percase-table", DataTable)
         table.clear()
         for row in score.get("perCase", []):
@@ -200,6 +203,48 @@ class BrainScreen(DaijinScreen):
                 ceiling=total or None,
                 ceiling_label=f"ceiling {total} cases; chosen budget carries the solid texture",
             )
+
+    def _fill_budget_control(self, score: dict[str, Any]) -> None:
+        select = self.query_one("#brain-budget", Select)
+        note = self.query_one("#brain-budget-note", Static)
+        chosen = score.get("chosenBudget")
+        budgets = [point.get("budget") for point in score.get("budgetSweep") or [] if point.get("budget")]
+        if not budgets and chosen:
+            budgets = [chosen]
+        select.set_options([
+            (f"{budget} (recommended)" if budget == chosen else str(budget), budget)
+            for budget in budgets
+        ])
+        if chosen in budgets:
+            select.value = chosen
+        note.update(f"[dim]{score.get('rationale', '')}[/dim]" if score.get("rationale") else "")
+
+    @work
+    async def remeasure_at_budget(self) -> None:
+        repo = getattr(self.app, "selected_repo", None)
+        notice = self.query_one("#brain-notice", Banner)
+        budget = self.query_one("#brain-budget", Select).value
+        if not repo or budget is Select.NULL or not budget:
+            notice.set_notice("Pick a budget first.", "warn")
+            return
+        notice.set_notice(f"Re-measuring at {budget} tokens. Zero spend; the local embedder does the work.", "info")
+        try:
+            score = await self.client.call("retrievalScore", {"repoPath": repo, "tokenBudget": int(budget)})
+            # STORED, so serving actually uses it: a re-measure that only
+            # repainted a screen would leave retrieval on the old budget.
+            await self.client.call("settingsSet", {"patch": {"retrieval": {"tokenBudget": int(budget)}}})
+        except RpcError as error:
+            self.report_rpc_error(error)
+            notice.set_notice(error.hint, "error")
+            return
+        self.score = score
+        value = case_rate_value(score.get("caseRate"))
+        self._paint_hero(score, value, "green" if (value or 0) >= MCP_THRESHOLD else "yellow")
+        notice.set_notice(
+            f"Measured and stored: {budget} tokens is now the serving budget. "
+            f"Case rate {format_case_rate(score.get('caseRate'))}.",
+            "info",
+        )
 
     def _paint_hero(self, score: dict[str, Any], value: float | None, tone: str) -> None:
         """Status word and retrieval rate, large; the other numbers as facts.
@@ -244,8 +289,8 @@ class BrainScreen(DaijinScreen):
         )
         measured = f"   measured {score['at']}" if score.get("at") else ""
         facts.update(
-            f"[dim]MRR {score.get('mrr')}   violations {violations}   "
-            f"budget {score.get('chosenBudget')}{measured}[/dim]"
+            f"[dim]MRR {score.get('mrr')} (movement only, never a floor)   "
+            f"violations {violations}   budget {score.get('chosenBudget')}{measured}[/dim]"
         )
 
     async def _load_mcp(self, repo: str) -> None:
@@ -372,6 +417,9 @@ class BrainScreen(DaijinScreen):
         if event.button.id == "search-go":
             event.stop()
             await self.run_search()
+        elif event.button.id == "brain-remeasure":
+            event.stop()
+            self.remeasure_at_budget()
         elif event.button.id == "inventory-apply":
             event.stop()
             repo = getattr(self.app, "selected_repo", None)

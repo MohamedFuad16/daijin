@@ -125,14 +125,22 @@ def test_phase_checklist_appends_a_phase_the_client_did_not_know_about():
     assert checklist.state["surprise"]["status"] == "active"
 
 
-def test_phase_checklist_snapshot_shows_the_spinner_and_the_counts():
+def test_phase_checklist_snapshot_shows_the_spinner_and_backs_an_empty_detail_with_counts():
+    """Counts BACK UP an empty detail; beside a detail they repeated the same
+    numbers in a second dialect (owner round 8). The raw stream keeps both."""
     checklist = PhaseChecklist([("alpha", "Alpha")], clock=lambda: 0.0)
-    checklist.apply_event({"jobId": "j", "phase": "alpha", "step": "s", "detail": "reading", "counts": {"units": 18}, "level": "info"})
+    checklist.apply_event({"jobId": "j", "phase": "alpha", "step": "s", "detail": "", "counts": {"units": 18}, "level": "info"})
     lines = checklist.snapshot_lines()
     assert "phase 0/1" in lines[0]
     assert "Alpha" in lines[1]
     assert "units 18" in lines[1]
     assert lines[1][0] in SPINNER_FRAMES
+
+    # With a detail present, the counts stay out of the checklist row.
+    checklist.apply_event({"jobId": "j", "phase": "alpha", "step": "s", "detail": "18 units written", "counts": {"units": 18}, "level": "info"})
+    row = checklist.snapshot_lines()[1]
+    assert "18 units written" in row
+    assert "units 18" not in row
 
 
 def test_phase_checklist_reset_clears_every_phase():
@@ -434,7 +442,9 @@ def test_the_formatter_degrades_rather_than_producing_one_word_per_line():
         assert rendered, f"width {width} produced nothing"
         if width > 0:
             longest = max(len(line) for line in rendered.split("\n"))
-            assert longest <= max(width, MIN_DETAIL_WIDTH + 40), (
+            # Head is stamp(9) + gap(2) + phase(16) + step(22) = 49 columns
+            # since the step column widened to stop fusing with the detail.
+            assert longest <= max(width, MIN_DETAIL_WIDTH + 49), (
                 f"width {width} produced a {longest} column line"
             )
 

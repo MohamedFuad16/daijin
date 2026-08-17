@@ -353,28 +353,12 @@ def test_the_header_degrade_ladder_is_full_mark_then_word_then_nothing():
 
 
 @run_async
-async def test_the_home_screen_walks_the_mark_ladder_with_its_own_size():
-    # Roomy: the approved full letterforms are the header.
+async def test_the_home_screen_has_no_drawn_mark_and_the_nav_carries_the_brand():
+    """The big mark left the home screen (owner round 8): with DAIJIN at the
+    nav's left on every screen, seven rows of letterform above the nav was
+    branding twice. The splash keeps the drawn mark."""
     async with running_app() as (app, pilot):
         await settle(pilot, 12)
-        mark = app.screen.query_one("#home-wordmark")
-        assert mark.display is True
-        assert len(text_of(mark).strip("\n").split("\n")) == 7
-
-    # Wide enough for the word only: the word.
-    async with running_app(size=(30, 40)) as (app, pilot):
-        await settle(pilot, 12)
-        mark = app.screen.query_one("#home-wordmark")
-        assert mark.display is True
-        assert text_of(mark).strip() == "DAIJIN"
-
-    # Tall mark on a short terminal would cost the content its rows: the word.
-    async with running_app(size=(170, 20)) as (app, pilot):
-        await settle(pilot, 12)
-        mark = app.screen.query_one("#home-wordmark")
-        assert text_of(mark).strip() == "DAIJIN"
-
-    async with running_app(size=(5, 40)) as (app, pilot):
-        await settle(pilot, 12)
-        mark = app.screen.query_one("#home-wordmark")
-        assert mark.display is False, "a header too narrow for the word kept its row"
+        assert not app.screen.query("#home-wordmark"), "the drawn mark is back on home"
+        brands = app.screen.query(".nav-brand")
+        assert brands and text_of(brands.first()).strip() == "DAIJIN"

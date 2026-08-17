@@ -187,7 +187,7 @@
 }
 
 #init-mode {
-    width: 60;
+    width: 30;
 }
 
 #gym-controls {
@@ -304,20 +304,8 @@
     width: 1fr;
 }
 
-#init-scope-row {
-    height: 3;
-}
-
-/* An Input carries a border, so its text sits on the middle row of three
-   while a bare label sits on the first. That one-row offset is what reads as
-   misalignment. Centring the label in the row lines the two up. */
-#init-scope-row .kv-label {
-    height: 3;
-    content-align: left middle;
-}
-
 #init-scope {
-    width: 1fr;
+    width: 80;
 }
 
 #exam-filters {

@@ -76,6 +76,12 @@ class GatesScreen(DaijinScreen):
         notice = self.query_one("#gates-notice", Banner)
         if not repo:
             notice.set_notice("No repo selected. Press 1 for the repo home and pick one.", "warn")
+            # The STALE TABLE was the glitch the owner met (round 8): detach a
+            # repo and this screen kept its last rows under a true banner,
+            # which reads as data about nothing. No repo, no rows.
+            self.gates = []
+            table.clear()
+            self._show_gate({})
             return
         try:
             record = await self.client.call("gatesGet", {"repoPath": repo})

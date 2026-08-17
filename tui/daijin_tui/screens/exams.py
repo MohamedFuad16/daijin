@@ -228,11 +228,25 @@ class ExamsScreen(DaijinScreen):
             )
         quarantined = [e for e in self.exams if e.get("benchmarkStatus") == "quarantined"]
         drafts = [e for e in self.exams if e.get("status") == "draft"]
-        self.query_one("#exam-notice", Banner).set_notice(
-            f"{len(self.exams)} exams shown, {len(drafts)} in the draft queue, "
-            f"{len(quarantined)} quarantined out of measurement.",
-            "warn" if quarantined else "info",
-        )
+        if self.exams:
+            self.query_one("#exam-notice", Banner).set_notice(
+                f"{len(self.exams)} exams shown, {len(drafts)} in the draft queue, "
+                f"{len(quarantined)} quarantined out of measurement.",
+                "warn" if quarantined else "info",
+            )
+        else:
+            # An empty bank is a TEACHING moment, not a zero (owner round 8:
+            # "I don't know how to start the exam itself"). Say where exams
+            # come from and what stands between here and there.
+            self.query_one("#exam-notice", Banner).set_notice(
+                "No exams yet. Exams are mined from this repo's real commit history: "
+                "a free deterministic pass finds candidate commits, then the AUDITOR "
+                "role (an LLM you configure in Settings) selects and words the exam "
+                "bank, which is a paid step behind the owner's spend gate. The mining "
+                "button ships next; until then the bank stays empty and the gym has "
+                "nothing to run.",
+                "info",
+            )
         if self.exams:
             await self.show_exam(self.exams[0]["examId"])
         else:

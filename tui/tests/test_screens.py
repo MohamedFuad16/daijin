@@ -500,15 +500,22 @@ async def test_the_brain_hero_says_healthy_and_the_rate_before_anything_else():
 
 
 @run_async
-async def test_brain_reports_the_floor_as_a_count_with_mrr_marked_recorded():
+async def test_brain_reports_the_floor_once_with_mrr_marked_and_a_budget_control():
+    """The hero is the ONE place the floor numbers live (owner round 8: the
+    old Measured-floor block repeated every one of them). The tab adds what
+    the hero cannot carry: the budget choice, recommended value marked."""
     async with running_app() as (app, pilot):
         await goto(pilot, "3")
-        summary = text_of(app.screen.query_one("#floor-summary", Static))
-        assert "31 of 34" in summary
-        assert "91.2%" in summary, "the count carries its percentage beside it"
-        assert "recorded for movement only" in summary
-        assert "never a floor" in summary
-        assert "chosen budget 4000" in summary
+        hero = text_of(app.screen.query_one("#brain-hero", Static))
+        assert "31 of 34" in hero
+        assert "91.2%" in hero, "the count carries its percentage beside it"
+        facts = text_of(app.screen.query_one("#brain-hero-facts", Static))
+        assert "movement only" in facts
+        assert "never a floor" in facts
+        budget = app.screen.query_one("#brain-budget", Select)
+        labels = [label for label, _ in budget._options if isinstance(label, str)]
+        assert any("4000 (recommended)" in label for label in labels)
+        assert budget.value == 4000
 
 
 @run_async
@@ -2160,7 +2167,7 @@ async def test_picking_a_provider_fills_its_default_endpoint_and_says_what_moved
         screen.query_one("#role-provider", Select).value = "zai"
         await settle(pilot)
         field = screen.query_one("#role-endpoint", Input)
-        assert field.value == "https://api.z.ai/api/paas/v4"
+        assert field.value == "https://api.z.ai/api/coding/paas/v4"
         note = str(screen.query_one("#role-endpoint-note", Static).render())
         assert "api.openai.com" in note, "the move names where the endpoint was"
 

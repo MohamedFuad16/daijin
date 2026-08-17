@@ -1494,7 +1494,9 @@ PROVIDER_CATALOG: dict[str, Any] = {
         {
             "id": "zai",
             "label": "GLM",
-            "endpointDefault": "https://api.z.ai/api/paas/v4",
+            # The coding-plan realm is the default since the owner's override
+            # (D-0056); pay-as-you-go keys override the endpoint by hand.
+            "endpointDefault": "https://api.z.ai/api/coding/paas/v4",
             "keyRequired": True,
             "note": None,
             # The one provider with opt-in TOOLS, so the dialog's tools branch

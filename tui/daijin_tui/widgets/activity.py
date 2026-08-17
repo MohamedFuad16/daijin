@@ -366,7 +366,11 @@ class PhaseChecklist(Static):
                 body = f"{self._verb(key)} ... {entry['detail']}".strip()
             else:
                 body = entry["detail"] or "complete"
-            counts = self._format_counts(entry["counts"])
+            # Counts back up an EMPTY detail; beside a detail that already
+            # says "73 files, 18 languages" they repeat the same numbers in a
+            # second dialect, which is the unreadability the owner named
+            # (field round 8). The raw stream below still carries both.
+            counts = "" if entry["detail"] else self._format_counts(entry["counts"])
             elapsed = self._phase_elapsed(entry)
             tail = []
             if counts:
@@ -413,7 +417,7 @@ class PhaseChecklist(Static):
                 text.append(entry["detail"], style="white")
             else:
                 text.append(entry["detail"] or "complete", style="dim")
-            counts = self._format_counts(entry["counts"])
+            counts = "" if entry["detail"] else self._format_counts(entry["counts"])
             if counts:
                 text.append(f"   {counts}", style="magenta")
             elapsed = self._phase_elapsed(entry)
@@ -513,7 +517,14 @@ class EventLog(RichLog):
         step = str(event.get("step", "?"))
         marker = STEP_MARKER.get(step, "")
         prefix = f"[{marker}] " if marker else ""
-        head = f"{stamp}  {str(event.get('phase', '?')):<16}{step:<12}"
+        # The step column is a COLUMN: padded when short, ellipsised when
+        # long, and always followed by the gap. "budget-measured" is fifteen
+        # characters, so the old {step:<12} pad added nothing and the detail
+        # fused onto the name ("goldset-mined25 active cases"), which is what
+        # the owner could not read (field round 8).
+        if len(step) > 20:
+            step = step[:19] + "…"
+        head = f"{stamp}  {str(event.get('phase', '?'))[:14]:<16}{step:<22}"
 
         counts = event.get("counts") or {}
         tail = ", ".join(f"{k} {v}" for k, v in counts.items()) if counts else ""

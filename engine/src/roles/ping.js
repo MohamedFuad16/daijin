@@ -130,8 +130,22 @@ function cliPing({ model, execFileImpl, timeoutMs }) {
         let served = null;
         try {
           const parsed = JSON.parse(stdout);
-          const usage = parsed?.modelUsage && Object.keys(parsed.modelUsage);
-          served = (usage && usage[0]) || parsed?.model || null;
+          // modelUsage lists EVERY model the turn touched, and the CLI runs a
+          // small helper model (haiku) beside the main one for housekeeping.
+          // The first key is whichever happened to be first, which is how the
+          // dogfood run reported haiku as the served identity of an opus
+          // ping. The model that did the MAIN work is the one with the most
+          // tokens against its name, so that is the identity reported.
+          const usage = parsed?.modelUsage || {};
+          let best = null;
+          let bestWeight = -1;
+          for (const [servedName, tally] of Object.entries(usage)) {
+            const weight = Object.values(tally || {})
+              .filter((value) => typeof value === 'number')
+              .reduce((sum, value) => sum + value, 0);
+            if (weight > bestWeight) { best = servedName; bestWeight = weight; }
+          }
+          served = best || parsed?.model || null;
         } catch {
           served = null;
         }

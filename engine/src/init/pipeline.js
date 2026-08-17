@@ -735,7 +735,7 @@ export async function initBrain({
 
   // The unlock is decided AFTER the range is known, so the decision can carry it (finding
   // 80). The threshold itself is untouched; only what the reader is told changes.
-  const unlock = mcpUnlock(sweep.chosenPoint.caseRate, { resolution: resolution?.unavailable ? null : resolution });
+  const unlock = mcpUnlock(sweep.chosenPoint.caseRate, { resolution: resolution?.unavailable ? null : resolution, violations: sweep.chosenPoint.violations ?? null });
   if (unlock.saturation) {
     await steps.emit({ step: 'mcp-saturation', detail: unlock.saturation, level: 'warn' });
   }

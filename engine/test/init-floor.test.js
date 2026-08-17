@@ -83,6 +83,27 @@ test('the MCP unlock threshold is 0.75 and the reason names the measurement', ()
   assert.equal(unlocked.saturation, null, 'with no range measured there is nothing to warn about');
 });
 
+test('violations LOCK the unlock whatever the case rate says; null is said, never zeroed', () => {
+  // The dogfood catch: 23 of 25 with 2 violations was offered a snippet. A
+  // must-not pair surfacing means a wrong answer is being served.
+  const violated = mcpUnlock({ exact: 0.92, cases: '23 of 25', hits: 23, total: 25 }, { violations: 2 });
+  assert.equal(violated.unlocked, false);
+  assert.match(violated.reason, /2 must-not violation/);
+  assert.match(violated.reason, /whatever the case rate says/);
+
+  // Zero violations is a clean unlock with no extra caveat.
+  const clean = mcpUnlock({ exact: 0.92, cases: '23 of 25', hits: 23, total: 25 }, { violations: 0 });
+  assert.equal(clean.unlocked, true);
+  assert.doesNotMatch(clean.reason, /did not record/);
+
+  // A pre-field history row has NULL violations: the decision stands on the
+  // case rate but the reason says the floor was not recorded, because null
+  // treated as zero would silently un-enforce a documented floor.
+  const unknown = mcpUnlock({ exact: 0.92, cases: '23 of 25', hits: 23, total: 25 }, { violations: null });
+  assert.equal(unknown.unlocked, true);
+  assert.match(unknown.reason, /did not record violations/);
+});
+
 test('finding 80: the unlock carries the range, and the THRESHOLD is untouched', () => {
   const caseRate = { exact: 1, cases: '25 of 25', hits: 25, total: 25 };
 

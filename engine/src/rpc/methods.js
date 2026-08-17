@@ -876,6 +876,9 @@ export function createMethods({
       caseRate: floor.caseRate,
       chosenBudget: floor.chosenBudget ?? null,
       embedding: floor.embedding ?? null,
+      // The unlock enforces this floor from history, so a history row that
+      // dropped it would silently un-enforce it (the dogfood catch).
+      violations: floor.violations ?? null,
       // WHICH CHECKOUT AND WHICH BRAIN produced this number. Clones share one repoId and
       // therefore one history, so without these two fields a series that mixes branches
       // reads as a smooth trend. Null when unknown rather than guessed: a stamp invented
@@ -1347,6 +1350,7 @@ export function createMethods({
           caseRate: record.caseRate,
           chosenBudget: record.chosenBudget,
           embedding: chosen.record?.embedding ?? null,
+          violations: record.violations ?? null,
         }, { store, at: record.at });
 
         return record;
@@ -1402,8 +1406,9 @@ export function createMethods({
       const caseRate = history[0]?.caseRate ?? null;
       if (!caseRate) return { unlocked: false, threshold: MCP_UNLOCK_THRESHOLD, snippet: null, reason: 'No floor has been measured for this repo yet.' };
       // The decision AND its sentence come from floor.js, so the lock reason a user reads is
-      // the one the measurement wrote rather than a paraphrase of it.
-      const decision = mcpUnlock(caseRate);
+      // the one the measurement wrote rather than a paraphrase of it. Violations ride from
+      // the same history row; null (a pre-field row) is said in the reason, never zeroed.
+      const decision = mcpUnlock(caseRate, { violations: history[0]?.violations ?? null });
       if (!decision.unlocked) return { unlocked: false, threshold: decision.threshold, snippet: null, reason: decision.reason };
       // Points at serve-repo.js, the per-repo entry, NOT at brain-mcp.js. The latter is the
       // P1-era entry that takes a corpus descriptor and opens Postgres; pointed at a user's

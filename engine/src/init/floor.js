@@ -236,7 +236,23 @@ export async function measureResolution({
  * scrambled one, and the report says so in a sentence rather than leaving a green tick to
  * speak for itself.
  */
-export function mcpUnlock(caseRate, { threshold = MCP_UNLOCK_THRESHOLD, resolution = null } = {}) {
+export function mcpUnlock(caseRate, { threshold = MCP_UNLOCK_THRESHOLD, resolution = null, violations = null } = {}) {
+  // VIOLATIONS ARE AN ENFORCED FLOOR, not a footnote. A must-not pair
+  // surfacing means a wrong answer is being served, and a brain doing that is
+  // not fit to serve whatever its case rate says. The dogfood run caught this
+  // half-open: 23 of 25 with 2 violations was offered a snippet. Null means
+  // the measurement predates the field and is said, never treated as zero.
+  if (typeof violations === 'number' && violations > 0) {
+    return {
+      unlocked: false,
+      threshold,
+      caseRate,
+      resolution,
+      saturation: null,
+      reason: `${violations} must-not violation(s) surfaced: a wrong answer is being served, so MCP `
+        + `stays locked whatever the case rate says (${caseRate.cases}). The mechanical diagnosis names the pairs.`,
+    };
+  }
   const unlocked = caseRate.exact >= threshold;
   const control = resolution?.caseRate?.control ?? null;
   // One case is the smallest movement the metric can express, so "within one case of the
@@ -264,6 +280,9 @@ export function mcpUnlock(caseRate, { threshold = MCP_UNLOCK_THRESHOLD, resoluti
     saturation,
     reason: unlocked
       ? `${caseRate.cases} is at or above the ${threshold} threshold, so the brain is fit to serve over MCP.`
+        + (violations === null
+          ? ' (This measurement did not record violations; re-run init to enforce that floor too.)'
+          : '')
       : `${caseRate.cases} is below the ${threshold} threshold. The mechanical diagnosis names which cases missed; MCP stays locked until the floor is earned.`,
   };
 }

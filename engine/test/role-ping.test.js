@@ -167,7 +167,12 @@ test('claude-code pings through the CLI, keyless, and reads the served id from m
   const calls = [];
   const execFileImpl = (command, args, options, callback) => {
     calls.push({ command, args });
-    callback(null, JSON.stringify({ type: 'result', modelUsage: { 'claude-sonnet-5-20260114': {} } }), '');
+    // modelUsage carries the HELPER model too (haiku, housekeeping); the
+    // served identity is the model with the most tokens, not the first key.
+    callback(null, JSON.stringify({ type: 'result', modelUsage: {
+      'claude-haiku-4-5-20251001': { inputTokens: 300, outputTokens: 12 },
+      'claude-sonnet-5-20260114': { inputTokens: 2_400, outputTokens: 180 },
+    } }), '');
   };
   const { state, methods } = await fixture({
     role: { provider: 'claude-code', model: 'claude-sonnet-5', agentRef: 'daijin-engineer' },

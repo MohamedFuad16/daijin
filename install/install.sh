@@ -231,6 +231,23 @@ PREFIX="__DAIJIN_PREFIX__"
 # confusing way to learn the difference.
 DAEMON="$PREFIX/engine/src/rpc/daemon.js"
 
+# `daijin update` (owner field round 8): one command pulls the source checkout
+# this install came from and re-runs its installer. The source path comes from
+# the VERSION stamp the installer wrote, so the update goes back to wherever
+# THIS install actually came from, never a guessed location. --ff-only because
+# an updater has no business resolving merge conflicts in the owner's checkout.
+if [ "${1:-}" = "update" ]; then
+  source_path=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["source"]["path"])' "$PREFIX/VERSION" 2>/dev/null || true)
+  if [ -z "$source_path" ] || [ ! -d "$source_path/.git" ]; then
+    printf 'daijin: cannot update: the install stamp names no git checkout (source: %s).\n' "${source_path:-none}" >&2
+    printf 'Pull your daijin checkout by hand and re-run install/install.sh.\n' >&2
+    exit 1
+  fi
+  printf 'daijin: updating from %s\n' "$source_path"
+  git -C "$source_path" pull --ff-only
+  exec bash "$source_path/install/install.sh"
+fi
+
 # Only supply an engine when the caller did not choose one. --mock is the client's own
 # bundled engine and must win over anything this shim would add.
 wants_engine=1

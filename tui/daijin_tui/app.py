@@ -93,8 +93,20 @@ class DaijinApp(App):
         await self.client.start()
         try:
             await self.client.handshake()
-        except (RpcError, Exception) as error:  # noqa: BLE001 - any failure is a hard stop
+        except Exception as error:  # noqa: BLE001 - any failure is a hard stop
+            # A handshake that never completed says nothing about the contract
+            # version. Falling through to the version check reported "port in
+            # use" as "Contract version mismatch" and threw away the stderr
+            # tail the transports go out of their way to preserve.
             self.contract_error = error
+            await self.push_screen(
+                UpgradeScreen(
+                    engine_version=self.client.engine_version,
+                    contract_version=self.client.contract_version,
+                    connection_error=str(error),
+                )
+            )
+            return
         if not self.client.contract_matches:
             await self.push_screen(
                 UpgradeScreen(

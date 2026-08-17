@@ -6,13 +6,13 @@ from typing import Any, Iterable
 
 from textual import work
 from textual.containers import Horizontal
-from textual.widgets import Button, DataTable, Static, TabbedContent, TabPane
+from textual.widgets import Button, DataTable, Select, Static, TabbedContent, TabPane
 
 from .. import mock_data
 from ..concurrency import gather_all
 from ..rpc import RpcError
 from ..stream import FLUSH_INTERVAL, StreamCoalescer
-from ..widgets.activity import IDLE_UNTIL_INFERRED
+from ..widgets.activity import IDLE_UNTIL_INFERRED, TERMINAL_PHASES
 from ..widgets import (
     Banner,
     EventLog,
@@ -50,6 +50,11 @@ class GymScreen(DaijinScreen):
             yield Button("Start cycle", id="gym-start", variant="primary")
             yield Button("Cancel job", id="gym-cancel")
             yield Button("Refresh status", id="gym-refresh")
+            # The exam is part of what the user consents to spend on, so it is
+            # chosen here and read from the engine. It used to be
+            # mock_data.EXAMS[0], which put a fictional exam id into the one
+            # dialog whose whole job is telling the truth about a paid call.
+            yield Select([], id="gym-exam", prompt="exam to certify", allow_blank=True)
             yield Static("", id="gym-gate", markup=True)
         with TabbedContent(id="gym-tabs"):
             with TabPane("Live", id="gym-tab-live"):
@@ -79,6 +84,7 @@ class GymScreen(DaijinScreen):
         self._subscribe()
         self.refresh_heading()
         self._init_columns()
+        await self._load_exams()
         # The run ledger and the gate state have nothing to do with each other.
         # gymStatus likewise requires repoPath, which the v5 contract row for it
         # does not mention. Reported to the leader.
@@ -258,6 +264,26 @@ class GymScreen(DaijinScreen):
                     "warn",
                 )
 
+    async def _load_exams(self) -> None:
+        """Fill the picker from the engine, never from the fixture table."""
+        select = self.query_one("#gym-exam", Select)
+        repo = getattr(self.app, "selected_repo", None)
+        if not repo:
+            select.set_options([])
+            return
+        try:
+            rows = await self.client.call("examList", {"repoPath": repo, "filters": {}})
+        except RpcError as error:
+            # A repo with no ledger has no exams to certify. The picker stays
+            # empty and start_cycle refuses, which is the honest chain.
+            select.set_options([])
+            self.report_rpc_error(error)
+            return
+        exams = rows if isinstance(rows, list) else (rows or {}).get("exams", [])
+        select.set_options(
+            [(f"{e.get('examId')}  {e.get('title', '')}".strip(), e.get("examId")) for e in exams]
+        )
+
     def _render_events(self, batch: list[dict[str, Any]]) -> None:
         """Render a batch. A burst costs one repaint, not one per event."""
         checklist = self.query_one("#gym-checklist", PhaseChecklist)
@@ -284,7 +310,11 @@ class GymScreen(DaijinScreen):
         if any(e.get("step") == "extension" and "granted" in (e.get("counts") or {}) for e in batch):
             gauge.pulse(motion)
 
-        done = next((e for e in batch if e.get("phase") == "done"), None)
+        # TERMINAL_PHASES, not a literal: the engine may end with complete or
+        # finished, and a literal here would leave the running banner up AND
+        # skip the failed branch on a run that broke. gates.py already imports
+        # it; this is the same constant nobody else got round to importing.
+        done = next((e for e in batch if e.get("phase") in TERMINAL_PHASES), None)
         if done is not None:
             # This announced "Cycle complete" for every ending, failures
             # included. A gym cycle is spend touching, so a run that broke
@@ -341,9 +371,29 @@ class GymScreen(DaijinScreen):
 
     @work
     async def start_cycle(self) -> None:
-        repo = getattr(self.app, "selected_repo", None) or mock_data.REPOS[0]["path"]
         notice = self.query_one("#gym-notice", Banner)
-        exam_id = mock_data.EXAMS[0]["examId"]
+        # No fixture fallbacks on a spend path. A dialog that asks consent for a
+        # repo the user did not choose, or an exam the engine never heard of, is
+        # asking them to approve something that will not happen.
+        repo = getattr(self.app, "selected_repo", None)
+        if not repo:
+            notice.set_notice(
+                "No repo selected, so there is nothing to certify. Press 1 for "
+                "the repo home and pick one.",
+                "warn",
+            )
+            return
+        # Only a real exam id counts. Textual's blank sentinel is neither None
+        # nor a string, and comparing against the wrong one let it reach the
+        # wire as an unserializable object.
+        exam_id = self.query_one("#gym-exam", Select).value
+        if not isinstance(exam_id, str) or not exam_id:
+            notice.set_notice(
+                "Pick an exam to certify first. The cycle spends against one "
+                "exam and the confirmation names it.",
+                "warn",
+            )
+            return
 
         # The gate is the owner's permission to spend at all. It is not consent
         # to THIS cycle, so the confirmation happens here regardless of what the

@@ -201,6 +201,17 @@ class ExamsScreen(DaijinScreen):
             table.clear()
             self.exams = []
             return
+        except Exception as error:  # noqa: BLE001 - a transport failure is not an RpcError
+            # A dropped connection arrives as ConnectionError, not RpcError, and
+            # the old narrow catch let it kill the load worker: the user kept
+            # looking at stale rows with no notice at all. _load_motion_mode
+            # already catches broadly for the same reason.
+            self.query_one("#exam-notice", Banner).set_notice(
+                f"Could not read the exam list: {error}", "error"
+            )
+            table.clear()
+            self.exams = []
+            return
         self.exams = rows if isinstance(rows, list) else rows.get("exams", [])
         table.clear()
         for exam in self.exams:
@@ -485,7 +496,20 @@ class ExamsScreen(DaijinScreen):
         await self.reload_bank()
 
     async def action_toggle_radar(self) -> None:
-        mode = self.query_one("#exam-radar", RadarChart).toggle_mode()
+        await self._persist_radar_mode(self.query_one("#exam-radar", RadarChart).toggle_mode())
+
+    @work
+    async def on_radar_chart_mode_changed(self, event: RadarChart.ModeChanged) -> None:
+        """A mouse click persists exactly as the keyboard does.
+
+        The widget owns the flip; the screen owns the setting, because a widget
+        that wrote settings would need a client and this one is a pure
+        renderer. Both paths now end in the same call.
+        """
+        event.stop()
+        await self._persist_radar_mode(event.mode)
+
+    async def _persist_radar_mode(self, mode: str) -> None:
         try:
             await self.client.call("settingsSet", {"patch": {"charts": {"radarMode": mode}}})
         except RpcError as error:

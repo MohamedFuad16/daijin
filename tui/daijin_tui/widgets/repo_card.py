@@ -169,7 +169,13 @@ class RepoCard(Vertical):
 
     def on_click(self) -> None:
         self.focus()
-        self.post_message(self.Selected(self.repo))
+        # Mirrors on_key: a card with no brain has nothing to open, so both
+        # input paths route it to init. They used to disagree, and the mouse
+        # was the one that sent the user to an empty brain.
+        if self.needs_brain:
+            self.post_message(self.InitRequested(self.repo))
+        else:
+            self.post_message(self.Selected(self.repo))
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         event.stop()

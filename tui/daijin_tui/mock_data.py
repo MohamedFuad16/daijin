@@ -1092,7 +1092,10 @@ SETTINGS: dict[str, Any] = {
     "roles": [
         {
             "role": "engineer",
-            "preset": "GLM",
+            "provider": "zai",
+            "modelKnown": True,
+            "modelReason": "in the catalog for this provider",
+            "reasoningEffort": None,
             "model": "glm-4.6",
             "endpoint": "https://open.bigmodel.cn/api/paas/v4",
             "keyRef": "env:DAIJIN_ENGINEER_KEY",
@@ -1107,7 +1110,10 @@ SETTINGS: dict[str, Any] = {
         },
         {
             "role": "teacher",
-            "preset": "Claude",
+            "provider": "anthropic",
+            "modelKnown": True,
+            "modelReason": "in the catalog for this provider",
+            "reasoningEffort": "medium",
             "model": "claude-opus-5",
             "endpoint": "https://api.anthropic.com/v1",
             "keyRef": "env:DAIJIN_TEACHER_KEY",
@@ -1122,7 +1128,10 @@ SETTINGS: dict[str, Any] = {
         },
         {
             "role": "auditor",
-            "preset": "GPT",
+            "provider": "openai",
+            "modelKnown": True,
+            "modelReason": "in the catalog for this provider",
+            "reasoningEffort": "medium",
             "model": "gpt-5.2",
             "endpoint": "https://api.openai.com/v1",
             "keyRef": "env:DAIJIN_AUDITOR_KEY",
@@ -1137,7 +1146,10 @@ SETTINGS: dict[str, Any] = {
         },
         {
             "role": "watcher",
-            "preset": "DeepSeek",
+            "provider": "openai",
+            "modelKnown": False,
+            "modelReason": "not in the catalog, which is a starting point rather than a registry; used as written",
+            "reasoningEffort": "medium",
             "model": "deepseek-v4",
             "endpoint": "https://api.deepseek.com/v1",
             "keyRef": "env:DAIJIN_WATCHER_KEY",
@@ -1423,4 +1435,95 @@ def gates_script(job_id: str, repo_path: str) -> list[dict[str, Any]]:
         ev(5_600, "classify", "classify", "react-doctor pre-broken, excluded and labelled", {"preBroken": 1}, "warn"),
         ev(6_000, "classify", "classify", "playwright unavailable", {"unavailable": 1}, "warn"),
         ev(6_400, "done", "complete", f"gates.yaml written for {repo_path}", {"gates": 5}),
+    ]
+
+
+# A SAMPLE of the provider catalog, not a copy of it. The engine serves this
+# from engine/config/providers.json, which calls itself a starting point
+# rather than a registry, and duplicating that file here would put both halves
+# of every model id in this repo and let them go stale together. What this has
+# to be is SHAPE-faithful and branch-complete: a provider that needs a key and
+# one that does not, a model with reasoning tiers and one without, and a note
+# present and absent. Shape verified against the daemon on 2026-08-17.
+PROVIDER_CATALOG: dict[str, Any] = {
+    "version": 1,
+    "providers": [
+        {
+            "id": "openai",
+            "label": "OpenAI",
+            "endpointDefault": "https://api.openai.com/v1",
+            "keyRequired": True,
+            "note": None,
+            "models": [
+                {"id": "gpt-5.2", "label": "GPT-5.2",
+                 "reasoningEffort": ["low", "medium", "high"], "note": None},
+                {"id": "gpt-4.1", "label": "GPT-4.1", "reasoningEffort": None, "note": None},
+            ],
+        },
+        {
+            "id": "anthropic",
+            "label": "Claude",
+            "endpointDefault": "https://api.anthropic.com/v1",
+            "keyRequired": True,
+            "note": None,
+            "models": [
+                {"id": "claude-opus-4-5", "label": "Claude Opus 4.5",
+                 "reasoningEffort": ["low", "medium", "high"],
+                 "note": "Anthropic's control is an extended-thinking token budget rather "
+                         "than a named tier."},
+            ],
+        },
+        {
+            "id": "ollama",
+            "label": "Ollama",
+            "endpointDefault": "http://127.0.0.1:11434",
+            # The one provider that needs NO key, so the dialog must not
+            # demand a pointer for it.
+            "keyRequired": False,
+            "note": None,
+            "models": [
+                {"id": "qwen3:8b", "label": "Qwen3 8B", "reasoningEffort": None, "note": None},
+            ],
+        },
+    ],
+}
+
+# The engine accepts a hosting URL and nothing else. Verified against the
+# daemon: file:// and a bare path are both refused with this sentence.
+CLONE_URL_HINT = (
+    "{url} is not a repository URL this can clone. Expected something like "
+    "https://github.com/owner/name or git@github.com:owner/name.git. To attach "
+    "a directory you already have, use repoAttach."
+)
+
+
+def clone_script(job_id: str, url: str, target: str) -> list[dict[str, Any]]:
+    """The clone stream.
+
+    BOUND: only the REFUSAL path of repoClone is verified against the daemon.
+    Cloning a real repository is network egress to a third party, so the
+    success stream here follows the contract's documented steps rather than a
+    measurement, and the steps are the part to re-verify when someone runs a
+    real clone.
+    """
+    return [
+        {"ts": 0, "jobId": job_id, "phase": "clone", "step": "resolving",
+         "detail": f"resolving {url}", "level": "info"},
+        {"ts": 600, "jobId": job_id, "phase": "clone", "step": "cloning",
+         "detail": f"cloning into {target}", "level": "info"},
+        {"ts": 2_400, "jobId": job_id, "phase": "clone", "step": "cloned",
+         "detail": "working tree written", "counts": {"files": 214}, "level": "info"},
+        {"ts": 2_700, "jobId": job_id, "phase": "clone", "step": "attaching",
+         "detail": f"attaching {target}", "level": "info"},
+        {"ts": 3_000, "jobId": job_id, "phase": "done", "step": "finished",
+         "detail": f"cloned and attached {target}", "level": "info"},
+    ]
+
+
+def clone_failure_script(job_id: str, url: str) -> list[dict[str, Any]]:
+    return [
+        {"ts": 0, "jobId": job_id, "phase": "clone", "step": "resolving",
+         "detail": f"resolving {url}", "level": "info"},
+        {"ts": 900, "jobId": job_id, "phase": "done", "step": "failed",
+         "detail": "the remote refused the connection", "level": "error"},
     ]

@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import re
 import inspect
 import json
 import sys
@@ -716,6 +717,7 @@ class MockEngine:
         self.failing_inits: set[str] = set()
         self.failing_cycles = False
         self.failing_discoveries: set[str] = set()
+        self.failing_clones = False
         self.agent_files = copy.deepcopy(mock_data.AGENT_FILES)
         self.repos = copy.deepcopy(mock_data.REPOS)
         self.board_rows = copy.deepcopy(mock_data.BOARD_ROWS)
@@ -1370,6 +1372,56 @@ class MockEngine:
         return copy.deepcopy(exam)
 
     # Settings, roles, board -----------------------------------------------
+
+    async def _rpc_providerCatalog(self, params: dict[str, Any]) -> dict[str, Any]:
+        """A constant, and deliberately not part of settingsGet.
+
+        A catalog is not user state, and folding it into settings would
+        re-send it on every settings read. Zero-spend and unprobeable by
+        construction: it is a local table and cannot be made to call a
+        provider. rolePing stays the only key-verification path.
+        """
+        return copy.deepcopy(mock_data.PROVIDER_CATALOG)
+
+    async def _rpc_repoClone(self, params: dict[str, Any]) -> dict[str, Any]:
+        """Clone is a JOB, not an overload of repoAttach.
+
+        A clone of a real repository takes minutes, so it streams. Verified
+        against the daemon: a URL that is not a hosting URL is refused with
+        -32602 and this sentence, and file:// and bare paths are refused too.
+        """
+        url = str(params.get("url") or "").strip()
+        if not re.match(r"^(https://[^/]+/[^/]+/[^/]+|git@[^:]+:[^/]+/.+)$", url):
+            raise RpcError(
+                ERR_INVALID_PARAMS,
+                "not a repository URL",
+                {"hint": mock_data.CLONE_URL_HINT.format(url=url or "an empty string")},
+            )
+        name = str(params.get("name") or "").strip() or url.rstrip("/").split("/")[-1]
+        name = name[:-4] if name.endswith(".git") else name
+        # Managed location carries host AND owner: a bare name collides the
+        # moment two organisations both have a repo called daijin.
+        host, owner = self._clone_origin(url)
+        target = f"~/.daijin/clones/{host}/{owner}/{name}"
+        job_id = self._new_job_id("clone")
+        self._start_stream(
+            job_id,
+            mock_data.clone_failure_script(job_id, url)
+            if self.failing_clones
+            else mock_data.clone_script(job_id, url, target),
+        )
+        return {"jobId": job_id}
+
+    @staticmethod
+    def _clone_origin(url: str) -> tuple[str, str]:
+        if url.startswith("git@"):
+            host, _, rest = url[4:].partition(":")
+            return host, rest.split("/")[0]
+        parts = url.split("/")
+        return parts[2], parts[3]
+
+    def fail_next_clone(self) -> None:
+        self.failing_clones = True
 
     async def _rpc_settingsGet(self, params: dict[str, Any]) -> dict[str, Any]:
         return copy.deepcopy(self.settings)

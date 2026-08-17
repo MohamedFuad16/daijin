@@ -163,8 +163,11 @@ def test_no_stub_claims_a_method_the_contract_actually_has():
 
 @pytest.mark.skipif(not CONTRACT_PATH.exists(), reason="contract file not present")
 def test_the_contract_declares_the_method_count_the_plan_recorded():
-    """Informational: 30 at v5. The tables remain the count, not this number."""
-    assert len(_contract_methods()) == 30
+    """Informational: 32 at v5, after providerCatalog and repoClone (F3/F4).
+
+    The tables remain the count, not this number.
+    """
+    assert len(_contract_methods()) == 32
 
 
 @run_async
@@ -454,7 +457,13 @@ async def test_settings_match_the_v4_codified_shape():
     settings = await client.call("settingsGet", {})
     assert set(settings) == {"roles", "instructionFiles", "retrieval", "storage", "spendGate", "charts"}
     for role in settings["roles"]:
-        assert set(role) >= {"role", "preset", "model", "endpoint", "keyRef", "keyMasked", "ping"}
+        # preset is gone (D-0037). It asserted only that a key existed, which
+        # is what let a column stay blank against a real engine for weeks.
+        assert "preset" not in role, "preset came back; it is not on the wire"
+        assert set(role) >= {
+            "role", "provider", "model", "modelKnown", "modelReason",
+            "reasoningEffort", "endpoint", "keyRef", "keyMasked", "ping",
+        }
     for record in settings["instructionFiles"]:
         assert set(record) == {"name", "path", "hash", "defaultHash", "modified"}
     await client.aclose()

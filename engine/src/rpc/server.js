@@ -113,7 +113,7 @@ export async function acquireDaemonLock(stateRoot, { acquire = acquireWriterLock
   } catch (error) {
     const held = error.message.match(/PID (\d+)/)?.[1];
     throw new Error(held
-      ? `Another daijin daemon is already serving ${stateRoot} (PID ${held}). One daemon per state root: point this client at the running one, or stop PID ${held} first. Lock: ${lockFile}`
+      ? `Another daijin daemon is already serving ${stateRoot} (PID ${held}). One daemon per state root: point this client at the running one, or stop it first with: kill ${held}  (often a daijin left running in another terminal). Lock: ${lockFile}`
       : `Could not take the daemon lock for ${stateRoot}: ${error.message}. Lock: ${lockFile}`);
   }
 }

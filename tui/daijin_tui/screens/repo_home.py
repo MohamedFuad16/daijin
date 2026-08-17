@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Iterable
 
+from textual import work
 from textual.containers import Horizontal, HorizontalScroll
 from textual.widgets import Button, Input, Static
 
@@ -11,6 +12,7 @@ from ..concurrency import gather_all, gather_iter
 from ..rpc import RpcError
 from ..widgets import Banner, RepoCard, SectionTitle, format_count
 from ..widgets.wordmark import header_mark
+from .attach_dialog import AttachRepoScreen
 from .base import DaijinScreen
 
 
@@ -35,6 +37,7 @@ class RepoHomeScreen(DaijinScreen):
         with Horizontal(id="attach-row"):
             yield Input(placeholder="path to a repo to attach", id="attach-input")
             yield Button("Attach repo", id="attach-go", variant="primary")
+            yield Button("Find a repo", id="attach-browse")
         yield SectionTitle("Engine status")
         yield Static("", id="engine-status", markup=True)
         yield Banner("", tone="info", id="home-notice")
@@ -175,7 +178,9 @@ class RepoHomeScreen(DaijinScreen):
         )
 
     async def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id == "attach-go":
+        if event.button.id == "attach-browse":
+            self.browse_and_attach()
+        elif event.button.id == "attach-go":
             event.stop()
             await self.attach_repo()
 
@@ -183,6 +188,72 @@ class RepoHomeScreen(DaijinScreen):
         if event.input.id == "attach-input":
             event.stop()
             await self.attach_repo()
+
+    @work
+    async def browse_and_attach(self) -> None:
+        """The dialog: discovered repos, a path, or a URL to clone.
+
+        The URL route is offered only when the engine answers for repoClone.
+        Probing costs one refused call and buys a dialog that never shows a
+        control that cannot work.
+        """
+        notice = self.query_one("#home-notice", Banner)
+        roots: list[str] = []
+        try:
+            settings = await self.client.call("settingsGet", {})
+            roots = list(settings.get("repoScanRoots") or [])
+        except RpcError as error:
+            # The Path tab still works without roots, so this is a degraded
+            # dialog rather than a blocked one.
+            self.report_rpc_error(error)
+
+        clone_available, reason = await self._clone_available()
+        choice = await self.app.push_screen_wait(
+            AttachRepoScreen(
+                roots=roots,
+                clone_available=clone_available,
+                clone_unavailable_reason=reason,
+            )
+        )
+        if not choice:
+            return
+        if choice["kind"] == "path":
+            self.query_one("#attach-input", Input).value = choice["value"]
+            await self.attach_repo()
+            return
+        await self._clone(choice["value"])
+
+    async def _clone_available(self) -> tuple[bool, str]:
+        """Ask the engine whether it can clone, without cloning anything.
+
+        A deliberately invalid URL: a method that is not built answers -32001
+        with a phase, and one that is built refuses the argument with -32602.
+        The refusal IS the capability answer.
+        """
+        try:
+            await self.client.call("repoClone", {"url": ""})
+        except RpcError as error:
+            if error.is_not_implemented:
+                return False, error.hint
+            return True, ""
+        except Exception:  # noqa: BLE001 - a transport failure is not a verdict
+            return False, "Could not reach the engine to ask whether it can clone."
+        return True, ""
+
+    @work
+    async def _clone(self, url: str) -> None:
+        notice = self.query_one("#home-notice", Banner)
+        try:
+            result = await self.client.call("repoClone", {"url": url})
+        except RpcError as error:
+            self.report_rpc_error(error)
+            notice.set_notice(error.hint, "error")
+            return
+        self.clone_job_id = result.get("jobId")
+        notice.set_notice(
+            f"Cloning {url}, job {self.clone_job_id}. It is attached when the clone ends.",
+            "info",
+        )
 
     async def attach_repo(self) -> None:
         field = self.query_one("#attach-input", Input)

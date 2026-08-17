@@ -20,8 +20,22 @@ from ..rpc import RpcError
 from ..widgets import Banner, SectionTitle
 from .base import DaijinScreen
 from .dialogs import AgentFileEditScreen
+from .role_dialog import RoleConfigScreen
 
-ROLE_COLUMNS = ("role", "preset", "model", "endpoint", "HTTP", "TTFT", "latency", "served model id", "verified")
+# `preset` was removed from the role row (D-0037): it was declared by the
+# engine, written by nothing, and rendered here from mock data only, so
+# against a real engine this column was ALWAYS BLANK. `provider` replaces it,
+# and a name like "Claude" is a rendering of provider plus model rather than a
+# stored value. `model?` carries modelKnown, which is true, false, or null for
+# unconfigured, the same three states as keyResolvable.
+ROLE_COLUMNS = (
+    "role", "provider", "model", "model?", "reasoning",
+    "endpoint", "HTTP", "TTFT", "latency", "served model id", "verified",
+)
+
+# modelKnown is three-valued and null is NOT false: unconfigured is not the
+# same claim as "the catalog does not recognise this".
+MODEL_KNOWN = {True: "known", False: "unrecognised", None: "not set"}
 FILE_COLUMNS = ("agent file", "current hash", "default hash", "badge")
 
 ROLE_NOTES = {
@@ -50,6 +64,7 @@ class SettingsScreen(DaijinScreen):
         yield DataTable(id="role-table", cursor_type="row")
         yield Static("", id="role-detail", markup=True)
         with Horizontal(id="role-actions"):
+            yield Button("Configure selected role", id="role-configure", variant="primary")
             yield Button("Verify selected role (spends)", id="role-verify", variant="warning")
         yield SectionTitle("Instruction files", ".daijin/agents, shipped defaults, user editable")
         yield DataTable(id="file-table", cursor_type="row")
@@ -102,8 +117,12 @@ class SettingsScreen(DaijinScreen):
                 drift.append(role.get("role"))
             table.add_row(
                 role.get("role", ""),
-                role.get("preset", ""),
+                role.get("provider", ""),
                 role.get("model", ""),
+                MODEL_KNOWN.get(role.get("modelKnown"), "not set"),
+                # null is the ONLY encoding of unsupported. A string like
+                # "none" would read as a supported setting turned off.
+                role.get("reasoningEffort") or "not supported",
                 role.get("endpoint", ""),
                 str(ping.get("httpStatus", "-")),
                 f"{ping.get('ttftMs')} ms" if ping.get("ttftMs") else "-",
@@ -221,7 +240,9 @@ class SettingsScreen(DaijinScreen):
 
     async def on_button_pressed(self, event: Button.Pressed) -> None:
         event.stop()
-        if event.button.id == "role-verify":
+        if event.button.id == "role-configure":
+            self.configure_selected_role()
+        elif event.button.id == "role-verify":
             self.verify_selected_role()
         elif event.button.id == "file-edit":
             self.edit_selected_file()
@@ -273,6 +294,46 @@ class SettingsScreen(DaijinScreen):
                 f"the role is not ready. Retry without editing settings.",
                 "warn",
             )
+
+    @work
+    async def configure_selected_role(self) -> None:
+        """Provider, model, reasoning and the key POINTER, for one role."""
+        role_name = self._selected_key("role-table")
+        notice = self.query_one("#settings-notice", Banner)
+        if not role_name:
+            notice.set_notice("Select a role row first.", "warn")
+            return
+        role = next(
+            (r for r in (self.settings.get("roles") or []) if r.get("role") == role_name), None
+        )
+        if role is None:
+            notice.set_notice(f"{role_name} is not in the settings this screen loaded.", "warn")
+            return
+        try:
+            catalog = await self.client.call("providerCatalog", {})
+        except RpcError as error:
+            # Without the catalog the dialog would have to invent a provider
+            # list, which is the hand-copied vocabulary this method exists to
+            # avoid. Better to say why than to guess.
+            self.report_rpc_error(error)
+            notice.set_notice(
+                f"Cannot configure a role without the provider catalog: {error.hint}", "error"
+            )
+            return
+        patch = await self.app.push_screen_wait(RoleConfigScreen(role=role, catalog=catalog))
+        if patch is None:
+            return
+        try:
+            await self.client.call("settingsSet", {"patch": {"roles": [patch]}})
+        except RpcError as error:
+            self.report_rpc_error(error)
+            notice.set_notice(error.hint, "error")
+            return
+        self.set_pending_notice(
+            f"{role_name} set to {patch.get('provider')} {patch.get('model')}. "
+            f"Verify it with a ping before trusting it."
+        )
+        self.start_load()
 
     @work
     async def edit_selected_file(self) -> None:

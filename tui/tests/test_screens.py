@@ -1851,3 +1851,250 @@ def test_every_screen_with_a_banner_declares_which_banner_is_its_notice():
             f"pending notice it sets is discarded in silence"
         )
         assert screen.notice_id.startswith("#"), f"{name}'s notice_id is not a selector"
+
+
+@run_async
+async def test_the_role_table_shows_provider_not_a_column_that_is_always_blank():
+    """preset was declared by the engine, written by nothing, and rendered here.
+
+    Against a real engine that column was ALWAYS blank, and the only test on it
+    asserted that a key existed. Removed in D-0037; provider replaces it, and a
+    name like "Claude" is a rendering of provider plus model rather than a
+    stored value.
+    """
+    from daijin_tui.screens.settings import MODEL_KNOWN, ROLE_COLUMNS
+
+    assert "preset" not in ROLE_COLUMNS, "the always-blank column is back"
+    assert "provider" in ROLE_COLUMNS
+
+    async with running_app() as (app, pilot):
+        await goto(pilot, "8")
+        table = app.screen.query_one("#role-table", DataTable)
+        assert table.row_count > 0
+        row = table.get_row_at(0)
+        assert str(row[ROLE_COLUMNS.index("provider")]) in {
+            "openai", "anthropic", "xai", "zai", "ollama"
+        }, "provider renders something outside the closed enum"
+
+        # modelKnown is THREE valued and null is not false: unconfigured is a
+        # different claim from "the catalog does not recognise this".
+        assert MODEL_KNOWN[None] != MODEL_KNOWN[False]
+        shown = {str(table.get_row_at(i)[ROLE_COLUMNS.index("model?")]) for i in range(table.row_count)}
+        assert shown <= set(MODEL_KNOWN.values()), f"an unmapped modelKnown state: {shown}"
+        assert len(shown) > 1, "every role reads the same, so this checks nothing"
+
+        # null reasoningEffort is the ONLY encoding of unsupported. Rendering
+        # it as "none" would read as a supported control turned off.
+        efforts = {str(table.get_row_at(i)[ROLE_COLUMNS.index("reasoning")]) for i in range(table.row_count)}
+        assert "none" not in efforts, "unsupported was rendered as a setting"
+        assert "not supported" in efforts
+
+
+@run_async
+async def test_the_role_dialog_renders_the_catalog_rather_than_a_table_of_its_own():
+    """Hard-coding providers would put both halves of every model id here.
+
+    The engine serves the catalog from a data file that calls itself a
+    starting point rather than a registry, so the dialog renders what it is
+    given and cannot go stale on its own.
+    """
+    from daijin_tui.screens.role_dialog import RoleConfigScreen
+    from textual.widgets import Select
+
+    async with running_app() as (app, pilot):
+        catalog = await app.client.call("providerCatalog", {})
+        role = {"role": "engineer", "provider": "openai", "model": "gpt-5.2",
+                "reasoningEffort": "medium", "keyRef": "env:OPENAI_KEY"}
+        screen = RoleConfigScreen(role=role, catalog=catalog)
+        await app.push_screen(screen)
+        await settle(pilot)
+
+        offered = [v for _, v in screen.query_one("#role-provider", Select)._options
+                   if isinstance(v, str)]
+        assert offered == [p["id"] for p in catalog["providers"]], (
+            "the dialog offers providers the catalog did not"
+        )
+        models = [v for _, v in screen.query_one("#role-model", Select)._options
+                  if isinstance(v, str)]
+        assert models == [m["id"] for m in catalog["providers"][0]["models"]]
+        app.pop_screen()
+
+
+@run_async
+async def test_reasoning_is_disabled_where_the_model_has_no_such_control():
+    """null is the ONLY encoding of unsupported.
+
+    Rendering it as a choice called "none" would read as a supported setting
+    deliberately turned off, which is a different claim.
+    """
+    from daijin_tui.screens.role_dialog import RoleConfigScreen
+    from textual.widgets import Select
+
+    async with running_app() as (app, pilot):
+        catalog = await app.client.call("providerCatalog", {})
+        openai = next(p for p in catalog["providers"] if p["id"] == "openai")
+        tiered = next(m for m in openai["models"] if m["reasoningEffort"])
+        flat = next(m for m in openai["models"] if not m["reasoningEffort"])
+
+        screen = RoleConfigScreen(
+            role={"role": "engineer", "provider": "openai", "model": tiered["id"]},
+            catalog=catalog,
+        )
+        await app.push_screen(screen)
+        await settle(pilot)
+        control = screen.query_one("#role-reasoning", Select)
+        assert control.disabled is False
+        levels = [v for _, v in control._options if isinstance(v, str)]
+        assert levels == tiered["reasoningEffort"]
+        assert "none" not in levels, "unsupported was offered as a setting"
+
+        screen.query_one("#role-model", Select).value = flat["id"]
+        await settle(pilot)
+        assert screen.query_one("#role-reasoning", Select).disabled is True
+        assert screen._patch()["reasoningEffort"] is None, (
+            "an unsupported control sent a value anyway"
+        )
+        app.pop_screen()
+
+
+@run_async
+async def test_a_model_the_catalog_does_not_know_is_described_not_refused():
+    """The catalog disclaims being a registry, so it cannot be authoritative.
+
+    Refusing an unrecognised model would block one that shipped today until
+    someone edits a JSON file.
+    """
+    from daijin_tui.screens.role_dialog import RoleConfigScreen
+
+    async with running_app() as (app, pilot):
+        catalog = await app.client.call("providerCatalog", {})
+        screen = RoleConfigScreen(
+            role={"role": "engineer", "provider": "openai", "model": "gpt-6-preview"},
+            catalog=catalog,
+        )
+        await app.push_screen(screen)
+        await settle(pilot)
+        screen._describe_model("openai", "gpt-6-preview")
+        note = text_of(screen.query_one("#role-model-note", Static))
+        assert "starting point rather than a registry" in note
+        assert "sent as written" in note, "an unknown model reads as rejected"
+        app.pop_screen()
+
+
+@run_async
+async def test_a_local_provider_is_not_asked_for_a_key():
+    from daijin_tui.screens.role_dialog import RoleConfigScreen
+    from textual.widgets import Select
+
+    async with running_app() as (app, pilot):
+        catalog = await app.client.call("providerCatalog", {})
+        local = next(p for p in catalog["providers"] if not p["keyRequired"])
+        screen = RoleConfigScreen(role={"role": "watcher", "provider": local["id"]},
+                                  catalog=catalog)
+        await app.push_screen(screen)
+        await settle(pilot)
+        note = text_of(screen.query_one("#role-key-note", Static))
+        assert "needs no key" in note, f"a local provider was asked for a pointer: {note!r}"
+        app.pop_screen()
+
+
+@run_async
+async def test_a_pasted_key_is_refused_before_it_is_sent():
+    """The engine never sees a key value, and the user learns that at the field."""
+    from daijin_tui.screens.role_dialog import RoleConfigScreen
+    from textual.widgets import Input
+
+    async with running_app() as (app, pilot):
+        catalog = await app.client.call("providerCatalog", {})
+        screen = RoleConfigScreen(
+            role={"role": "engineer", "provider": "openai", "model": "gpt-5.2"},
+            catalog=catalog,
+        )
+        await app.push_screen(screen)
+        await settle(pilot)
+        screen.query_one("#role-keyref", Input).value = "sk-ant-abc123def456"
+        await settle(pilot)
+        note = text_of(screen.query_one("#role-key-note", Static))
+        assert "does not look like a pointer" in note
+        assert "never crosses the wire" in note
+
+        # And Save does not dismiss with it.
+        await pilot.click("#role-save")
+        await settle(pilot)
+        assert app.screen is screen, "a pasted key was accepted and sent"
+        app.pop_screen()
+
+
+@run_async
+async def test_the_url_route_appears_only_when_the_engine_can_clone():
+    """A control that exists and does nothing is the appeared-to-do-nothing defect.
+
+    The capability is asked rather than assumed: a method that is not built
+    answers -32001, and one that is built refuses the empty argument. The
+    refusal IS the answer.
+    """
+    from daijin_tui.screens.attach_dialog import AttachRepoScreen
+    from daijin_tui.rpc import ERR_NOT_IMPLEMENTED, RpcError
+    from textual.widgets import Input
+
+    async with running_app() as (app, pilot):
+        screen = app.screen
+        available, reason = await screen._clone_available()
+        assert available is True and reason == "", "the mock serves repoClone, so it is available"
+
+        original = app.client.call
+
+        async def deferred(method, params=None):
+            if method == "repoClone":
+                raise RpcError(ERR_NOT_IMPLEMENTED, "not built",
+                               {"hint": "repoClone lands in phase 9.", "phase": "9"})
+            return await original(method, params)
+
+        app.client.call = deferred
+        try:
+            available, reason = await screen._clone_available()
+        finally:
+            app.client.call = original
+        assert available is False
+        assert "phase 9" in reason, "the engine's own reason was not carried"
+
+        dialog = AttachRepoScreen(roots=[], clone_available=False,
+                                  clone_unavailable_reason=reason)
+        await app.push_screen(dialog)
+        await settle(pilot)
+        assert dialog.query_one("#attach-url", Input).disabled is True
+        assert "phase 9" in text_of(dialog.query_one("#attach-url-note", Static))
+        app.pop_screen()
+
+
+@run_async
+async def test_the_attach_dialog_refuses_only_what_the_engine_refuses(tmp_path_factory):
+    from daijin_tui.screens.attach_dialog import AttachRepoScreen
+    from textual.widgets import Input
+
+    base = tmp_path_factory.mktemp("attach")
+    (base / "repo" / ".git").mkdir(parents=True)
+    (base / "plain").mkdir()
+
+    async with running_app() as (app, pilot):
+        dialog = AttachRepoScreen(roots=[str(base)])
+        await app.push_screen(dialog)
+        await settle(pilot)
+
+        field = dialog.query_one("#attach-path", Input)
+        note = dialog.query_one("#attach-path-note", Static)
+
+        field.value = "cd"
+        await settle(pilot)
+        assert "does not exist" in text_of(note), "the field test's exact mistake is not caught"
+
+        field.value = str(base / "plain")
+        await settle(pilot)
+        rendered = text_of(note)
+        assert "produce less" in rendered, "a non-git directory was not explained"
+        assert "cannot" not in rendered.lower(), "a non-git directory reads as refused"
+
+        field.value = str(base / "repo")
+        await settle(pilot)
+        assert "Ready" in text_of(note)
+        app.pop_screen()

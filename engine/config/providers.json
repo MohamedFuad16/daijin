@@ -160,7 +160,7 @@
     {
       "id": "zai",
       "label": "GLM",
-      "endpointDefault": "https://api.z.ai/api/paas/v4",
+      "endpointDefault": "https://api.z.ai/api/coding/paas/v4",
       "keyRequired": true,
       "models": [
         {
@@ -198,7 +198,7 @@
           "note": "Adds Z.ai's web_search tool to this role's calls (the tools block of the chat completions request). Web Search, Web Reader and Zread share one usage quota."
         }
       ],
-      "note": "Z.ai bills two realms separately: api/paas/v4 is pay-as-you-go and api/coding/paas/v4 is the GLM Coding Plan. A key only works on the realm its plan lives in; a 429 'insufficient balance' on one realm often means the key belongs to the other."
+      "note": "Default endpoint is the GLM Coding Plan realm (api/coding/paas/v4), the owner's ruling. Pay-as-you-go keys use https://api.z.ai/api/paas/v4 instead; the two realms bill separately and a key only works on the realm its plan lives in."
     },
     {
       "id": "ollama",

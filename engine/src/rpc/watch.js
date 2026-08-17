@@ -46,6 +46,11 @@ export const FIX_CATALOG = Object.freeze({
     endpoint: ZAI_CODING_URL,
     needsRole: true,
   }),
+  'zai-payg-endpoint': Object.freeze({
+    label: 'Point this role at the Z.ai pay-as-you-go realm (api/paas/v4)',
+    endpoint: ZAI_PAYG_URL,
+    needsRole: true,
+  }),
 });
 
 function finding({ id, at, severity, category, target, summary, detail = null, fixId = null }) {
@@ -131,12 +136,14 @@ export function roleFindings(roles, { at, zaiDefault = ZAI_PAYG_URL } = {}) {
     if (!role.provider) continue;
     if (ping && ping.ok === false) {
       const effective = role.endpoint || (role.provider === 'zai' ? zaiDefault : null);
-      // THE REALM TRAP, detected rather than left to archaeology: a zai key
-      // answering 429 on the pay-as-you-go realm is, in every case seen so
-      // far, a Coding Plan key aimed at the wrong billing realm.
-      const realmTrap = role.provider === 'zai'
-        && ping.httpStatus === 429
-        && effective === zaiDefault;
+      // THE REALM TRAP, detected rather than left to archaeology: Z.ai bills
+      // its two realms separately, so a key answering 429 "insufficient
+      // balance" on one realm is, in every case seen so far, subscribed on
+      // the OTHER. Whichever realm the role sits on, the fix offered is the
+      // opposite one; a custom endpoint is not the trap, the user aimed it.
+      const onKnownRealm = effective === ZAI_PAYG_URL || effective === ZAI_CODING_URL;
+      const realmTrap = role.provider === 'zai' && ping.httpStatus === 429 && onKnownRealm;
+      const otherRealmFix = effective === ZAI_PAYG_URL ? 'zai-coding-endpoint' : 'zai-payg-endpoint';
       rows.push(finding({
         id: `role-failed:${role.role}`,
         at,
@@ -146,10 +153,9 @@ export function roleFindings(roles, { at, zaiDefault = ZAI_PAYG_URL } = {}) {
         summary: `The ${role.role} role's last verification failed`,
         detail: realmTrap
           ? `${ping.hint || ''} Z.ai bills its two realms separately: this key may be `
-            + 'subscribed on the GLM Coding Plan realm (api/coding/paas/v4) rather than '
-            + 'pay-as-you-go (api/paas/v4).'
+            + `subscribed on the other realm (${effective === ZAI_PAYG_URL ? 'GLM Coding Plan, api/coding/paas/v4' : 'pay-as-you-go, api/paas/v4'}).`
           : ping.hint || `HTTP ${ping.httpStatus ?? 'none'}.`,
-        fixId: realmTrap ? 'zai-coding-endpoint' : null,
+        fixId: realmTrap ? otherRealmFix : null,
       }));
     } else if (!ping && role.model) {
       rows.push(finding({

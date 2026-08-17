@@ -8,7 +8,7 @@ import path from 'node:path';
 import { EngineState } from '../src/rpc/state.js';
 import { JobRunner } from '../src/rpc/jobs.js';
 import { createMethods } from '../src/rpc/methods.js';
-import { FIX_CATALOG, ZAI_CODING_URL, gateFindings, roleFindings, statusFindings } from '../src/rpc/watch.js';
+import { FIX_CATALOG, ZAI_CODING_URL, ZAI_PAYG_URL, gateFindings, roleFindings, statusFindings } from '../src/rpc/watch.js';
 
 const AT = '2026-08-17T12:00:00.000Z';
 
@@ -34,20 +34,23 @@ test('an unavailable gate whose runtime is pnpm carries the install-pnpm fix', (
   assert.ok(rows.some((row) => row.id.startsWith('gates-no-signal')));
 });
 
-test('the zai realm trap is detected: 429 on the pay-as-you-go realm offers the coding realm', () => {
-  const roles = [{
+test('the zai realm trap offers the OTHER realm, whichever one the 429 landed on', () => {
+  const base = {
     role: 'engineer',
     provider: 'zai',
     model: 'glm-5.3',
-    endpoint: null,
     ping: { ok: false, httpStatus: 429, hint: 'The provider answered 429. Insufficient balance or no resource package.' },
-  }];
-  const rows = roleFindings(roles, { at: AT });
-  assert.equal(rows.length, 1);
-  assert.equal(rows[0].action.fixId, 'zai-coding-endpoint');
-  assert.match(rows[0].detail, /Coding Plan/);
+  };
+  // 429 on pay-as-you-go: offer the coding realm.
+  const payg = roleFindings([{ ...base, endpoint: ZAI_PAYG_URL }], { at: AT });
+  assert.equal(payg[0].action.fixId, 'zai-coding-endpoint');
+  assert.match(payg[0].detail, /Coding Plan/);
+  // 429 on the coding realm (the catalog default since the owner's override,
+  // D-0056): offer pay-as-you-go.
+  const coding = roleFindings([{ ...base, endpoint: null }], { at: AT, zaiDefault: ZAI_CODING_URL });
+  assert.equal(coding[0].action.fixId, 'zai-payg-endpoint');
   // A 429 on a CUSTOM endpoint is not the trap: the user aimed it themselves.
-  const custom = roleFindings([{ ...roles[0], endpoint: 'https://proxy.example.com/v4' }], { at: AT });
+  const custom = roleFindings([{ ...base, endpoint: 'https://proxy.example.com/v4' }], { at: AT });
   assert.equal(custom[0].action, null);
 });
 

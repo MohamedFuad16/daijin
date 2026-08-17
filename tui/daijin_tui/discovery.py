@@ -147,3 +147,86 @@ def looks_like_clone_url(value: str) -> bool:
         parts = text[len("https://"):].split("/")
         return len(parts) >= 3 and all(parts[:3])
     return False
+
+
+# The gh listing. It is a NETWORK CALL to GitHub, so nothing here runs unless a
+# user presses a button that says so: the client's only unprompted reads are
+# its own config and the engine's wire, and everything else is a labelled
+# action. A dialog opening must never cause egress.
+GH_TIMEOUT_SECONDS = 20
+GH_LIMIT = 100
+
+
+@dataclass(frozen=True)
+class RemoteRepo:
+    name_with_owner: str
+    url: str
+    local_path: str | None = None
+
+    @property
+    def needs_clone(self) -> bool:
+        return self.local_path is None
+
+
+def gh_available() -> bool:
+    """Is the CLI on PATH at all? Answered without contacting anything."""
+    import shutil as _shutil
+
+    return _shutil.which("gh") is not None
+
+
+def list_github_repos(limit: int = GH_LIMIT) -> tuple[list[RemoteRepo], str]:
+    """Ask gh for the account's repositories. Returns (repos, error).
+
+    The error is the CLI's own stderr, shown verbatim: gh already explains
+    "not logged in" better than a paraphrase would, and a client that
+    rewrites it will drift from whatever gh says next.
+    """
+    import json as _json
+    import subprocess as _subprocess
+
+    if not gh_available():
+        return [], "The gh CLI is not installed, so GitHub cannot be listed."
+    try:
+        result = _subprocess.run(
+            ["gh", "repo", "list", "--limit", str(limit), "--json", "nameWithOwner,url"],
+            capture_output=True, text=True, timeout=GH_TIMEOUT_SECONDS,
+        )
+    except FileNotFoundError:
+        return [], "The gh CLI is not installed, so GitHub cannot be listed."
+    except _subprocess.TimeoutExpired:
+        return [], f"gh did not answer within {GH_TIMEOUT_SECONDS} seconds."
+    if result.returncode != 0:
+        return [], (result.stderr or result.stdout or "gh failed without saying why").strip()
+    try:
+        rows = _json.loads(result.stdout or "[]")
+    except ValueError:
+        return [], "gh answered with something that is not JSON."
+    return [
+        RemoteRepo(name_with_owner=row.get("nameWithOwner", ""), url=row.get("url", ""))
+        for row in rows
+        if row.get("nameWithOwner")
+    ], ""
+
+
+def mark_already_local(
+    remotes: Sequence[RemoteRepo], local: Sequence[Discovered]
+) -> list[RemoteRepo]:
+    """Match a remote to a local checkout by basename.
+
+    Basename is a WEAK match and deliberately so: it is used only to mark a
+    row as already present, never to attach one path as another. A false match
+    costs the user a redundant clone offer; a strong-looking match that was
+    wrong would attach the wrong directory.
+    """
+    by_name: dict[str, str] = {}
+    for item in local:
+        by_name.setdefault(item.name.lower(), item.path)
+    return [
+        RemoteRepo(
+            name_with_owner=remote.name_with_owner,
+            url=remote.url,
+            local_path=by_name.get(remote.name_with_owner.split("/")[-1].lower()),
+        )
+        for remote in remotes
+    ]

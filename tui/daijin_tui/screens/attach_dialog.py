@@ -16,15 +16,26 @@ from __future__ import annotations
 
 from typing import Any, Iterable
 
+from textual import work
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
 from textual.widgets import Button, DataTable, Input, Static, TabbedContent, TabPane
 
-from ..discovery import Discovered, describe_path, looks_like_clone_url, scan_roots
+from ..discovery import (
+    Discovered,
+    RemoteRepo,
+    describe_path,
+    gh_available,
+    list_github_repos,
+    looks_like_clone_url,
+    mark_already_local,
+    scan_roots,
+)
 
 DISCOVERED_COLUMNS = ("repo", "git", "path")
+GITHUB_COLUMNS = ("repo", "state", "url")
 
 
 class AttachRepoScreen(ModalScreen[dict[str, Any] | None]):
@@ -54,6 +65,7 @@ class AttachRepoScreen(ModalScreen[dict[str, Any] | None]):
         self.clone_available = clone_available
         self.clone_unavailable_reason = clone_unavailable_reason
         self.discovered: list[Discovered] = []
+        self.remotes: list[RemoteRepo] = []
 
     def compose(self) -> ComposeResult:
         with Vertical(id="attach-dialog", classes="dialog"):
@@ -67,6 +79,24 @@ class AttachRepoScreen(ModalScreen[dict[str, Any] | None]):
                     yield Input(placeholder="path to a repo on this machine", id="attach-path")
                     yield Static("", id="attach-path-note", markup=True)
                     yield Button("Attach path", id="attach-path-go", variant="primary")
+                with TabPane("GitHub", id="attach-tab-gh"):
+                    # NOTHING here runs until the button is pressed. Listing an
+                    # account's repositories contacts GitHub, and a dialog
+                    # opening must never cause egress: the label says what the
+                    # press will do before it does it.
+                    yield Button(
+                        "List my GitHub repos (contacts GitHub)",
+                        id="attach-gh-list",
+                        variant="primary",
+                    )
+                    yield Static(
+                        "[dim]Nothing has been sent. Pressing this runs the gh CLI, "
+                        "which contacts GitHub with your existing login.[/dim]",
+                        id="attach-gh-note",
+                        markup=True,
+                    )
+                    yield DataTable(id="attach-gh-table", cursor_type="row")
+                    yield Button("Clone selected", id="attach-gh-pick")
                 with TabPane("Clone a URL", id="attach-tab-url"):
                     yield Input(
                         placeholder="https://github.com/owner/name",
@@ -92,6 +122,15 @@ class AttachRepoScreen(ModalScreen[dict[str, Any] | None]):
         table = self.query_one("#attach-table", DataTable)
         if not table.columns:
             table.add_columns(*DISCOVERED_COLUMNS)
+        gh_table = self.query_one("#attach-gh-table", DataTable)
+        if not gh_table.columns:
+            gh_table.add_columns(*GITHUB_COLUMNS)
+        if not gh_available():
+            self.query_one("#attach-gh-list", Button).disabled = True
+            self.query_one("#attach-gh-note", Static).update(
+                "[yellow]The gh CLI is not installed, so this route is unavailable. "
+                "The other tabs work regardless.[/yellow]"
+            )
         self._rescan()
         if not self.clone_available:
             self.query_one("#attach-url-note", Static).update(
@@ -153,6 +192,10 @@ class AttachRepoScreen(ModalScreen[dict[str, Any] | None]):
         button = event.button.id
         if button == "attach-cancel":
             self.dismiss(None)
+        elif button == "attach-gh-list":
+            self._list_github()
+        elif button == "attach-gh-pick":
+            self._pick_remote()
         elif button == "attach-pick":
             self._pick()
         elif button == "attach-path-go":
@@ -168,6 +211,61 @@ class AttachRepoScreen(ModalScreen[dict[str, Any] | None]):
                 self.on_input_changed(Input.Changed(self.query_one("#attach-url", Input), value))
                 return
             self.dismiss({"kind": "url", "value": value})
+
+    @work(thread=True)
+    def _list_github(self) -> None:
+        """Run gh OFF the UI thread: a slow network call must not freeze the dialog."""
+        repos, error = list_github_repos()
+        self.app.call_from_thread(self._show_github, repos, error)
+
+    def _show_github(self, repos: list[RemoteRepo], error: str) -> None:
+        note = self.query_one("#attach-gh-note", Static)
+        table = self.query_one("#attach-gh-table", DataTable)
+        table.clear()
+        if error:
+            # gh's own words. It explains "not logged in" better than a
+            # paraphrase, and a rewrite drifts from whatever gh says next.
+            note.update(f"[red]{error}[/red]")
+            return
+        self.remotes = mark_already_local(repos, self.discovered)
+        for remote in self.remotes:
+            table.add_row(
+                remote.name_with_owner,
+                "clone" if remote.needs_clone else "already local",
+                remote.url,
+                key=remote.name_with_owner,
+            )
+        already = sum(1 for r in self.remotes if not r.needs_clone)
+        note.update(
+            f"[dim]{len(self.remotes)} from GitHub, {already} already on this machine. "
+            f"Matching is by folder name, so it marks a row rather than choosing a "
+            f"path.[/dim]"
+        )
+
+    def _pick_remote(self) -> None:
+        table = self.query_one("#attach-gh-table", DataTable)
+        if not table.row_count:
+            self.query_one("#attach-gh-note", Static).update(
+                "[yellow]Nothing listed yet. Press the button above first.[/yellow]"
+            )
+            return
+        try:
+            key = table.coordinate_to_cell_key(table.cursor_coordinate).row_key.value
+        except Exception:  # noqa: BLE001 - no selection is not an error
+            return
+        remote = next((r for r in self.remotes if r.name_with_owner == key), None)
+        if remote is None:
+            return
+        if remote.local_path:
+            # Already here: attach the checkout rather than cloning it twice.
+            self.dismiss({"kind": "path", "value": remote.local_path})
+            return
+        if not self.clone_available:
+            self.query_one("#attach-gh-note", Static).update(
+                f"[yellow]{self.clone_unavailable_reason or 'This engine cannot clone yet.'}[/yellow]"
+            )
+            return
+        self.dismiss({"kind": "url", "value": remote.url})
 
     def _pick(self) -> None:
         table = self.query_one("#attach-table", DataTable)

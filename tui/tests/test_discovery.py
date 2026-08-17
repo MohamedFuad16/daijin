@@ -107,3 +107,62 @@ def test_the_clone_url_shapes_match_what_the_engine_accepts():
         assert looks_like_clone_url(good), good
     for bad in ("/tmp/thing", "file:///tmp/thing", "https://example.com", "", "github.com/o/n"):
         assert not looks_like_clone_url(bad), bad
+
+
+def test_the_gh_listing_is_never_run_by_merely_importing_or_constructing(monkeypatch):
+    """The rule: a dialog opening must not cause network egress.
+
+    The client's only unprompted reads are its own config and the engine's
+    wire; everything else is a labelled user action.
+    """
+    import subprocess as real_subprocess
+
+    from daijin_tui import discovery
+
+    calls: list[list[str]] = []
+
+    def spy(cmd, *args, **kwargs):
+        calls.append(list(cmd))
+        raise AssertionError(f"a subprocess ran without being asked: {cmd}")
+
+    monkeypatch.setattr(real_subprocess, "run", spy)
+    # Importing, and asking whether gh EXISTS, must not run it.
+    assert discovery.gh_available() in (True, False)
+    assert calls == [], f"gh_available shelled out: {calls}"
+
+
+def test_gh_failure_is_reported_in_ghs_own_words(monkeypatch):
+    """gh explains "not logged in" better than a paraphrase would, and a
+    rewrite drifts from whatever gh says next."""
+    import subprocess as real_subprocess
+
+    from daijin_tui import discovery
+
+    class Result:
+        returncode = 1
+        stdout = ""
+        stderr = "gh: To get started with GitHub CLI, please run: gh auth login\n"
+
+    monkeypatch.setattr(discovery, "gh_available", lambda: True)
+    monkeypatch.setattr(real_subprocess, "run", lambda *a, **k: Result())
+    repos, error = discovery.list_github_repos()
+    assert repos == []
+    assert "gh auth login" in error, f"the CLI's own sentence was lost: {error!r}"
+
+
+def test_a_remote_already_on_disk_is_marked_rather_than_matched_to_a_path():
+    """Basename matching is WEAK and is used only to mark a row.
+
+    A false match costs a redundant clone offer; a strong-looking match that
+    was wrong would attach the wrong directory.
+    """
+    from daijin_tui.discovery import Discovered, RemoteRepo, mark_already_local
+
+    local = [Discovered(path="/code/alpha", name="alpha", is_git=True, root="/code")]
+    marked = mark_already_local(
+        [RemoteRepo("owner/alpha", "https://github.com/owner/alpha"),
+         RemoteRepo("other/zeta", "https://github.com/other/zeta")],
+        local,
+    )
+    assert marked[0].needs_clone is False and marked[0].local_path == "/code/alpha"
+    assert marked[1].needs_clone is True and marked[1].local_path is None

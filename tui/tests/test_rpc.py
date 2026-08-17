@@ -163,11 +163,30 @@ def test_no_stub_claims_a_method_the_contract_actually_has():
 
 @pytest.mark.skipif(not CONTRACT_PATH.exists(), reason="contract file not present")
 def test_the_contract_declares_the_method_count_the_plan_recorded():
-    """Informational: 32 at v5, after providerCatalog and repoClone (F3/F4).
+    """The tables ARE the count, so the count is derived rather than written.
 
-    The tables remain the count, not this number.
+    A literal here was a number in THIS repo describing the ENGINE's surface,
+    which is the hand-copied shape: both halves mine, drifting together or not
+    at all. The same fix as the keyRef mirror, which stopped being a copy the
+    moment it was checked against the original.
+
+    What is asserted instead is the thing a number was standing in for: the
+    tables and the mock describe the SAME surface, in both directions.
     """
-    assert len(_contract_methods()) == 32
+    methods = _contract_methods()
+    # Non-vacuity first: a parser that returned nothing would satisfy every
+    # subset assertion below it.
+    assert len(methods) >= 25, f"the contract parse found only {sorted(methods)}"
+
+    engine = MockEngine(speed=0.0)
+    served = {
+        name[len("_rpc_"):] for name in dir(engine) if name.startswith("_rpc_")
+    }
+    assert not methods - served, f"documented and not served: {sorted(methods - served)}"
+    # The reverse catches a method this client INVENTED: one the mock answers
+    # and the contract never declared would let a screen be built against
+    # something no engine has.
+    assert not served - methods, f"served and not documented: {sorted(served - methods)}"
 
 
 @run_async

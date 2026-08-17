@@ -6,6 +6,8 @@ path, pilot.click for the mouse path.
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 from conftest import DEFAULT_REPO, SUB_75_REPO, goto, run_async, running_app, screen_text, scroll_to, settle
 
@@ -2098,3 +2100,79 @@ async def test_the_attach_dialog_refuses_only_what_the_engine_refuses(tmp_path_f
         await settle(pilot)
         assert "Ready" in text_of(note)
         app.pop_screen()
+
+
+@run_async
+async def test_opening_the_attach_dialog_contacts_nothing():
+    """The GitHub route exists and is inert until pressed.
+
+    A dialog that lists an account's repositories on open would make merely
+    looking at the attach screen a network call.
+    """
+    from daijin_tui.screens import attach_dialog
+    from daijin_tui.screens.attach_dialog import AttachRepoScreen
+    from textual.widgets import DataTable
+
+    calls: list[str] = []
+    # Patch the name the DIALOG looks up, not the one in discovery. The dialog
+    # imported the function directly, so patching discovery.list_github_repos
+    # left the dialog holding the original and the spy could never fire: the
+    # test would have passed no matter what the dialog did on open.
+    original = attach_dialog.list_github_repos
+    attach_dialog.list_github_repos = lambda *a, **k: (calls.append("ran"), ([], ""))[1]
+    try:
+        async with running_app() as (app, pilot):
+            dialog = AttachRepoScreen(roots=[])
+            await app.push_screen(dialog)
+            await settle(pilot, 12)
+            assert calls == [], "opening the dialog contacted GitHub"
+            note = text_of(dialog.query_one("#attach-gh-note", Static))
+            assert "Nothing has been sent" in note or "not installed" in note, (
+                f"the dialog does not say what pressing will do: {note!r}"
+            )
+            assert dialog.query_one("#attach-gh-table", DataTable).row_count == 0
+            app.pop_screen()
+    finally:
+        attach_dialog.list_github_repos = original
+
+
+@run_async
+async def test_a_github_repo_already_on_disk_is_attached_rather_than_cloned():
+    from daijin_tui.discovery import Discovered, RemoteRepo
+    from daijin_tui.screens.attach_dialog import AttachRepoScreen
+    from textual.widgets import DataTable
+
+    async with running_app() as (app, pilot):
+        dialog = AttachRepoScreen(roots=[])
+        await app.push_screen(dialog)
+        await settle(pilot)
+        dialog.discovered = [Discovered(path="/code/alpha", name="alpha", is_git=True, root="/code")]
+        dialog._show_github(
+            [RemoteRepo("owner/alpha", "https://github.com/owner/alpha"),
+             RemoteRepo("owner/zeta", "https://github.com/owner/zeta")],
+            "",
+        )
+        await settle(pilot)
+        table = dialog.query_one("#attach-gh-table", DataTable)
+        assert table.row_count == 2
+        states = {str(table.get_row_at(i)[1]) for i in range(2)}
+        assert states == {"clone", "already local"}
+
+        # The one already here attaches its CHECKOUT; it is not cloned twice.
+        # Captured from dismiss rather than inferred: `assert x if hasattr(...)
+        # else True` is a tautology and passes whatever the dialog does.
+        dismissed: list[Any] = []
+        dialog.dismiss = lambda value=None: dismissed.append(value)
+
+        table.cursor_coordinate = (0, 0)
+        dialog._pick_remote()
+        assert dismissed == [{"kind": "path", "value": "/code/alpha"}], (
+            f"a repo already on disk was not attached from disk: {dismissed}"
+        )
+
+        dismissed.clear()
+        table.cursor_coordinate = (1, 0)
+        dialog._pick_remote()
+        assert dismissed == [{"kind": "url", "value": "https://github.com/owner/zeta"}], (
+            f"a repo not on disk was not offered for cloning: {dismissed}"
+        )

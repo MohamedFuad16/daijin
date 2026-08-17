@@ -49,12 +49,28 @@ function normalizeBaseUrl(value) {
   return (value || 'http://localhost:11434').replace(/\/$/, '');
 }
 
-export async function checkOllama({ environment = process.env, fetchImpl = fetch } = {}) {
+/**
+ * How long a status probe waits before calling the endpoint unreachable.
+ *
+ * 1.5 s rather than 5 s. This is the STATUS path, which runs on a screen paint, not the
+ * embedding path, where a slow answer is still worth waiting for. The number is bounded by
+ * what a person will sit through rather than by what a busy server might need: a local
+ * ollama answers in single-digit milliseconds, and a remote one that cannot manage 1.5 s
+ * is not going to serve a retrieval run either.
+ *
+ * The value only matters for a host that ACCEPTS AND NEVER ANSWERS. A refused connection
+ * returns instantly and a name that does not resolve fails instantly; a machine that is
+ * asleep, firewalled, or on a VPN that went down is the case that reaches this timeout,
+ * and it was costing five seconds on every paint.
+ */
+export const PROBE_TIMEOUT_MS = 1_500;
+
+export async function checkOllama({ environment = process.env, fetchImpl = fetch, timeoutMs = PROBE_TIMEOUT_MS } = {}) {
   const baseUrl = normalizeBaseUrl(environment.OLLAMA_BASE_URL);
   try {
     const [version, tags] = await Promise.all([
-      requestJson(`${baseUrl}/api/version`, { timeoutMs: 5_000 }, { retries: 0, fetchImpl }),
-      requestJson(`${baseUrl}/api/tags`, { timeoutMs: 5_000 }, { retries: 0, fetchImpl }),
+      requestJson(`${baseUrl}/api/version`, { timeoutMs }, { retries: 0, fetchImpl }),
+      requestJson(`${baseUrl}/api/tags`, { timeoutMs }, { retries: 0, fetchImpl }),
     ]);
     const model = environment.EMBEDDING_MODEL;
     const installed = tags.models?.find((item) => item.name === model || item.name === `${model}:latest` || item.model === model);

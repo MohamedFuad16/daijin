@@ -39,6 +39,22 @@ The flag is ON THE WIRE because analyze already knew it had truncated and could 
 | `budgetEstimate` | `{ repoPath, mode: "layer1+layer2" \| "gym", scope? }` | `{ estimatedTokens, basis }` ZERO-SPEND deterministic estimate (from corpus size, commit count, and scope), computed without any provider call; this is what the spend confirmation dialog displays BEFORE consent, so an estimate that itself spent would defeat its purpose. basis is a one-line human-readable derivation |
 | `scoreHistory` | `{ repoPath }` | past floor measurements, newest first: `[{ at, caseRate: { exact, cases }, chosenBudget, embedding, originPath, index }]`; [Amended 2026-08-17, D-0035 batch: `originPath` and `index` say WHICH CHECKOUT and WHICH BRAIN produced a row. Clones share one repoId and therefore one history, which is the right identity because a trend is a property of the project, but two checkouts on different branches then write different brains' floors into one series; without these a mixed series reads as a smooth trend. `index` is `{ digest, documents }` over document ids and content hashes, not over the database file, whose bytes move with vacuum and would mark every rebuild of identical content as a new condition. `embedding` is the served identity the row was measured with. Null rather than guessed when unknown] the repo card trend line renders from this, distinct from budgetSweep which is one measurement across budgets |
 | `serveStatus` | `{}` | `{ repos: [{ path, health, floorScore, mcpActive }], ollama: { reachable, endpoint, model, dimension, version, digest, hint }, db: { backend, repos, stateRoot }, spendGate: { open, path } }` the gate is observable before anything is attempted. [Addition 2026-08-17, enum sweep: `health` is `no-brain` \| `warn` \| `ok` \| `critical`. `no-brain` means never indexed, `warn` means indexed but below the MCP unlock threshold or never measured, `ok` means at or above it, and `critical` means the brain exists and could not be opened, which is a real state the home screen must show rather than a crash. A row's health is recomputed per call, so a repo whose brain was deleted on disk stops reporting the health it had when it was attached] | [Amended 2026-08-17, owner field test F5: `ollama` and `db` were documented as BARE NAMES with no shape, which is why the contract-shape gate never checked them and the client rendered `?` for values the engine held in a variable. Both key sets are now closed and IDENTICAL ACROSS BRANCHES: `hint` used to appear only on the failure branch, so no client could rely on a fixed set. `endpoint`, `model` and `dimension` are CONFIGURATION and are sent on both branches, populated from settings whether or not ollama answers; `version` and `digest` are probe results and are null when unreachable; `hint` is null when reachable. `endpoint` is the host actually probed, threaded from `retrieval.ollamaBaseUrl`, which the probe previously could not see at all. `db.stateRoot` is always a real path, never null.]
+
+[Amended 2026-08-17, D-0043: the ollama probe is BOUNDED AND CACHED. Its timeout is 1.5 s,
+down from 5 s, because this runs on a screen paint rather than on the embedding path. And
+the result is reused for a few seconds, keyed on ENDPOINT AND MODEL, so repeated paints do
+not re-probe and a settings change re-probes at once rather than reporting the state of a
+server the engine is no longer using.
+
+Measured: with `retrieval.ollamaBaseUrl` pointing at a host that ACCEPTS AND NEVER ANSWERS,
+serveStatus cost 5,017 ms on EVERY call. It is now ~1.5 s once and ~10 ms thereafter. A
+refused connection and an unresolvable name were always instant; the timeout is only
+reached by a host that is asleep, firewalled, or behind a VPN that dropped, which is why
+every earlier unreachable-endpoint fixture failed fast and none of them noticed the cost.
+
+FAILURES ARE CACHED TOO. The unreachable endpoint is the expensive case, so a cache holding
+only successes would have missed the defect entirely. The window is deliberately short: a
+user who starts ollama should see it within a paint or two.]
 | `mcpSnippet` | `{ repoPath }` | `{ unlocked, threshold: 0.75, snippet, reason }` the paste-ready MCP config, locked below the floor threshold. [Amended 2026-08-17, D-0035 batch: `reason` is the sentence floor.js wrote for the decision, displayed verbatim by the client, so a locked snippet explains itself in the words the measurement used rather than a paraphrase] |
 
 ## Gates (discovered, user-editable data)

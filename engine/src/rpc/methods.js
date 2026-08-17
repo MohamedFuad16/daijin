@@ -687,6 +687,33 @@ export function createMethods({
   /// handles.
   let activeGymRun = null;
 
+  /**
+   * The last status probe, reused for a few seconds.
+   *
+   * serveStatus runs on a screen paint and every paint re-probed, so a slow endpoint cost
+   * its full timeout EVERY TIME and a client polling faster than the timeout piled calls
+   * up behind each other. The cache turns a repeated cost into a single one.
+   *
+   * KEYED ON ENDPOINT AND MODEL, so changing either through settings re-probes at once
+   * rather than showing the old answer for the rest of the window. A cache that outlived a
+   * configuration change would report the state of a server the engine is no longer using,
+   * which is the exact defect F5 fixed and I will not reintroduce behind a cache.
+   *
+   * SHORT on purpose: a user who starts ollama should see it within a paint or two. This
+   * caches FAILURES as well as successes, and a long window would make recovery look
+   * broken.
+   */
+  const PROBE_CACHE_MS = 3_000;
+  let probeCache = null;
+  const cachedProbe = async (key, probe) => {
+    if (probeCache && probeCache.key === key && now() - probeCache.at < PROBE_CACHE_MS) {
+      return probeCache.value;
+    }
+    const value = await probe();
+    probeCache = { key, at: now(), value };
+    return value;
+  };
+
   /// Open a repo's brain, run `body`, and always close. A leaked sqlite handle in a
   /// long-lived daemon is a file descriptor that never comes back.
   async function withStore(repoPath, body, options = {}) {
@@ -1034,6 +1061,10 @@ export function createMethods({
         EMBEDDING_MODEL: configuredModel,
         ...(configuredBaseUrl ? { OLLAMA_BASE_URL: configuredBaseUrl } : {}),
       };
+      // One probe per window, whatever the paint rate. The whole block is cached rather
+      // than the raw call, so both branches are covered: an unreachable endpoint is the
+      // expensive case and caching only success would have missed it entirely.
+      const ollamaStatus = await cachedProbe(`${configuredBaseUrl ?? ''}|${configuredModel ?? ''}`, async () => {
       let ollamaStatus;
       try {
         const served = await ollama({ environment: probeEnvironment });
@@ -1060,6 +1091,8 @@ export function createMethods({
           hint: error.message,
         };
       }
+      return ollamaStatus;
+      });
 
       // The gate is observable BEFORE anything is attempted, per the contract. A user
       // should never discover the gate's state by being refused.

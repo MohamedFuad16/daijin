@@ -2222,16 +2222,71 @@ async def test_a_blocked_phase_is_surfaced_and_the_action_waits_for_its_code():
             "an action was offered with no code behind it, which is a dead button"
         )
 
-        # And WITH a code, which is what arrives once the field reaches the wire.
-        screen._render_events([{**blocked, "actionCode": "too-little-material"}])
-        await settle(pilot)
-        assert button.display is True
-        assert "repository root" in str(button.label)
+        # WITH a code AND a root to attach, which is the owner's case.
+        original = app.client.call
+
+        async def with_root(method, params=None):
+            if method == "analyze":
+                return {"hasBrainFolder": False,
+                        "warning": {"code": "nested-in-repository",
+                                    "repositoryRoot": "/code/parent"}}
+            return await original(method, params)
+
+        app.client.call = with_root
+        try:
+            screen._render_events([{**blocked, "actionCode": "too-little-material"}])
+            await settle(pilot, 15)
+            assert button.display is True
+            assert "repository root" in str(button.label)
+            assert screen.blocked_root == "/code/parent"
+        finally:
+            app.client.call = original
 
         # The other code has no action, and must not borrow this one's button.
         screen._render_events([{**blocked, "actionCode": "gold-set-too-thin"}])
         await settle(pilot)
         assert button.display is False, "a code with no action showed one anyway"
+
+
+@run_async
+async def test_the_root_action_stays_hidden_when_there_is_no_root_to_attach():
+    """MEASURED on a real daemon 2026-08-17: a STANDALONE one-file repo and a
+    nested subdirectory BOTH block with too-little-material, and the standalone
+    one has no parent at all (repoAttach returns warning null).
+
+    So the code is necessary and not sufficient. Offering "attach the
+    repository root instead" to a repo with no parent is an action that cannot
+    be performed, which is an inert control wearing a label.
+    """
+    blocked = {
+        "ts": 400, "jobId": "job-init-0001", "phase": "goldset", "step": "blocked",
+        "detail": "Only 4 case(s) could be mined.", "level": "warn",
+        "actionCode": "too-little-material",
+    }
+    async with running_app() as (app, pilot):
+        await goto(pilot, "2")
+        screen = app.screen
+        original = app.client.call
+
+        async def no_root(method, params=None):
+            if method == "analyze":
+                # What a standalone repo returns: attached clean, nothing to say.
+                return {"hasBrainFolder": False, "warning": None}
+            return await original(method, params)
+
+        app.client.call = no_root
+        try:
+            screen._render_events([blocked])
+            await settle(pilot, 15)
+        finally:
+            app.client.call = original
+
+        panel = screen.query_one("#init-blocked", Static)
+        assert panel.display is True, "the block itself must still be reported"
+        assert "Only 4 case" in text_of(panel)
+        assert screen.query_one("#init-attach-root", Button).display is False, (
+            "a root was offered for a repo that has none"
+        )
 
 
 @run_async

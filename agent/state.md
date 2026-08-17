@@ -1,5 +1,29 @@
 # Daijin build state (authoritative)
 
+## 2026-08-17 19:50 - RELEASE-READY. The final watched run is green.
+
+CI run 31991594523 at tip 1139487, watched to completion: hygiene,
+engine, install-dry-run, tui ALL SUCCESS. tui-builder independently
+ran the full suite against a checkout of main itself (exit code
+quoted, not a count scraped - its own hour-old lesson applied), with
+the cherry-pick duplication verified harmless IN MAIN'S BYTES. Every
+lane closed, every worktree removed after per-commit confirmation,
+every branch's commits individually verified in main.
+
+One last insight kept from the close, tui-builder's, preferred over
+the leader's framing of the missed-merge: THE CAUTION CAME FROM THE
+DESTRUCTIVE ACTION, NOT FROM SUSPICION - the stronger per-commit check
+happened because a deletion was imminent, which says where rigor
+actually comes from and therefore where it will be missing: the
+non-destructive paths, which is where the incident lived.
+
+NOTHING IS OUTSTANDING. The record ends: nine phases accepted, 21
+external findings closed, the evidence chain annotated to its last
+correction, both suites green on a watched run at the tip. THE
+RELEASE SEQUENCE IS THE OWNER'S (D-0034): flip the repo public, cut
+the release with the checksum written against the real artifact, land
+the portfolio-mine redirect, deploy. daijin ships when the owner says
+so.
 ## 2026-08-17 19:30 - The ultrareview era, consolidated; all 21 findings closed
 
 THE CAMPAIGN: three external reviews (engine-data, engine-rpc,

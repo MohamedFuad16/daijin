@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { checkKeyRef, parseKeyRef, resolveKey } from '../src/roles/keys.js';
+import { KEY_REF_FORMS, checkKeyRef, keyRefRefusal, parseKeyRef, resolveKey } from '../src/roles/keys.js';
 
 const SECRET = 'sk-do-not-let-this-escape-0123456789';
 
@@ -280,4 +280,74 @@ test('the settings surface reaches for the CHECK, never the value', async () => 
   const stateSource = await read(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/rpc/state.js'), 'utf8');
   assert.match(stateSource, /checkKeyRef/, 'the settings surface uses the boolean check');
   assert.ok(!/\bresolveKey\s*\(/.test(stateSource), 'and never the value');
+});
+
+test('a PREFIXED pointer must still be absolute, which the contract said and the parser did not', () => {
+  // Found by tui-builder's conformance test, not by either of us re-reading code: it ran
+  // 28 inputs through parseKeyRef and compared verdicts against its own mirror, and the
+  // mirror was STRICTER THAN THE ENGINE here. Re-reading could not have found it, because
+  // each side matched what its own author believed the rule was.
+  //
+  // Why it is a defect and not a nicety: a relative pointer resolves against the DAEMON's
+  // working directory, whatever it was launched from, so the same setting names a
+  // different file depending on how the process started. The bare form already refused
+  // relative strings; the prefix removes the env-versus-file ambiguity and not the
+  // which-file one, and the guard existed at one site and not its sibling.
+  for (const relative of ['file:rel', 'file:./key', 'file:../up/key', 'env-file:rel#NAME', 'env-file:./e#NAME']) {
+    assert.equal(parseKeyRef(relative), null, `${relative} must be refused`);
+  }
+  // The documented forms still parse, or this would be a refusal of everything.
+  assert.deepEqual(parseKeyRef('file:/abs/key'), { kind: 'file', file: '/abs/key' });
+  assert.deepEqual(parseKeyRef('env-file:/abs/e#NAME'), { kind: 'env-file', file: '/abs/e', name: 'NAME' });
+});
+
+test('every form KEY_REF_FORMS advertises actually parses', () => {
+  // The contract's own examples, run through the parser. KEY_REF_FORMS is what a client is
+  // told to offer, and it named absolute paths while the parser took anything, which is
+  // how the two drifted in the first place.
+  for (const form of KEY_REF_FORMS) {
+    const sample = form.replace('NAME', 'SOME_KEY');
+    assert.notEqual(parseKeyRef(sample), null, `the advertised form ${form} must parse`);
+  }
+});
+
+test('a refusal NEVER echoes the value it refused, because that value is often a key', () => {
+  // Caught before staging, in my own new code. The first version of keyRefRefusal quoted
+  // the offending pointer to be helpful. The likeliest wrong value here is a PASTED API
+  // KEY, and this string crosses the RPC boundary and lands in logs, so a diagnostic that
+  // quotes what it refuses defeats the very rule the module exists to enforce. The
+  // sentinel is distinctive so a leak shows as a string match rather than a judgment call.
+  const sentinel = 'sk-ant-DAIJIN-SENTINEL-NEVER-LOG-ME-42';
+  for (const attempt of [sentinel, `file:${sentinel}`, `env-file:${sentinel}#N`, `env:${sentinel}`]) {
+    const message = keyRefRefusal(attempt);
+    assert.ok(message, `${attempt} must be refused`);
+    assert.equal(message.includes(sentinel), false, 'the refusal leaked the value it refused');
+    assert.equal(message.includes('DAIJIN-SENTINEL'), false);
+  }
+});
+
+test('a refusal carries its ACTION, and names the right one for each shape', () => {
+  // House rule: a refusal says how to fix it. Each branch names the specific fix rather
+  // than reprinting the list of forms, which is what the reader was already staring at.
+  assert.match(keyRefRefusal('file:rel/key'), /relative.*absolute path|full path from the root/s);
+  assert.match(keyRefRefusal('env-file:/abs/e'), /variable name after a #/);
+  assert.match(keyRefRefusal('env:'), /NAME of an environment variable after the colon/);
+  // A pasted key behind an env: prefix gets the same sentence, because the shape of the
+  // NAME is what is wrong and saying so is what stops the next attempt being the same.
+  assert.match(keyRefRefusal('env:sk-ant-abc'), /dashes or dots is not one/);
+  // The bare form is where a pasted key lands, so it explains what a pointer IS.
+  assert.match(keyRefRefusal('some-pasted-thing'), /NAME of a place a key is kept, never the key/);
+  // And a good pointer draws no complaint, or every message above is unreachable.
+  assert.equal(keyRefRefusal('file:/abs/ok'), null);
+  assert.equal(keyRefRefusal('env-file:/abs/e#NAME'), null);
+  assert.equal(keyRefRefusal('env:SOME_KEY'), null);
+});
+
+test('the refusal never suggests a path resolved against the daemon own working directory', () => {
+  // My first version suggested path.resolve(file), INSIDE a sentence explaining that the
+  // daemon's working directory cannot be relied on. It would have handed the user a
+  // confidently wrong path under the engine's install location: the F5 defect shape, in a
+  // message about avoiding it.
+  const message = keyRefRefusal('file:rel/key');
+  assert.equal(message.includes(process.cwd()), false, 'the message resolved a path against the daemon cwd');
 });

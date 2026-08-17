@@ -153,3 +153,32 @@ test('arrays are REPLACED by the stored file, never merged back to their default
   const settings = await state.settings();
   assert.deepEqual(settings.repoScanRoots, ['/only/this/one']);
 });
+
+test('the keyRef refusal REACHES the caller with its reason, and without the value', async () => {
+  // The same lesson as F1's blocked report: a fix that lands only on the helper is
+  // invisible to the person it was written for. A mutation dropping keyRefRefusal from
+  // settingsSet survived until this existed, because every other test called the message
+  // function directly and none checked that settingsSet used it.
+  const state = await stateWith(null);
+  await assert.rejects(
+    () => state.patchSettings({ roles: [{ role: 'engineer', keyRef: 'file:rel/key' }] }),
+    (error) => {
+      assert.match(error.message, /engineer role/, 'the refusal names which role');
+      assert.match(error.message, /relative/, 'and carries the reason, not just a rejection');
+      assert.match(error.message, /absolute path|full path from the root/);
+      return true;
+    },
+  );
+
+  // AND THE VALUE MUST NOT TRAVEL WITH IT. This error crosses the RPC boundary and lands
+  // in logs, and the likeliest wrong value here is a pasted key.
+  const sentinel = 'sk-ant-DAIJIN-SENTINEL-NEVER-LOG-ME-42';
+  await assert.rejects(
+    () => state.patchSettings({ roles: [{ role: 'engineer', keyRef: sentinel }] }),
+    (error) => {
+      assert.equal(error.message.includes(sentinel), false, 'the refusal leaked the pasted value');
+      assert.match(error.message, /never the key/);
+      return true;
+    },
+  );
+});

@@ -14,7 +14,7 @@ import path from 'node:path';
 
 import { writeJsonAtomic as sharedWriteJsonAtomic } from '../runtime/atomic.js';
 
-import { checkKeyRef, KEY_REF_FORMS, parseKeyRef } from '../roles/keys.js';
+import { checkKeyRef, keyRefRefusal, parseKeyRef } from '../roles/keys.js';
 import { checkRoleProvider, describeRoleModel } from '../roles/providers.js';
 
 export const ROLES = Object.freeze(['engineer', 'teacher', 'auditor', 'watcher']);
@@ -281,7 +281,11 @@ export class EngineState {
         // and is deliberately not accepted: it reads as an environment variable to one
         // person and a relative path to another.
         if (key === 'keyRef' && value !== null && !parseKeyRef(value)) {
-          throw new Error(`Unusable key pointer for the ${role.role} role. Expected one of: ${KEY_REF_FORMS.join(', ')}.`);
+          // The REASON, not just the rejection. A refusal that lists three accepted forms
+          // leaves the reader diffing their own string against examples to find the one
+          // character that is wrong, and for the commonest case (a relative path) the
+          // answer can simply be handed to them.
+          throw new Error(`Unusable key pointer for the ${role.role} role. ${keyRefRefusal(value)}`);
         }
         role[key] = value;
       }

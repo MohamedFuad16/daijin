@@ -179,6 +179,24 @@ and literal refusal for raw values). Role rows additionally carry
 keyResolvable (true / false / null for never-configured) and keyReason, so
 a client can render key health without any value crossing the wire.]
 
+[Amended 2026-08-17, D-0040: THE PREFIXED FORMS ARE NOW SHAPE CHECKED, which the contract
+already implied and the parser did not enforce. `file:` and the path half of `env-file:`
+must be ABSOLUTE, because a relative pointer resolves against the DAEMON's working
+directory rather than the user's shell, so the same setting names a different file
+depending on how the process was started. `env:` must be followed by something that can be
+an environment variable name (`[A-Za-z_][A-Za-z0-9_]*`), which is what stops a pasted key
+being accepted behind the prefix and failing much later as an unset variable; case is
+allowed here, unlike the bare form which must SHOUT to be distinguished from a path.
+
+Found by tui-builder's conformance test running inputs through the engine's own parser and
+comparing verdicts against its independent mirror: the mirror was STRICTER THAN THE ENGINE.
+Neither side could have found it by re-reading, since each matched what its author believed
+the rule was.
+
+The refusal now carries its ACTION rather than reprinting the list of forms, and NEVER
+ECHOES THE VALUE IT REFUSED: the likeliest wrong value here is a pasted API key, and this
+message crosses the RPC boundary and lands in logs.]
+
 `initBrain`'s report carries `blocked` when a phase stops the run:
 `{ at, reason, failed, action, actionCode }`. `reason` is the conclusion, `failed` names
 every gate that fell short WITH ITS FLOOR beside its count, and `action` is the next move

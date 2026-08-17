@@ -34,6 +34,62 @@ import path from 'node:path';
 
 export const KEY_REF_FORMS = Object.freeze(['env:NAME', 'file:/abs/path', 'env-file:/abs/path#NAME']);
 
+/// What an environment variable may be named. Hyphens, dots and spaces cannot appear in
+/// one, which is what makes this a usable filter against a pasted key.
+const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+/**
+ * WHY a pointer was refused, in a sentence that names the fix.
+ *
+ * parseKeyRef answers yes or no, which is all a caller needs to decide and nothing a user
+ * needs to act on. House rule: a refusal carries its action. A relative pointer rejected
+ * with a bare list of accepted forms leaves the reader diffing their own string against
+ * three examples to find the one character that is wrong.
+ *
+ * THE INPUT IS NEVER ECHOED. My first version quoted it, which reads as helpful and is a
+ * SECRET LEAK: the likeliest wrong value here is a pasted API key, and this string crosses
+ * the RPC boundary and lands in logs. The module exists to keep key values out of exactly
+ * those places, and a diagnostic that quotes what it refuses defeats the refusal. Every
+ * message below describes the SHAPE that was wrong and the shape that is wanted.
+ *
+ * It also does not suggest a resolved absolute path. path.resolve here would resolve
+ * against the DAEMON's working directory, inside a sentence explaining that the daemon's
+ * working directory cannot be relied on, and would hand the user a confidently wrong path
+ * under the engine's install location.
+ *
+ * Returns null when the pointer is fine, so it reads as "no complaint".
+ */
+export function keyRefRefusal(keyRef) {
+  const text = String(keyRef ?? '').trim();
+  if (!text) return 'The pointer is empty.';
+  if (parseKeyRef(text)) return null;
+
+  for (const prefix of ['env-file:', 'file:']) {
+    if (!text.startsWith(prefix)) continue;
+    const body = text.slice(prefix.length);
+    if (prefix === 'env-file:') {
+      const hash = body.lastIndexOf('#');
+      if (hash <= 0 || hash === body.length - 1) {
+        return 'An env-file pointer needs a variable name after a #, as env-file:/absolute/path#VARIABLE_NAME.';
+      }
+      if (!path.isAbsolute(body.slice(0, hash))) {
+        return 'The path in an env-file pointer is relative. It is read by the daemon, which does not share your shell\'s working directory, so give the full path from the root: env-file:/absolute/path#VARIABLE_NAME.';
+      }
+      return null;
+    }
+    if (!path.isAbsolute(body)) {
+      return 'The path is relative. It is read by the daemon, which does not share your shell\'s working directory, so give the full path from the root, as file:/absolute/path.';
+    }
+  }
+  if (text.startsWith('env:')) {
+    return 'An env pointer needs the NAME of an environment variable after the colon, as env:VARIABLE_NAME. A name may hold letters, digits and underscores, so anything with dashes or dots is not one, and a key value is never accepted here.';
+  }
+  // The bare form. This is where a PASTED KEY lands, so the message says what a pointer is
+  // rather than trying to classify what was given, and names nothing back.
+  return `A pointer is the NAME of a place a key is kept, never the key. Use an environment variable name in capitals, an absolute file path, or one of the explicit forms: ${KEY_REF_FORMS.join(', ')}.`;
+}
+
+
 /**
  * Parse a pointer without resolving it.
  *
@@ -48,15 +104,42 @@ export function parseKeyRef(keyRef) {
     const body = text.slice('env-file:'.length);
     const hash = body.lastIndexOf('#');
     if (hash <= 0 || hash === body.length - 1) return null;
-    return { kind: 'env-file', file: body.slice(0, hash), name: body.slice(hash + 1) };
+    const file = body.slice(0, hash);
+    if (!path.isAbsolute(file)) return null;
+    return { kind: 'env-file', file, name: body.slice(hash + 1) };
   }
   if (text.startsWith('file:')) {
     const file = text.slice('file:'.length);
-    return file ? { kind: 'file', file } : null;
+    // ABSOLUTE ONLY, which the contract already said and this parser did not enforce.
+    // Found by tui-builder's conformance test running 28 inputs through this function and
+    // comparing verdicts: their mirror refused `file:rel` and was CLOSER TO THE CONTRACT
+    // THAN THE ENGINE, which no amount of re-reading either side would have shown, because
+    // each matched what its author believed.
+    //
+    // It matters beyond tidiness: a relative pointer resolves against the DAEMON's working
+    // directory, which is whatever directory it was launched from and is not the user's.
+    // So the same setting reads a different file depending on how the daemon was started,
+    // or none at all. That is not a pointer, it is a coin flip.
+    //
+    // The bare form already refused relative strings for a neighbouring reason. The prefix
+    // removes the ambiguity about env-versus-file; it does not remove the ambiguity about
+    // WHICH FILE, and the guard was written at one site and not its sibling.
+    if (!file || !path.isAbsolute(file)) return null;
+    return { kind: 'file', file };
   }
   if (text.startsWith('env:')) {
     const name = text.slice('env:'.length);
-    return name ? { kind: 'env', name } : null;
+    // THE NAME IS SHAPE CHECKED TOO, and it was not. The prefix resolves env-versus-file
+    // and says nothing about whether what follows can be an environment variable at all,
+    // so `env:` plus a PASTED KEY was accepted, stored, and failed much later as an unset
+    // variable, with the user reading it as the provider being down.
+    //
+    // Same defect as the relative-path one two branches up, found by the test written for
+    // that one: a prefix removes one ambiguity and the guard for the remaining one was
+    // never written. Case is allowed here, unlike the bare form which must SHOUT to be
+    // told apart from a path, because a lowercase environment variable is legal and the
+    // prefix has already done the disambiguating.
+    return ENV_NAME.test(name) ? { kind: 'env', name } : null;
   }
   // The legacy bare form, disambiguated by shape.
   if (path.isAbsolute(text)) return { kind: 'file', file: text, legacy: true };

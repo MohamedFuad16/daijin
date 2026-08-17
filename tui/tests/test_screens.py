@@ -2176,3 +2176,53 @@ async def test_a_github_repo_already_on_disk_is_attached_rather_than_cloned():
         assert dismissed == [{"kind": "url", "value": "https://github.com/owner/zeta"}], (
             f"a repo not on disk was not offered for cloning: {dismissed}"
         )
+
+
+@run_async
+async def test_a_blocked_phase_is_surfaced_and_the_action_waits_for_its_code():
+    """MEASURED 2026-08-17: the blocked step event carries no actionCode.
+
+    The field lives on initBrain's report, which no method returns and which
+    is not written under the state root, so nothing reaches a client today.
+    The prose is therefore shown, because it is real, and the button stays
+    hidden until a code arrives: keying it on the prose is what the contract
+    forbids, and showing it with nothing behind it is the inert control this
+    project has fixed twice already.
+    """
+    from daijin_tui.screens.init_feed import InitFeedScreen
+
+    blocked = {
+        "ts": 400, "jobId": "job-init-0001", "phase": "goldset", "step": "blocked",
+        "detail": "Only 4 case(s) could be mined, which usually means the attached "
+                  "directory holds very little.",
+        "level": "warn",
+    }
+    async with running_app() as (app, pilot):
+        await goto(pilot, "2")
+        screen = app.screen
+        panel = screen.query_one("#init-blocked", Static)
+        button = screen.query_one("#init-attach-root", Button)
+        assert panel.display is False, "an empty block panel sits above every successful run"
+        assert button.display is False
+
+        screen._render_events([blocked])
+        await settle(pilot)
+        assert panel.display is True
+        assert "goldset blocked" in text_of(panel)
+        assert "attached directory holds very little" in text_of(panel), (
+            "the engine's own sentence is not shown"
+        )
+        assert button.display is False, (
+            "an action was offered with no code behind it, which is a dead button"
+        )
+
+        # And WITH a code, which is what arrives once the field reaches the wire.
+        screen._render_events([{**blocked, "actionCode": "too-little-material"}])
+        await settle(pilot)
+        assert button.display is True
+        assert "repository root" in str(button.label)
+
+        # The other code has no action, and must not borrow this one's button.
+        screen._render_events([{**blocked, "actionCode": "gold-set-too-thin"}])
+        await settle(pilot)
+        assert button.display is False, "a code with no action showed one anyway"

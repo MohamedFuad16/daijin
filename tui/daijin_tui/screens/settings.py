@@ -400,9 +400,20 @@ class SettingsScreen(DaijinScreen):
             self.report_rpc_error(error)
             notice.set_notice(error.hint, "error")
             return
+        saved_key = ""
+        key_ref = str(patch.get("keyRef") or "")
+        # A pasted key was just written to a private file; SAY WHERE, in the
+        # notice that survives the reload. The owner watched their pasted key
+        # "turn into" a file pointer with no explanation of where it went.
+        if key_ref.startswith("file:") and "/keys/" in key_ref:
+            saved_key = (
+                f" Your pasted key is stored at {key_ref[5:]} (readable only by you); "
+                f"the settings keep the pointer, never the key. Paste a new key any "
+                f"time to replace it."
+            )
         self.set_pending_notice(
-            f"{role_name} set to {patch.get('provider')} {patch.get('model')}. "
-            f"Verify it with a ping before trusting it."
+            f"{role_name} set to {patch.get('provider')} {patch.get('model')}."
+            f"{saved_key} Verify it with a ping before trusting it."
         )
         self.start_load()
 

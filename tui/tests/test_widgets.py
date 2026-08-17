@@ -190,6 +190,23 @@ def test_formatters():
     assert health_glyph("critical")[1] == "health-critical"
 
 
+def test_epoch_stamped_events_render_as_seconds_into_the_job():
+    """The real engine stamps epoch ms; the mock streams job-relative ms.
+
+    The elapsed column must read as elapsed for BOTH: an epoch rendered raw
+    reads as 1786966347.08s, which is what the owner met on the gates screen.
+    """
+    from daijin_tui.widgets.activity import EventLog
+
+    epoch = 1_786_966_347_080
+    first = {"ts": epoch, "phase": "probe", "step": "probe", "detail": "x"}
+    later = {"ts": epoch + 2_500, "phase": "classify", "step": "classify", "detail": "y"}
+    assert EventLog.format_event(first, base_ts=float(epoch)).startswith("   0.00s")
+    assert EventLog.format_event(later, base_ts=float(epoch)).startswith("   2.50s")
+    # Relative stamps keep their own zero: base 0 leaves them untouched.
+    assert EventLog.format_event({"ts": 4_700, "phase": "p", "step": "s", "detail": "d"}).startswith("   4.70s")
+
+
 def test_a_phase_that_never_ran_is_not_reported_as_done():
     """The client's phase list is a guess; the engine's pipeline is its own.
 

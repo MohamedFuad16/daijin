@@ -49,12 +49,14 @@ class RepoHomeScreen(DaijinScreen):
     heading = "Repo home"
     subheading = "connected repos, health, measured floor"
 
-    def content(self) -> Iterable[Any]:
-        # The mark, persistent. The splash is a moment; this is the brand
-        # staying put, and it is the same object in a size a header can hold.
-        # Sized at compose time and re-sized on resize, because a mark that
-        # wraps is not a smaller mark, it is a broken one.
+    def brand(self) -> Iterable[Any]:
+        # The mark, persistent, ABOVE THE NAV (owner field round 6): the very
+        # top of the screen, not a block inside the content flow. Sized at
+        # compose time and re-sized on resize, because a mark that wraps is
+        # not a smaller mark, it is a broken one.
         yield Static("", id="home-wordmark", markup=False)
+
+    def content(self) -> Iterable[Any]:
         yield SectionTitle("Connected repos", "click a card, or tab and press enter")
         # Scrollable, not a plain row. Four cards at 42 columns already exceed
         # a 170 column terminal, and a card past the right edge is reachable by

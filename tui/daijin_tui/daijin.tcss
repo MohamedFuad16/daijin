@@ -14,6 +14,23 @@
     padding: 0 1;
 }
 
+.nav-brand {
+    width: auto;
+    padding: 1 2 0 1;
+    color: $warning;
+    text-style: bold;
+}
+
+/* The home screen's drawn mark, above the nav. Its own block, never inside
+   the scrolling content, so it is the first thing on the screen and stays
+   there. Height follows content: the word costs one row, the full mark
+   seven, nothing costs nothing. */
+#home-wordmark {
+    height: auto;
+    padding: 0 1;
+    color: $warning;
+}
+
 .nav-button {
     min-width: 10;
     margin: 0 1 0 0;
@@ -327,6 +344,19 @@
     border: round $panel;
 }
 
+/* The brain hero: status and rate first, big and unmissable. */
+#brain-hero {
+    height: auto;
+    padding: 1 1 0 1;
+}
+#brain-hero-gauge {
+    margin: 0 1;
+}
+#brain-hero-facts {
+    height: auto;
+    padding: 0 1 1 1;
+}
+
 /* Modal dialogs */
 
 .dialog {
@@ -362,6 +392,34 @@
 #spend-estimate {
     padding: 1 0;
     color: $warning;
+}
+
+/* Role dialog: labelled fields with breathing room. The field list scrolls
+   inside the frame so the Save row never leaves the screen, and every note
+   wraps inside the dialog instead of running past its border. */
+#role-dialog {
+    max-height: 90%;
+}
+#role-fields {
+    height: auto;
+    max-height: 28;
+}
+.dialog-title {
+    margin-bottom: 1;
+}
+.field-label {
+    color: $text-muted;
+    margin-top: 1;
+    height: 1;
+}
+.field-note {
+    height: auto;
+    margin-bottom: 1;
+}
+#role-tools-web {
+    margin-top: 1;
+    border: none;
+    height: 1;
 }
 
 /* The attach dialog's tables scroll INSIDE the dialog. 24 discovered repos

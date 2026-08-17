@@ -36,6 +36,10 @@ class NavBar(Horizontal):
         self.add_class("nav-bar")
 
     def compose(self) -> ComposeResult:
+        # The brand sits at the LEFT OF THE NAV, the way a site puts its logo
+        # in the header bar (owner field round 6). One row, plain word: the
+        # big drawn mark lives above the nav on the home screen only.
+        yield Static("DAIJIN", classes="nav-brand")
         for key, label in NAV_ITEMS:
             button = Button(label, id=f"nav-{key}", classes="nav-button")
             if key == self.active:
@@ -84,6 +88,9 @@ class DaijinScreen(Screen):
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
+        # A screen may put chrome ABOVE the nav: the home screen's drawn
+        # wordmark lives here so it sits at the very top, never mid-content.
+        yield from self.brand()
         yield NavBar(self.mode_name)
         yield Static(self._heading_markup(), markup=True, id="screen-heading")
         with VerticalScroll(id="screen-body"):
@@ -128,6 +135,10 @@ class DaijinScreen(Screen):
         if getattr(self.app, "is_mock", False):
             line += "  [reverse] MOCK ENGINE [/reverse]"
         return line
+
+    def brand(self) -> Iterable[Any]:
+        """Chrome above the nav bar. Empty for every screen but home."""
+        return ()
 
     def content(self) -> Iterable[Any]:  # pragma: no cover - overridden
         return ()

@@ -13,6 +13,7 @@ from ..rpc import RpcError
 from ..widgets import (
     Banner,
     DitherBars,
+    Gauge,
     MCP_THRESHOLD,
     SectionTitle,
     case_rate_value,
@@ -55,6 +56,13 @@ class BrainScreen(DaijinScreen):
 
     def content(self) -> Iterable[Any]:
         yield Banner("", tone="info", id="brain-notice")
+        # THE HERO (owner field round 6): the brain's status and its retrieval
+        # rate, big, before anything else. The reader should know "healthy or
+        # not" and "how much it retrieves" without scanning a table; the
+        # table below carries the rest of the numbers.
+        yield Static("", id="brain-hero", markup=True)
+        yield Gauge(caption="", width=60, id="brain-hero-gauge")
+        yield Static("", id="brain-hero-facts", markup=True)
         with TabbedContent(id="brain-tabs"):
             with TabPane("Retrieval", id="brain-tab-retrieval"):
                 yield SectionTitle("Measured floor", "from retrievalScore, re-derived, not read off a filename")
@@ -146,6 +154,7 @@ class BrainScreen(DaijinScreen):
         case_rate = score.get("caseRate")
         value = case_rate_value(case_rate)
         tone = "green" if (value or 0) >= MCP_THRESHOLD else "yellow"
+        self._paint_hero(score, value, tone)
         summary.update(
             f"case rate [{tone}]{format_case_rate(case_rate)}[/{tone}]  "
             f"[dim]ratio {format_ratio(value)}, threshold {MCP_THRESHOLD}[/dim]\n"
@@ -191,6 +200,53 @@ class BrainScreen(DaijinScreen):
                 ceiling=total or None,
                 ceiling_label=f"ceiling {total} cases; chosen budget carries the solid texture",
             )
+
+    def _paint_hero(self, score: dict[str, Any], value: float | None, tone: str) -> None:
+        """Status word and retrieval rate, large; the other numbers as facts.
+
+        The status is DERIVED from the same numbers the floor enforces:
+        healthy is at-or-above the unlock threshold with zero violations,
+        below-floor is under it, and a violation makes it unhealthy whatever
+        the rate says, because a must-not pair surfacing is a wrong answer
+        being served.
+        """
+        hero = self.query_one("#brain-hero", Static)
+        gauge = self.query_one("#brain-hero-gauge", Gauge)
+        facts = self.query_one("#brain-hero-facts", Static)
+        violations = int(score.get("violations") or 0)
+        if value is None:
+            hero.update("[b yellow]NOT MEASURED[/b yellow]  [dim]run init to measure this brain[/dim]")
+            facts.update("")
+            return
+        percent = f"{value * 100:.1f}%"
+        cases = ""
+        if isinstance(score.get("caseRate"), dict):
+            cases = str(score["caseRate"].get("cases") or "")
+        if violations:
+            status, status_tone = "UNHEALTHY", "red"
+            why = f"{violations} must-not violation(s): wrong answers are being served"
+        elif (value or 0) >= MCP_THRESHOLD:
+            status, status_tone = "HEALTHY", "green"
+            why = "above the unlock threshold; MCP serving is offered"
+        else:
+            status, status_tone = "BELOW FLOOR", "yellow"
+            why = "under the unlock threshold; see Diagnosis for what is missing"
+        hero.update(
+            f"[b {status_tone}]{status}[/b {status_tone}]"
+            f"   retrieval [b {status_tone}]{percent}[/b {status_tone}]"
+            + (f" [dim]({cases} gold cases answered)[/dim]" if cases else "")
+            + f"\n[dim]{why}[/dim]"
+        )
+        gauge.set_value(
+            float(value),
+            motion=getattr(self.app, "motion", None),
+            caption=f"retrieval {percent}, threshold {MCP_THRESHOLD}",
+        )
+        measured = f"   measured {score['at']}" if score.get("at") else ""
+        facts.update(
+            f"[dim]MRR {score.get('mrr')}   violations {violations}   "
+            f"budget {score.get('chosenBudget')}{measured}[/dim]"
+        )
 
     async def _load_mcp(self, repo: str) -> None:
         panel = self.query_one("#mcp-summary", Static)

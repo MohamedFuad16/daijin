@@ -27,7 +27,7 @@ from typing import Any, Iterable, Sequence
 
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, Vertical
+from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Button, Checkbox, Input, Select, Static
 
@@ -191,6 +191,31 @@ def looks_like_pasted_key(value: str) -> bool:
     )
 
 
+def discover_key_sources(state_root: Any = None) -> list[tuple[str, str]]:
+    """Pointers this machine already has: saved key files and env vars.
+
+    The owner asked for discovery instead of typing: a picker of what exists.
+    Two sources, both local and instant: the state root's keys/ directory
+    (where pasted keys are saved), and environment variable NAMES that look
+    like credentials. Names only, never values: the value stays wherever it
+    is, which is the entire point of pointers. Deliberately NO machine-wide
+    filesystem scan: a regex walk of the disk hunting key-shaped files would
+    be slow, invasive, and indistinguishable from malware to anyone watching.
+    """
+    sources: list[tuple[str, str]] = []
+    keys_dir = (Path(state_root) if state_root else Path.home() / ".daijin") / "keys"
+    try:
+        for file in sorted(keys_dir.glob("*.key")):
+            sources.append((f"saved key: {file.name}", f"file:{file}"))
+    except OSError:
+        pass
+    credential = re.compile(r"(API_?KEY|TOKEN|SECRET)", re.IGNORECASE)
+    for name in sorted(os.environ):
+        if credential.search(name) and os.environ.get(name, "").strip():
+            sources.append((f"env var: {name}", f"env:{name}"))
+    return sources
+
+
 class RoleConfigScreen(ModalScreen[dict[str, Any] | None]):
     """Returns the patch for one role, or None on cancel."""
 
@@ -212,6 +237,7 @@ class RoleConfigScreen(ModalScreen[dict[str, Any] | None]):
         # claude-code provider reads them; an empty list renders as an empty
         # picker with the note saying where agent files live.
         self.agents: list[dict[str, Any]] = list(agents or [])
+        self.key_sources: list[tuple[str, str]] = []
 
     # Catalog reads -------------------------------------------------------
 
@@ -226,49 +252,74 @@ class RoleConfigScreen(ModalScreen[dict[str, Any] | None]):
 
     def compose(self) -> ComposeResult:
         role_name = self.role.get("role", "role")
+        self.key_sources = discover_key_sources(getattr(self.app, "state_root", None))
+        # LABELLED AND SPACED (owner field round 6): every control carries a
+        # dim label above it and breathing room around it, so a note under one
+        # field cannot read as the caption of the next. The field list
+        # scrolls; the Save row never moves.
         with Vertical(id="role-dialog", classes="dialog"):
-            yield Static(f"[b]{role_name}[/b]", markup=True)
-            # NO SELECTION IS EXPRESSED BY OMITTING THE VALUE, not by a
-            # sentinel. Select.BLANK in Textual 8.2.8 is a legacy alias equal to
-            # `False`, and the widget's own validator REFUSES it, so
-            # `provider or Select.BLANK` handed the Select an illegal value for
-            # every role with no provider - which is every role a fresh user
-            # has. Select.NULL is the real sentinel, and not passing a value at
-            # all is simpler than naming it.
-            configured = self.role.get("provider")
-            provider_options = [
-                (p.get("label", p.get("id")), p.get("id")) for p in self.providers
-            ]
-            if configured and any(value == configured for _, value in provider_options):
-                yield Select(provider_options, id="role-provider", prompt="provider",
-                             value=configured)
-            else:
-                yield Select(provider_options, id="role-provider", prompt="provider")
-            yield Select([], id="role-model", prompt="model", allow_blank=True)
-            yield Select([], id="role-reasoning", prompt="reasoning effort", allow_blank=True)
-            yield Static("", id="role-model-note", markup=True)
-            # Which SUB-AGENT plays the role, shown only for claude-code. The
-            # model above stays what it is: which Claude model the CLI asks for.
-            yield Select(
-                [(f"{a.get('name')} ({a.get('scope')})", a.get("id")) for a in self.agents],
-                id="role-agent",
-                prompt="sub-agent",
-                allow_blank=True,
-            )
-            yield Static("", id="role-agent-note", markup=True)
-            yield Input(
-                placeholder="endpoint (empty follows the catalog default)",
-                id="role-endpoint",
-                value=str(self.role.get("endpoint") or ""),
-            )
-            yield Static("", id="role-endpoint-note", markup=True)
-            yield Checkbox("Web search (Z.ai tools)", id="role-tools-web", value=False)
-            yield Input(
-                placeholder="paste your API key, or point at one: env:NAME, file:/abs/path",
-                id="role-keyref",
-                value=str(self.role.get("keyRef") or ""),
-            )
-            yield Static("", id="role-key-note", markup=True)
+            yield Static(f"[b]{role_name}[/b]", markup=True, classes="dialog-title")
+            with VerticalScroll(id="role-fields"):
+                yield Static("provider", classes="field-label")
+                # NO SELECTION IS EXPRESSED BY OMITTING THE VALUE, not by a
+                # sentinel. Select.BLANK in Textual 8.2.8 is a legacy alias
+                # equal to `False`, and the widget's own validator REFUSES it,
+                # so `provider or Select.BLANK` handed the Select an illegal
+                # value for every role with no provider - which is every role
+                # a fresh user has.
+                configured = self.role.get("provider")
+                provider_options = [
+                    (p.get("label", p.get("id")), p.get("id")) for p in self.providers
+                ]
+                if configured and any(value == configured for _, value in provider_options):
+                    yield Select(provider_options, id="role-provider", prompt="provider",
+                                 value=configured)
+                else:
+                    yield Select(provider_options, id="role-provider", prompt="provider")
+                yield Static("model", classes="field-label")
+                yield Select([], id="role-model", prompt="model", allow_blank=True)
+                yield Static("reasoning", classes="field-label", id="role-reasoning-label")
+                yield Select([], id="role-reasoning", prompt="reasoning effort", allow_blank=True)
+                yield Static("", id="role-model-note", markup=True, classes="field-note")
+                # Which SUB-AGENT plays the role, shown only for claude-code.
+                # The model above stays what it is: which Claude model the CLI
+                # asks for.
+                yield Static("sub-agent", classes="field-label", id="role-agent-label")
+                yield Select(
+                    [(f"{a.get('name')} ({a.get('scope')})", a.get("id")) for a in self.agents],
+                    id="role-agent",
+                    prompt="sub-agent",
+                    allow_blank=True,
+                )
+                yield Static("", id="role-agent-note", markup=True, classes="field-note")
+                yield Static("endpoint", classes="field-label", id="role-endpoint-label")
+                yield Input(
+                    placeholder="endpoint (empty follows the catalog default)",
+                    id="role-endpoint",
+                    value=str(self.role.get("endpoint") or ""),
+                )
+                yield Static("", id="role-endpoint-note", markup=True, classes="field-note")
+                # SHORT caption, wrapped note on its own line: the one-line
+                # checkbox caption overflowed the dialog frame and clipped.
+                yield Checkbox("Web search", id="role-tools-web", value=False)
+                yield Static("", id="role-tools-note", markup=True, classes="field-note")
+                yield Static("API key", classes="field-label", id="role-key-label")
+                yield Input(
+                    placeholder="paste your API key, or point at one: env:NAME, file:/abs/path",
+                    id="role-keyref",
+                    value=str(self.role.get("keyRef") or ""),
+                )
+                # WHAT THIS MACHINE ALREADY HAS: saved key files under the
+                # state root and credential-shaped env var NAMES. Picking one
+                # fills the field above; pasting still works. Names only,
+                # never values.
+                yield Select(
+                    list(self.key_sources),
+                    id="role-key-source",
+                    prompt="or pick a key this machine already has",
+                    allow_blank=True,
+                )
+                yield Static("", id="role-key-note", markup=True, classes="field-note")
             with Horizontal(classes="dialog-actions"):
                 yield Button("Save", id="role-save", variant="primary")
                 yield Button("Cancel", id="role-cancel")
@@ -319,14 +370,17 @@ class RoleConfigScreen(ModalScreen[dict[str, Any] | None]):
                 endpoint_note.update(
                     f"[dim]{new}[/dim]" if new else ""
                 )
-        endpoint_field.display = provider_id != "claude-code"
-        endpoint_note.display = provider_id != "claude-code"
+        show_endpoint = provider_id != "claude-code"
+        endpoint_field.display = show_endpoint
+        endpoint_note.display = show_endpoint
+        self.query_one("#role-endpoint-label", Static).display = show_endpoint
 
         agent_select = self.query_one("#role-agent", Select)
         agent_note = self.query_one("#role-agent-note", Static)
         is_agent_provider = provider_id == "claude-code"
         agent_select.display = is_agent_provider
         agent_note.display = is_agent_provider
+        self.query_one("#role-agent-label", Static).display = is_agent_provider
         if is_agent_provider:
             configured = self.role.get("agentRef")
             if configured and any(a.get("id") == configured for a in self.agents):
@@ -341,14 +395,16 @@ class RoleConfigScreen(ModalScreen[dict[str, Any] | None]):
             )
 
         tools_box = self.query_one("#role-tools-web", Checkbox)
+        tools_note = self.query_one("#role-tools-note", Static)
         offered = provider.get("tools") or []
         has_web = any(tool.get("id") == "web_search" for tool in offered)
         tools_box.display = has_web
+        tools_note.display = has_web
         if has_web:
             note = next(
                 (tool.get("note") for tool in offered if tool.get("id") == "web_search"), None
             )
-            tools_box.label = f"Web search{f' - {note}' if note else ''}"
+            tools_note.update(f"[dim]{note}[/dim]" if note else "")
             tools_box.value = bool(self.role.get("tools")) and "web_search" in (
                 self.role.get("tools") or []
             )
@@ -406,6 +462,13 @@ class RoleConfigScreen(ModalScreen[dict[str, Any] | None]):
             provider = self.query_one("#role-provider", Select).value
             self._fill_reasoning(provider, event.value)
             self._describe_model(provider, event.value)
+        elif event.select.id == "role-key-source":
+            # Picking a discovered source FILLS THE FIELD rather than saving
+            # behind it: the input stays the single truth of what will be
+            # stored, so what you read is what you save.
+            if event.value is not Select.NULL and event.value:
+                self.query_one("#role-keyref", Input).value = str(event.value)
+                self._check_key_ref()
 
     # Key pointer ---------------------------------------------------------
 

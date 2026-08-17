@@ -86,8 +86,27 @@ PHASE_VERBS: dict[str, Sequence[str]] = {
     "rounds": ("editing", "checking gates", "watching the boundary"),
     "submit": ("submitting", "grading blind", "reading the rubric"),
     "audit": ("auditing criteria", "counting the cohort"),
+    # THE REAL ENGINE'S PHASE NAMES. The rows above are the mock's dialect,
+    # and against the daemon only two of them matched, so most of a real init
+    # cycled the fallback's three words for its entire run - which is what the
+    # owner watched (field round 6). Wire names from pipeline.js setPhase.
+    "reindex": ("clearing the index", "re-reading the brain", "re-embedding"),
+    "evidence": ("reading sources", "walking history", "collecting manifests"),
+    "adopt": ("reading your brain", "validating citations", "adopting units"),
+    "scaffold": ("distilling evidence", "drafting units", "writing the brain"),
+    "narrate": ("narrating", "citing sources", "checking claims"),
+    "ingest": ("chunking", "embedding", "writing the store"),
+    "gates": ("probing manifests", "running baselines", "classifying"),
+    "goldset": ("mining commits", "checking integrity", "certifying the gauge"),
+    "floor": ("sweeping budgets", "scoring retrieval", "picking the floor"),
+    "probe": ("scanning manifests", "listing candidates"),
+    "classify": ("running each gate", "reading exit codes", "labelling"),
+    "clone": ("resolving the remote", "cloning", "attaching"),
 }
-DEFAULT_VERBS = ("working", "reading", "writing")
+# Varied on purpose: three beats of the same two words read as a stuck
+# spinner. These stay TRUTHFULLY GENERIC (they describe no phase in
+# particular), but they no longer loop "reading, writing" at the user.
+DEFAULT_VERBS = ("working", "reading", "sifting", "assembling", "writing", "checking")
 
 # The step-event shape has no terminal marker. The mock emits a "done" phase;
 # the real engine does not, so a client cannot tell "finished" from "stalled"
@@ -465,7 +484,14 @@ class EventLog(RichLog):
         )
 
     @classmethod
-    def format_event(cls, event: dict[str, Any], width: int = 0, *, truncate: bool = True) -> str:
+    def format_event(
+        cls,
+        event: dict[str, Any],
+        width: int = 0,
+        *,
+        truncate: bool = True,
+        base_ts: float = 0.0,
+    ) -> str:
         """One event as fixed columns, with the detail wrapped under itself.
 
         The stream has to read as a TABLE even when a detail is a sentence, so
@@ -475,7 +501,15 @@ class EventLog(RichLog):
         their own segment for the same reason.
         """
         ts = event.get("ts")
-        stamp = f"{float(ts) / 1000:7.2f}s" if isinstance(ts, (int, float)) else str(ts)
+        # The REAL engine stamps events with epoch milliseconds while the mock
+        # streams job-relative ones, and this column claims to be elapsed
+        # time. Rendered raw, an epoch reads as "1786966347.08s" (owner field
+        # round 6). An epoch-sized stamp is rebased against the log's first
+        # event so both dialects render as seconds into the job.
+        if isinstance(ts, (int, float)):
+            stamp = f"{(float(ts) - base_ts) / 1000:7.2f}s"
+        else:
+            stamp = str(ts)
         step = str(event.get("step", "?"))
         marker = STEP_MARKER.get(step, "")
         prefix = f"[{marker}] " if marker else ""
@@ -529,13 +563,33 @@ class EventLog(RichLog):
         step = str(event.get("step") or "")
         return STEP_STYLE.get(step) or LEVEL_STYLE.get(str(event.get("level") or "info"), "white")
 
+    def _base_ts(self) -> float:
+        """The job's zero point: the first event's stamp, when it is an epoch.
+
+        Mock streams are already job-relative (small numbers), so they keep
+        their own zero; anything stamped past 1e10 ms is a wall clock and is
+        rebased. The threshold is three centuries away from ambiguity: no job
+        runs 1e10 ms (~116 days of relative time) and no epoch is below it.
+        """
+        first = next(
+            (e.get("ts") for e in self._events if isinstance(e.get("ts"), (int, float))), None
+        )
+        if first is None or float(first) < 1e10:
+            return 0.0
+        return float(first)
+
     def append_event(self, event: dict[str, Any]) -> None:
         self.event_count += 1
         self._events.append(event)
         # The widget's own width, so the wrap happens where the frame ends.
         self.write(
             Text(
-                self.format_event(event, self.size.width or 0, truncate=self.truncate),
+                self.format_event(
+                    event,
+                    self.size.width or 0,
+                    truncate=self.truncate,
+                    base_ts=self._base_ts(),
+                ),
                 style=self.style_for(event),
             )
         )
@@ -552,10 +606,11 @@ class EventLog(RichLog):
         # the events, which are the thing being redrawn.
         super().clear()
         width = self.size.width or 0
+        base_ts = self._base_ts()
         for event in self._events:
             self.write(
                 Text(
-                    self.format_event(event, width, truncate=truncate),
+                    self.format_event(event, width, truncate=truncate, base_ts=base_ts),
                     style=self.style_for(event),
                 )
             )

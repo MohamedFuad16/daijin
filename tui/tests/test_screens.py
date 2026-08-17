@@ -483,6 +483,23 @@ async def test_init_feed_refuses_to_start_without_a_repo():
 
 
 @run_async
+async def test_the_brain_hero_says_healthy_and_the_rate_before_anything_else():
+    """Status and retrieval rate first, big; the numbers ride below as facts.
+
+    Healthy is DERIVED: at-or-above the unlock threshold with zero
+    violations. The mock repo sits at 31 of 34 (91.2%) with none, so the hero
+    must say HEALTHY and carry the percentage.
+    """
+    async with running_app() as (app, pilot):
+        await goto(pilot, "3")
+        hero = text_of(app.screen.query_one("#brain-hero", Static))
+        assert "HEALTHY" in hero
+        assert "91.2%" in hero
+        facts = text_of(app.screen.query_one("#brain-hero-facts", Static))
+        assert "violations 0" in facts
+
+
+@run_async
 async def test_brain_reports_the_floor_as_a_count_with_mrr_marked_recorded():
     async with running_app() as (app, pilot):
         await goto(pilot, "3")

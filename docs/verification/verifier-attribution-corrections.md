@@ -114,3 +114,67 @@ the live engine in place. I placed `gate-scanner-plants.mjs` beside it as an acc
 instrument and reviewed the battery's hardening across three rounds without noticing the
 in-place default. The finding is mine and so is the miss; recorded here so the endorsement
 and the defect appear in the same place.
+
+---
+
+## Annotation 2026-08-17, following ultrareview run 1 (findings 5 and 6)
+
+Two instrument defects were found by the owner's ultrareview in code whose outputs sit in
+this evidence chain. **Neither changes a recorded conclusion.** Both are annotated rather
+than re-run, because in each case the question was whether a conclusion had leaned on a
+wrong value, and in each case it had not. Artifacts were read from `main` via `git show`
+while the shared checkout was on a review branch.
+
+### Finding 5: `parityMode` is wrong in the P2 artifacts and was never read
+
+`scoreGoldset` recorded `parityMode` from the corpus DESCRIPTOR rather than from the store
+actually in use (`retrieval-score.js:277`), so both arms of the P2 A/B carry
+`"parityMode": true` on precisely the axis the two arms differed.
+
+The extractor's sharpening, adopted here because it is stronger than my own reading: on the
+sqlite arm the value is not merely wrong, it is **meaningless**. `parityMode` is a pgvector
+concept, the flag that makes that store emit the platform's exact statements. The sqlite
+store has no such mode to be in, so `"parityMode": true` on `ab-sqlite.json` is a category
+error rather than an incorrect boolean.
+
+**Report 7's conclusion did not consult the field.** Which path each arm ran was established
+from the MRR value:
+
+```
+ab-pgvector  mrr 0.6637955182072829   the P1 shipped-ordered reference, bit for bit
+ab-sqlite    mrr 0.6598739495798318
+             P1 parity-path reference 0.6588935574229692, matched by neither arm
+```
+
+and the same-construction check was the one-line arm-selector diff between the two run
+scripts, also structural. So the finding is INERT ON THE RECORD and REAL IN THE ARTIFACT: a
+future reader who takes the stamped field at face value will conclude both arms ran parity
+mode, which would mean the A/B compared nothing.
+
+This is the one occasion in this build where the rule "re-derive from values, never from a
+label" paid directly rather than being asserted. It was not foresight about this defect; it
+is that a label is a claim and a value is a measurement.
+
+### Finding 6: the permute defect could not fire on any recorded gold set
+
+`permuteAnswers` can emit `must_return: [undefined]` when a case's `must_return` covers every
+unique id in the set. That survives validation, throws later in `assertIdsExist`, and drops
+the D-0030 discriminating range to "unavailable" rather than to an error anyone would notice.
+
+Every range in this chain was MEASURED, none unavailable: P3's control at 18 of 25, P3.5's
+generated arm at 18 of 25 with ranges 0.28 and 0.8234761904761905, P3.5's curated arm at 4
+of 25.
+
+The `"unavailable": 1` appearing in both P3.5 reports is NOT a range. Resolved by path rather
+than by key name, it is `.phases.gates.unavailable`, the gate classification count for the
+pnpm gate absent on the measuring machine. An `unavailable` in a file about ranges is the
+coincidence that gets misread in whichever direction the reader already believes, which is
+why it was checked by path.
+
+The defect was also structurally unable to fire. The P3 gold set carries 11 unique answer ids
+across 25 cases and **zero cases whose `must_return` covers every id**, so the `wrong` pool
+always held 10 members. The precondition never existed.
+
+Worth fixing for the corpus it will eventually meet, where the failure mode is worse than a
+crash: the range silently reads "unavailable", and a saturated gauge loses the single number
+that would have revealed the saturation.

@@ -197,7 +197,8 @@
           "label": "Web search",
           "note": "Adds Z.ai's web_search tool to this role's calls (the tools block of the chat completions request). Web Search, Web Reader and Zread share one usage quota."
         }
-      ]
+      ],
+      "note": "Z.ai bills two realms separately: api/paas/v4 is pay-as-you-go and api/coding/paas/v4 is the GLM Coding Plan. A key only works on the realm its plan lives in; a 429 'insufficient balance' on one realm often means the key belongs to the other."
     },
     {
       "id": "ollama",

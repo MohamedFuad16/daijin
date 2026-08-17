@@ -11,10 +11,12 @@
 // they would do anything, so the refusal cannot regress into a call when their phases land.
 
 import { mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises';
+import { execFile as execFileCb } from 'node:child_process';
 import { homedir } from 'node:os';
 import { loadProviderCatalog } from '../roles/providers.js';
 import { resolveKey } from '../roles/keys.js';
 import { pingProvider } from '../roles/ping.js';
+import { FIX_CATALOG, ZAI_PAYG_URL, gateFindings, roleFindings, statusFindings } from './watch.js';
 import { scanAgentCatalog } from '../roles/agents.js';
 import { cloneRepository, parseCloneUrl } from '../init/clone.js';
 import { createHash } from 'node:crypto';
@@ -895,7 +897,10 @@ export function createMethods({
     }
   }
 
-  return {
+  // NAMED, not returned inline: server dispatch grabs bare function references
+  // (methods[name]), so `this` inside a handler is undefined. systemCheck
+  // composes serveStatus through this binding instead.
+  const api = {
     // ---- handshake and lifecycle ------------------------------------------------
 
     async hello() {
@@ -2125,6 +2130,68 @@ export function createMethods({
       return { agents };
     },
 
+    /// The tool-wide watch (owner field round 6): the watcher's beat over the
+    /// WHOLE product, mechanised and zero spend. Findings are board-shaped
+    /// rows (source 'watcher'); the paid narration rides later. Each sweep is
+    /// computed fresh from state the engine already holds - a stored finding
+    /// would keep reporting a problem after the owner fixed it.
+    async systemCheck() {
+      const at = new Date(now()).toISOString();
+      const status = await api.serveStatus({});
+      const settings = await state.settings();
+      const catalog = await loadProviderCatalog();
+      const zaiDefault = catalog.providers.find((p) => p.id === 'zai')?.endpointDefault || ZAI_PAYG_URL;
+      const findings = [
+        ...statusFindings(status, { at }),
+        ...roleFindings(settings.roles, { at, zaiDefault }),
+      ];
+      for (const repo of status.repos || []) {
+        try {
+          const content = await readFile(gatesFilePath(repo.path), 'utf8');
+          findings.push(...gateFindings(repo.path, parseGatesFile(content), { at }));
+        } catch {
+          // No gates file is not a finding: discovery simply has not run, and
+          // the init flow already owns telling the user that.
+        }
+      }
+      return { findings, at };
+    },
+
+    /// The auditor's hand, under two locks: confirm is required on every call
+    /// (this changes the MACHINE or the settings, and the engine never infers
+    /// consent), and the catalog is CLOSED (watch.js) - a fix either runs a
+    /// command written in this codebase or patches a setting to a value
+    /// written in this codebase. Nothing from a repo or a provider response
+    /// is ever executed.
+    async systemFix(params) {
+      const fix = FIX_CATALOG[params?.fixId];
+      if (!fix) {
+        throw invalidParams('unknown fix',
+          `fixId must be one of: ${Object.keys(FIX_CATALOG).join(', ')}. The fix catalog is closed on purpose.`);
+      }
+      if (params?.confirm !== true) {
+        throw invalidParams('not confirmed',
+          `${fix.label} changes this machine or its settings, so it needs confirm: true from an explicit user action.`);
+      }
+      if (fix.needsRole) {
+        if (!ROLES.includes(params?.role)) {
+          throw invalidParams('unknown role', `This fix patches one role's endpoint; role must be one of ${ROLES.join(', ')}.`);
+        }
+        await state.patchSettings({ roles: [{ role: params.role, endpoint: fix.endpoint }] });
+        return { ok: true, applied: params.fixId, detail: `${params.role} endpoint set to ${fix.endpoint}. Verify the role to confirm.` };
+      }
+      const run = deps.execFix || ((command, args) => new Promise((resolve) => {
+        execFileCb(command, args, { timeout: 180_000 }, (error, stdout, stderr) => {
+          resolve({ error, stdout: String(stdout || ''), stderr: String(stderr || '') });
+        });
+      }));
+      const { error, stdout, stderr } = await run(fix.command, [...fix.args]);
+      if (error) {
+        return { ok: false, applied: params.fixId, detail: `${fix.label} failed: ${String(stderr || error.message || '').slice(-400)}` };
+      }
+      return { ok: true, applied: params.fixId, detail: `${fix.label} succeeded. ${String(stdout).trim().split('\n').slice(-1)[0] || ''}`.trim() };
+    },
+
     async board(params) {
       const filters = params?.filters || {};
       const all = await state.board();
@@ -2188,6 +2255,7 @@ export function createMethods({
       }
     },
   };
+  return api;
 }
 
 export { ROLES, AGENT_ROLES, INIT_MODES };

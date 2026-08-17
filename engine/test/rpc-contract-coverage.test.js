@@ -79,6 +79,11 @@ const PROSE = Object.freeze({
   // contents differ per machine and are empty on CI, so the nested-shape subject would be
   // a row that exists only on some machines.
   agentCatalog: 'claims verified 2026-08-17: id/name/description/model/path/scope pinned in agent-catalog.test.js',
+  // Machine-dependent output (ollama reachability, installed runtimes), so the
+  // hermetic fixture cannot pin a stable nested subject; the shapes are pinned
+  // deterministically in system-watch.test.js instead.
+  systemCheck: 'claims verified 2026-08-17: board-shaped rows and the sweep pinned in system-watch.test.js',
+  systemFix: 'claims verified 2026-08-17: closed catalog, confirm lock, endpoint patch pinned in system-watch.test.js',
   settingsSet: 'claims verified 2026-08-17: the full settings object, same key set as settingsGet, reflecting the patch',
   agentFileSet: 'claims verified 2026-08-17: currentHash recomputed, defaultHash stable, modified flipped, key set matches agentFileGet',
 });

@@ -1,5 +1,32 @@
 # Daijin build state (authoritative)
 
+## 2026-08-18 03:05 - THE GYM RAN LIVE, and the run caught two more defects first
+
+The full loop, live on a real fixture repo (a stack module with a real
+node --test gate and a real feature commit), scratch state root, both gate
+openings through the NEW spendGateSet path:
+
+gates discovered (test: live, 1 of 1 carrying signal) -> gate opened scoped
+exam-mining -> the Fable auditor mined and authored exam-0001 ("Let callers
+check whether a stack is empty") -> THE MINING RUN RE-BLOCKED THE GATE and
+the early gymStart was refused -32050, live proof of D-0060 -> promoted ->
+gate re-opened scoped gym-cycle -> gymStart ran the REAL GLM-5.3 student:
+19 rounds of reads and edits over the JSON action protocol, 59,525 real
+work tokens of a 450k cap, submit, diff applied, candidate gates run,
+sandbox cleaned -> attempt recorded: mode harness-debug, status completed,
+verdict null, ungraded pending (honest; the teacher is not wired) -> the
+gate re-blocked itself after the run.
+
+The first live attempt caught two defects the suites had not:
+1. gymStart opened the store WITHOUT the layout path (bare openStore), which
+   is the D-0031 legacy-location crash; now through openBrain.
+2. That crash happened BEFORE the job's try block, so the finally never ran
+   and the gate stayed open after a failed job - the exact failure D-0060
+   exists to prevent. The opens moved inside the try; the re-block now
+   covers them.
+
+Suites after: engine 767 pass, TUI green, exit codes checked.
+
 ## 2026-08-18 02:30 - Owner round 9: the gym runs, the gate is a button, bare daijin
 
 Three directives ("this gate opening and closing has to be a button", "the

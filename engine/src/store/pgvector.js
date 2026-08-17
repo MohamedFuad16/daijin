@@ -130,6 +130,18 @@ function checksum(text) {
   return createHash('sha256').update(text).digest('hex');
 }
 
+/**
+ * Escape a standing prefix for a LIKE pattern, exported so the behaviour can be TESTED.
+ *
+ * It was inline, and the test written for it asserted that the word ESCAPE appears in this
+ * file, which passed against a mutation that removed the clause, because the word also
+ * appears in the comment explaining it. A source-text assertion that matches its own prose
+ * is not a test. Extracting the rule is what makes it checkable.
+ */
+export function escapeLikePrefix(prefix) {
+  return `${String(prefix).replace(/[%_\\]/g, '\\$&')}%`;
+}
+
 export function createPgVectorStore({
   connectionString,
   client: injectedClient = null,
@@ -223,6 +235,22 @@ export function createPgVectorStore({
     /// Advertised so the rerank stage can REFUSE this store rather than trusting a
     /// configuration default to keep it away from the parity measurement.
     parityMode,
+
+    /**
+     * The project scope this store writes under. Sqlite has had this since it was written
+     * and pgvector never did, which made pipeline.js's project-mismatch guard UNREACHABLE
+     * here: it reads `store.project`, got `undefined`, and its own `!== undefined` check
+     * then skipped it entirely.
+     *
+     * The guard exists because the two scopes can disagree. A caller constructing this
+     * store with `project: 'x'` and calling initBrain without one writes documents under
+     * `x` while the prune runs against the default scope, which in a shared database is a
+     * CROSS-PROJECT PURGE: rows another project owns, deleted by a run that never mentioned
+     * it. The sqlite path has always been protected from that and this one was not.
+     */
+    get project() {
+      return project;
+    },
 
     // ---- schema ---------------------------------------------------------------
 
@@ -397,13 +425,19 @@ export function createPgVectorStore({
     /// default when unspecified stays 'global.'.
     async standingDocuments({ prefix = STANDING_ID_PREFIX, excludeDocumentIds = [] } = {}) {
       if (prefix === '') throw new Error('standingDocuments refuses an empty prefix; it would make every document standing.');
+      // ESCAPED, as sqlite has always done. `_` and `%` are LIKE wildcards, and a standing
+      // prefix that contains one silently widens the match: `global_` pins every document
+      // whose id has ANY character where the underscore is, so documents that are not
+      // standing are pinned into every retrieval. Sqlite escapes and this did not, so the
+      // two backends disagreed on which documents are standing, which is a parity break on
+      // the axis P1 and P2 are measured over.
       const { rows } = await query(
         `SELECT id, type, path, title, tags, meta, content, content_hash AS "contentHash"
            FROM document
-          WHERE id LIKE $1
+          WHERE id LIKE $1 ESCAPE '\\'
             AND NOT (id = ANY($2::text[]))
           ORDER BY type, id`,
-        [`${prefix}%`, excludeDocumentIds],
+        [escapeLikePrefix(prefix), excludeDocumentIds],
       );
       return rows;
     },

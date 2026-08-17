@@ -22,6 +22,7 @@ import { resolveServedIdentity } from '../rag/embed.js';
 import { embeddingIdentity } from '../runtime/embedding-identity.js';
 import { GENERIC_PATH_GRAMMAR, normalizeModulePath } from '../rag/paths.js';
 import { compareStrings } from './walk.js';
+import { DAIJIN_DIRECTORY } from '../state/layout.js';
 
 /**
  * Import-graph edges as relationship rows.
@@ -81,14 +82,28 @@ export function chunkUnits(units) {
  * A rule that scores lower than a chunk is still a rule. Retrieval decides nothing about
  * how agents behave, so the contract must never be a candidate for it.
  */
+const CONTRACT_AGENTS = new RegExp(`(^|/)${DAIJIN_DIRECTORY.replace('.', '\\.')}/agents/`);
+const CONTRACT_MANIFEST = new RegExp(`(^|/)${DAIJIN_DIRECTORY.replace('.', '\\.')}/manifest\\.json$`);
+
 export function assertNoContractUnits(units) {
   const offending = [];
   for (const unit of units) {
     for (const candidate of [unit.path, unit.meta?.sourceFile, unit.meta?.sourceArtifact, ...(unit.citations || [])]) {
       if (!candidate) continue;
       const normalized = String(candidate).replace(/\\/g, '/').replace(/^\.\//, '');
-      const isAgentFile = /(^|\/)agents\//.test(normalized);
-      const isManifest = /(^|\/)manifest\.json$/.test(normalized);
+      // ANCHORED TO THE CONTRACT ROOT, not to the words. The previous pattern matched any
+      // `agents/` segment and any `manifest.json`, which refuses the WHOLE INGEST for a
+      // host repo that has `src/agents/` (the standard layout for LangGraph, CrewAI and
+      // AutoGen, which is exactly the population this tool is for) or an `extension/
+      // manifest.json` or a PWA. Worse, it refused a brain unit that merely CITED such a
+      // file, so a unit about a host's architecture killed the run that produced it.
+      //
+      // The contract is a LOCATION, not a naming convention: `.daijin/agents/` and
+      // `.daijin/manifest.json` and nothing else. The directory comes from the layout
+      // module so the guard cannot drift from the thing it guards. Still matched anywhere
+      // in the string, because a citation may be absolute.
+      const isAgentFile = CONTRACT_AGENTS.test(normalized);
+      const isManifest = CONTRACT_MANIFEST.test(normalized);
       if (isAgentFile || isManifest) {
         offending.push({ id: unit.id, path: candidate, kind: isManifest ? 'manifest' : 'agent-instruction' });
         break;

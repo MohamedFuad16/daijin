@@ -732,7 +732,18 @@ test('THE CONTRACT CANNOT ENTER THE STORE, whichever producer made the unit', as
   try {
     const plants = [
       { id: 'plant.a', type: 'convention', path: '.daijin/agents/student.md', title: 'Student rules', tags: [], meta: { area: 'contract' }, content: 'Rule text.', body: 'Rule text.' },
-      { id: 'plant.b', type: 'convention', path: '.daijin/brain/conventions.md', title: 'Sneaky', tags: [], meta: { area: 'x', sourceFile: 'agent/agents/teacher.md' }, content: 'Rule text.', body: 'Rule text.' },
+      // plant.b was `agent/agents/teacher.md`, which the old pattern refused because it
+      // matched ANY `agents/` segment. Ultrareview finding 2: that overreach failed the
+      // whole ingest for a host repo with `src/agents/`, the standard layout for LangGraph,
+      // CrewAI and AutoGen, which is the population this tool is for. The contract is a
+      // LOCATION and not a naming convention, so a host's agents directory is ordinary
+      // source and is now allowed; the control below asserts that positively.
+      //
+      // The plant it becomes is the contract IN DISGUISE, which is what this test was
+      // reaching for: same location, spelled so a naive matcher misses it.
+      { id: 'plant.b', type: 'convention', path: '.daijin/brain/conventions.md', title: 'Sneaky', tags: [], meta: { area: 'x', sourceFile: './.daijin/agents/teacher.md' }, content: 'Rule text.', body: 'Rule text.' },
+      { id: 'plant.e', type: 'convention', path: '.daijin/brain/conventions.md', title: 'Windows spelling', tags: [], meta: { area: 'x', sourceFile: '.daijin\\agents\\auditor.md' }, content: 'Rule text.', body: 'Rule text.' },
+      { id: 'plant.f', type: 'convention', path: '.daijin/brain/conventions.md', title: 'Absolute', tags: [], meta: { area: 'x', sourceFile: '/home/me/repo/.daijin/agents/watcher.md' }, content: 'Rule text.', body: 'Rule text.' },
       { id: 'plant.c', type: 'convention', path: '.daijin/manifest.json', title: 'Manifest', tags: [], meta: { area: 'x' }, content: 'Schema.', body: 'Schema.' },
       { id: 'plant.d', type: 'convention', path: '.daijin/brain/conventions.md', title: 'Cited contract', tags: [], meta: { area: 'x' }, citations: ['.daijin/agents/watcher.md'], content: 'Rule text.', body: 'Rule text.' },
     ];
@@ -744,6 +755,24 @@ test('THE CONTRACT CANNOT ENTER THE STORE, whichever producer made the unit', as
       );
       assert.deepEqual(await store.existingDocumentIds([plant.id]), [], 'and nothing was written');
     }
+
+    // THE HOST REPO'S OWN AGENTS, which must now pass. Finding 2's population: a unit about
+    // a repo that keeps its agent code in `src/agents/`, and a unit that merely CITES such a
+    // file. The old pattern refused both and took the entire ingest with them.
+    await ingestUnits({
+      store,
+      units: [
+        { id: 'host.agents', type: 'convention', path: '.daijin/brain/conventions.md', title: 'Host agents', tags: [], meta: { area: 'x', sourceFile: 'src/agents/planner.py' }, content: 'Rule: planner.', body: 'Rule: planner.' },
+        { id: 'host.cite', type: 'convention', path: '.daijin/brain/conventions.md', title: 'Cites host agents', tags: [], meta: { area: 'x' }, citations: ['src/agents/crew.ts', 'extension/manifest.json'], content: 'Rule: cites.', body: 'Rule: cites.' },
+      ],
+      embedder: { embed: async (texts) => texts.map(() => new Array(DIMENSION).fill(0.1)) },
+      project: 'default',
+    });
+    assert.deepEqual(
+      (await store.existingDocumentIds(['host.agents', 'host.cite'])).sort(),
+      ['host.agents', 'host.cite'],
+      'a host repo with src/agents/ or a PWA manifest must ingest; refusing it fails the whole run for the target population',
+    );
 
     // The control: an ordinary brain unit passes, so the refusal is not refusing everything.
     await ingestUnits({

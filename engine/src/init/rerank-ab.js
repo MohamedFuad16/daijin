@@ -53,6 +53,19 @@ export function permuteAnswers(cases) {
   if (ids.length < 2) throw new Error('A permuted control needs at least two distinct answers to swap between.');
   return cases.map((entry, index) => {
     const wrong = ids.filter((id) => !entry.must_return.includes(id));
+    // A case whose answers cover EVERY id in the set has no wrong answer to swap to, and
+    // `wrong[index % 0]` is `undefined`, which produced `must_return: [undefined]` and a
+    // control arm that scored a case it could never satisfy. Downstream the D-0030 range
+    // then read as unavailable with nothing said about why.
+    //
+    // Thrown rather than skipped, and thrown by NAME. Skipping the case would give the
+    // control a different denominator from the candidate, which is the one property the
+    // range depends on; the caller catches this and reports it as a skipped control with
+    // the reason, which is what a reader needs to decide whether the corpus can be
+    // permuted at all.
+    if (wrong.length === 0) {
+      throw new Error(`Case ${entry.id} names every answer in the gold set, so a permuted control cannot give it a wrong one. A control that scores it anyway would measure nothing.`);
+    }
     const { must_not_outrank: unused, ...rest } = entry;
     return { ...rest, must_return: [wrong[index % wrong.length]] };
   });

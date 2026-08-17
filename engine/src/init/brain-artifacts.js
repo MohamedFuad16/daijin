@@ -52,16 +52,58 @@ export const ARTIFACT_LAYOUT = Object.freeze({
 
 const MARKER = /^<!--\s*daijin\s+(.*?)\s*-->$/;
 
+/// Citations are joined with the unit separator, never a comma: a path may contain a comma
+/// and a comma-joined list cannot say whether it did, so one citation round-tripped into
+/// two. Written as an escape so the source file stays ASCII, for the reason evidence.js now
+/// carries at length.
+const CITE_SEPARATOR = '\u001f';
+
+/**
+ * One attribute value, encoded so it survives the round trip and cannot escape the comment.
+ *
+ * Three failures this closes, all reproduced:
+ *  - a QUOTE in a value was rewritten to an apostrophe, silently corrupting a source path
+ *    rather than failing;
+ *  - a value containing `-->` ENDED THE HTML COMMENT, so the marker broke out and the rest
+ *    of it rendered as document text;
+ *  - a comma inside a citation was indistinguishable from the separator between citations.
+ *
+ * JSON does the escaping, which is the point of using it rather than hand-written rules: it
+ * is the encoder whose edge cases are somebody else's problem. `<` and `>` are additionally
+ * escaped, which JSON does not do and HTML comments require, so no value can terminate the
+ * marker it lives in.
+ */
+function encodeValue(value) {
+  return JSON.stringify(String(value)).slice(1, -1)
+    .replaceAll('<', '\\u003c')
+    .replaceAll('>', '\\u003e');
+}
+
+function decodeValue(text) {
+  try {
+    return JSON.parse(`"${text}"`);
+  } catch {
+    // A marker written before this encoding, or by hand. Returned as-is rather than
+    // throwing: an unreadable attribute should degrade to its literal text, not lose the
+    // whole unit.
+    return text;
+  }
+}
+
 function encodeAttributes(attributes) {
   return Object.entries(attributes)
     .filter(([, value]) => value !== null && value !== undefined && value !== '')
-    .map(([key, value]) => `${key}="${String(value).replaceAll('"', "'")}"`)
+    .map(([key, value]) => `${key}="${encodeValue(value)}"`)
     .join(' ');
 }
 
 function decodeAttributes(text) {
   const attributes = {};
-  for (const match of text.matchAll(/(\w+)="([^"]*)"/g)) attributes[match[1]] = match[2];
+  // The value pattern allows escaped quotes, which the old `[^"]*` could not: a value
+  // containing a quote used to end the attribute early and shift every later one.
+  for (const match of text.matchAll(/(\w+)="((?:[^"\\]|\\.)*)"/g)) {
+    attributes[match[1]] = decodeValue(match[2]);
+  }
   return attributes;
 }
 
@@ -86,7 +128,7 @@ export function unitMarker(unit, { shift = 0 } = {}) {
     preamble: unit.meta?.preamble ? 'true' : '',
     split: unit.meta?.splitRule ?? '',
     source: unit.meta?.sourceFile ?? '',
-    cites: (unit.citations || []).join(','),
+    cites: (unit.citations || []).join(CITE_SEPARATOR),
     shift: shift || '',
   })} -->`;
 }
@@ -221,7 +263,12 @@ export function parseBrainFile(text, { file }) {
         .trim(),
       Number(attributes.shift || 0),
     );
-    const citations = attributes.cites ? attributes.cites.split(',').filter(Boolean) : [];
+    // Split on the separator, with a comma fallback for markers written before it. A brain
+    // written by an older init must still round-trip; it is durable markdown and the whole
+    // point is that it outlives the code that wrote it.
+    const citations = attributes.cites
+      ? attributes.cites.split(attributes.cites.includes(CITE_SEPARATOR) ? CITE_SEPARATOR : ',').filter(Boolean)
+      : [];
     units.push({
       id: attributes.id,
       type: attributes.type,

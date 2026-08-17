@@ -272,9 +272,17 @@ export async function scoreGoldset({
     // cannot be compared to another record except by assuming they shared one. Recorded so
     // identity verification is a lookup rather than an inference (verifier finding 66).
     embedding,
-    // Which backend statements produced it. parityMode changes the document inventory's
-    // row order, which is a measured difference, not a cosmetic one.
-    store: { parityMode: Boolean(corpus.storeOptions?.parityMode) },
+    // Which backend statements produced it, read from THE STORE THAT RAN rather than from
+    // the descriptor that asked. parityMode changes the document inventory's row order,
+    // which is a measured difference and not a cosmetic one.
+    //
+    // Reading the descriptor recorded what a caller REQUESTED. The P2 A/B injects two
+    // stores directly, so `corpus.storeOptions` was absent on both arms and both were
+    // labelled `parityMode: false` on exactly the axis they differ on. A record that
+    // describes both arms of an experiment identically on the experimental variable is
+    // worse than one with no label: it invites a later reader to conclude the arms were
+    // comparable when the label is what failed.
+    store: { parityMode: Boolean(store?.parityMode) },
     summary,
     results,
     diagnostics,

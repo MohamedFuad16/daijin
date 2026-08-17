@@ -2663,8 +2663,8 @@ def test_an_unreachable_reading_says_it_may_be_cached():
         "db": {"backend": "sqlite", "repos": 0, "stateRoot": "~/.daijin"},
         "spendGate": {"open": False, "path": ".daijin/GATE"},
     })
-    assert "cached briefly" in down, "an unreachable reading does not admit it may be stale"
-    assert "may still say unreachable" in down
+    assert "may be cached" in down, "an unreachable reading does not admit it may be stale"
+    assert "ctrl+r" in down, "the caveat does not say how to get a fresh reading"
 
     # And a REACHABLE reading does not carry the caveat: it would be noise on
     # the state where nobody is about to retry.
@@ -2674,7 +2674,7 @@ def test_an_unreachable_reading_says_it_may_be_cached():
         "db": {"backend": "sqlite", "repos": 1, "stateRoot": "~/.daijin"},
         "spendGate": {"open": False, "path": ".daijin/GATE"},
     })
-    assert "cached briefly" not in up
+    assert "may be cached" not in up
 
 
 @run_async

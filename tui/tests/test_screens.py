@@ -2503,3 +2503,124 @@ async def test_one_repo_whose_analyze_never_answers_does_not_blank_the_screen():
         assert all(c.stalled is None for c in siblings), (
             "one bad repo dragged its siblings down with it"
         )
+
+
+@run_async
+async def test_the_skeleton_paints_before_serve_status_answers():
+    """The status block is painted before the call is even made.
+
+    A remote embedder that accepts and never replies made serveStatus a five
+    second call. The difference between a screen that says what it is doing and
+    one that shows a spinner is the entire complaint, and no bound is needed
+    for the skeleton if the skeleton never waits.
+    """
+    from daijin_tui.screens import repo_home
+
+    original_patience = repo_home.STATUS_PATIENCE_SECONDS
+    repo_home.STATUS_PATIENCE_SECONDS = 0.2
+
+    async with running_app() as (app, pilot):
+        screen = app.screen
+        original = app.client.call
+        released = asyncio.Event()
+
+        async def slow_status(method, params=None):
+            if method == "serveStatus":
+                await released.wait()
+            return await original(method, params)
+
+        app.client.call = slow_status
+        try:
+            screen.start_load()
+            await settle(pilot, 12)
+
+            # Mid-call: the screen is readable and says what it is doing.
+            block = text_of(screen.query_one("#engine-status", Static))
+            assert block.strip(), "the status block was blank while waiting"
+            assert "has not answered" in block, f"the wait is not named: {block!r}"
+            assert screen.query_one("#attach-input", Input).display is not False, (
+                "the attach box was gated on a call it does not depend on"
+            )
+
+            released.set()
+            await screen.wait_for_load()
+            await settle(pilot, 6)
+        finally:
+            app.client.call = original
+            repo_home.STATUS_PATIENCE_SECONDS = original_patience
+
+        # And it fills in when the engine finally answers.
+        block = text_of(screen.query_one("#engine-status", Static))
+        assert "ollama" in block, f"the real status never replaced the placeholder: {block!r}"
+        assert "has not answered" not in block
+
+
+def test_the_card_bound_is_derived_from_the_engines_own_ceiling():
+    """A number chosen here would fire before a slow but BOUNDED engine answers.
+
+    analyze bounds its file walk at timeBudgetMs = 10_000, so a card can
+    legitimately spend ten seconds. An earlier round 8s would have timed out a
+    working engine, which turns a bound meant to catch a hang into one that
+    manufactures failures.
+    """
+    from daijin_tui.screens import repo_home
+
+    assert repo_home.CARD_TIMEOUT_SECONDS > repo_home.ENGINE_WALK_BUDGET_SECONDS, (
+        "the card bound fires before the engine's own walk budget expires"
+    )
+    assert repo_home.CARD_TIMEOUT_SECONDS == repo_home.ENGINE_WALK_BUDGET_SECONDS + 2.0
+
+    # The derivation is stated where the number is, so a reader can re-derive
+    # rather than inherit it.
+    import inspect
+
+    source = inspect.getsource(repo_home)
+    assert "timeBudgetMs" in source, "the number does not say where it came from"
+
+
+@run_async
+async def test_the_status_block_says_something_from_the_first_frame():
+    """Before any bound elapses, and before the call answers.
+
+    The escalation message covers a LONG wait. This covers the first moment:
+    with the patience window set far away, the block must still be readable,
+    because the paint happens before the call is made rather than after it
+    times out. A test that only looked past the timeout let a mutation
+    removing the first paint survive.
+    """
+    from daijin_tui.screens import repo_home
+
+    original_patience = repo_home.STATUS_PATIENCE_SECONDS
+    repo_home.STATUS_PATIENCE_SECONDS = 60.0
+
+    async with running_app() as (app, pilot):
+        screen = app.screen
+        original = app.client.call
+        released = asyncio.Event()
+
+        async def slow_status(method, params=None):
+            if method == "serveStatus":
+                await released.wait()
+            return await original(method, params)
+
+        app.client.call = slow_status
+        try:
+            screen.start_load()
+            await settle(pilot, 10)
+
+            block = text_of(screen.query_one("#engine-status", Static))
+            assert block.strip(), (
+                "the status block was blank while the call was pending and no "
+                "bound had elapsed, so the first paint never happened"
+            )
+            assert "reading the engine" in block, f"it does not say what it is doing: {block!r}"
+            assert "has not answered" not in block, "the patience window fired early"
+
+            released.set()
+            await screen.wait_for_load()
+            await settle(pilot, 6)
+        finally:
+            app.client.call = original
+            repo_home.STATUS_PATIENCE_SECONDS = original_patience
+
+        assert "ollama" in text_of(screen.query_one("#engine-status", Static))

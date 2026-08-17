@@ -13,6 +13,9 @@
 import { mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { loadProviderCatalog } from '../roles/providers.js';
+import { resolveKey } from '../roles/keys.js';
+import { pingProvider } from '../roles/ping.js';
+import { scanAgentCatalog } from '../roles/agents.js';
 import { cloneRepository, parseCloneUrl } from '../init/clone.js';
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
@@ -679,6 +682,12 @@ export function createMethods({
   // driver exists yet: building one needs a configured role, and roles arrive with the
   // model-setup round. Injectable so a cycle is fully testable with a fake student.
   const createEngineer = deps.createEngineer || null;
+  // The rolePing seam: the generation, the key resolution, and the agent scan are all
+  // injectable so the ping path is fully testable against a local mock HTTP server with
+  // no provider, no key, and no claude CLI on the machine.
+  const ping = deps.pingProvider || pingProvider;
+  const resolveRoleKey = deps.resolveKey || resolveKey;
+  const scanAgents = deps.scanAgentCatalog || scanAgentCatalog;
 
   /// The gym run in flight, or null. `jobs.activeGymRun?.()` was called and DID NOT EXIST,
   /// so gymStatus.activeRun was permanently absent although the contract names it. The job
@@ -2063,13 +2072,57 @@ export function createMethods({
       if (!ROLES.includes(params?.role)) {
         throw invalidParams('unknown role', `role must be one of ${ROLES.join(', ')}.`);
       }
-      // Refused BEFORE the not-implemented, deliberately. A role ping is a real provider
-      // generation, so the confirmation requirement is enforced now, while there is no
-      // provider client to reach, rather than added later next to one.
+      // Consent BEFORE anything else, as it was when this was a stub: a role ping is a
+      // real provider generation and only ever runs because the user asked for this one.
       await requireConsent('rolePing', params,
         'A role ping is a real provider generation and costs money. It only ever runs when you ask for it, never on a screen opening.');
-      throw notImplemented('rolePing', 'P3 (first-boot model setup)',
-        'Confirmed, but no role has an endpoint or a key pointer configured yet, so there is nothing to ping.');
+      const settings = await state.settings();
+      const role = settings.roles.find((row) => row.role === params.role);
+      if (!role?.provider || !role?.model) {
+        throw invalidParams('role not configured',
+          `The ${params.role} role has no ${role?.provider ? 'model' : 'provider'} configured. Configure it in settings first; a ping verifies a configuration, so there has to be one.`);
+      }
+      const catalog = await loadProviderCatalog();
+      const entry = catalog.providers.find((candidate) => candidate.id === role.provider);
+      // The endpoint falls back to the catalog default so a fresh role is pingable
+      // without copying a URL by hand; claude-code has neither and needs neither.
+      const endpoint = role.endpoint || entry?.endpointDefault || null;
+      if (!endpoint && role.provider !== 'claude-code') {
+        throw invalidParams('no endpoint',
+          `The ${params.role} role has no endpoint and the catalog has no default for ${role.provider}.`);
+      }
+      let key = null;
+      if (entry?.keyRequired ?? true) {
+        if (!role.keyRef) {
+          throw invalidParams('no key pointer',
+            `The ${params.role} role has no key pointer. ${role.provider} needs one; set keyRef in settings first.`);
+        }
+        // Resolved HERE, at the moment of the call, and handed to the ping as a value:
+        // the pointer-only rule is about storage and the wire, and this is neither.
+        try {
+          key = await resolveRoleKey(role.keyRef);
+        } catch (error) {
+          // The resolver's sentence names the fix (which variable, which file); pass it
+          // through as the hint rather than wrapping it in a vaguer one.
+          throw invalidParams('key not resolvable', error.message);
+        }
+      }
+      const measured = await ping({ ...role, endpoint }, key);
+      const record = { ...measured, at: new Date(now()).toISOString() };
+      // Recorded whether it worked or not. A failed verification is a fact about the
+      // configuration worth keeping; clients read ping.ok and ping.hint from settingsGet.
+      await state.recordRolePing(params.role, record);
+      return record;
+    },
+
+    /// Custom sub-agent discovery: Claude Code agent files in ~/.claude/agents and in
+    /// each attached repo's .claude/agents. ZERO SPEND: a directory listing and a
+    /// frontmatter read, no network, no CLI launch. The claude-code provider's model
+    /// list stays in providerCatalog; this lists which AGENT plays the role.
+    async agentCatalog() {
+      const repos = await state.repos();
+      const agents = await scanAgents({ repoPaths: repos.map((row) => row.path) });
+      return { agents };
     },
 
     async board(params) {

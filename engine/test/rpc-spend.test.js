@@ -150,9 +150,13 @@ test('budgetEstimate is zero-spend and needs no confirmation, because it feeds t
 });
 
 test('rolePing with confirmation gets past the refusal and reports what is actually missing', async () => {
+  // Since the real implementation landed (owner field round 4), an unconfigured role is a
+  // PARAMETER refusal naming the missing piece, not a deferral: the method works, this
+  // role is not set up, and the hint says which half is absent.
   const error = errorOf(await daemon.request('rolePing', { role: 'engineer', confirm: true }));
   assert.notEqual(error.code, ERR_SPEND_REFUSED);
-  assert.equal(error.code, -32001, 'confirmed, but no role has an endpoint configured yet');
+  assert.equal(error.code, -32602);
+  assert.match(error.data.hint, /no provider|no model/i);
 });
 
 test('diagnoseNarrate refuses without confirmation, and names the free alternative', async () => {

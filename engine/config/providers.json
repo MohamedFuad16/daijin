@@ -190,6 +190,13 @@
           ],
           "note": "GLM exposes thinking as a switch, not a tier: on enables thinking, off disables it."
         }
+      ],
+      "tools": [
+        {
+          "id": "web_search",
+          "label": "Web search",
+          "note": "Adds Z.ai's web_search tool to this role's calls (the tools block of the chat completions request). Web Search, Web Reader and Zread share one usage quota."
+        }
       ]
     },
     {
@@ -213,6 +220,40 @@
           "id": "deepseek-r1:8b",
           "label": "DeepSeek-R1 8B",
           "reasoningEffort": null
+        }
+      ]
+    },
+    {
+      "id": "claude-code",
+      "label": "Claude Code sub-agent",
+      "endpointDefault": null,
+      "keyRequired": false,
+      "note": "Runs a custom sub-agent headless through the local claude CLI on your own login auth: no API key and no endpoint. Pick which sub-agent file plays this role; the launched instance reaches the repo brain over MCP.",
+      "models": [
+        {
+          "id": "claude-fable-5",
+          "label": "Fable 5",
+          "note": "Adaptive thinking; no effort tiers to set."
+        },
+        {
+          "id": "claude-opus-5",
+          "label": "Opus 5",
+          "reasoningEffort": [
+            "low",
+            "medium",
+            "high"
+          ],
+          "note": null
+        },
+        {
+          "id": "claude-sonnet-5",
+          "label": "Sonnet 5",
+          "reasoningEffort": [
+            "low",
+            "medium",
+            "high"
+          ],
+          "note": null
         }
       ]
     }

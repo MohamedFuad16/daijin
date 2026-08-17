@@ -46,6 +46,12 @@ export async function loadProviderCatalog({ file = CATALOG_PATH, reload = false 
       // a suggestion rather than an inventory, and a client that renders the list without
       // that sentence is making a claim the file explicitly disclaims.
       note: provider.note ?? null,
+      // Provider-level opt-in tools (zai's web_search). Null, never an empty array, for
+      // the same reason reasoningEffort is: an empty list reads as "tools exist here and
+      // there are none", which is a different claim from "this provider has no tools".
+      tools: Array.isArray(provider.tools) && provider.tools.length
+        ? provider.tools.map((tool) => ({ id: tool.id, label: tool.label, note: tool.note ?? null }))
+        : null,
       models: (provider.models || []).map((model) => ({
         id: model.id,
         label: model.label,

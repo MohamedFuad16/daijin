@@ -41,6 +41,13 @@ export const DEFAULT_SETTINGS = Object.freeze({
     endpoint: null,
     keyRef: null,
     keyMasked: null,
+    // ZAI web tools (web_search; Reader and Zread share its quota): a list of tool ids
+    // the role's calls should carry, or null for none. Stored per role because the
+    // engineer may want search the teacher must not have.
+    tools: null,
+    // A Claude Code sub-agent id (agentCatalog row) when provider is claude-code. The
+    // role then runs headless through the local claude CLI instead of an API key.
+    agentRef: null,
     // v5: `ping: null` is the canonical encoding for a NEVER-VERIFIED role. rolePing is
     // spend-touching and never fires automatically, so "never paid for" has to be
     // representable. An object full of nulls would read as a ping that ran and returned
@@ -311,6 +318,23 @@ export class EngineState {
     }
     await writeJsonAtomic(this.settingsFile, settings);
     return this.settings();
+  }
+
+  /**
+   * Record a role's ping MEASUREMENT. A separate method from patchSettings on purpose:
+   * patchSettings refuses `ping` from clients because a client writing its own ping is a
+   * client marking its roles verified without a provider answering. The engine measured
+   * this one, so it enters through the engine's own door.
+   */
+  async recordRolePing(roleName, ping) {
+    return this.#serialize(async () => {
+      const settings = await this.rawSettings();
+      const role = (settings.roles || []).find((entry) => entry.role === roleName);
+      if (!role) throw new Error(`unknown role ${roleName}`);
+      role.ping = ping;
+      await writeJsonAtomic(this.settingsFile, settings);
+      return this.settings();
+    });
   }
 
   /**

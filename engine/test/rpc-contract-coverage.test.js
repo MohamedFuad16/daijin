@@ -74,6 +74,11 @@ const LIVE = Object.freeze({
 // moved and that row is now declared and covered, which is why it is absent here.
 const PROSE = Object.freeze({
   settingsGet: 'claims verified 2026-08-17: full (every DEFAULT_SETTINGS key present) and masked (a sentinel key never appears)',
+  // Prose rather than covered: its row shape is pinned in agent-catalog.test.js against
+  // seeded temp directories. Covered here it would read the REAL ~/.claude/agents, whose
+  // contents differ per machine and are empty on CI, so the nested-shape subject would be
+  // a row that exists only on some machines.
+  agentCatalog: 'claims verified 2026-08-17: id/name/description/model/path/scope pinned in agent-catalog.test.js',
   settingsSet: 'claims verified 2026-08-17: the full settings object, same key set as settingsGet, reflecting the patch',
   agentFileSet: 'claims verified 2026-08-17: currentHash recomputed, defaultHash stable, modified flipped, key set matches agentFileGet',
 });

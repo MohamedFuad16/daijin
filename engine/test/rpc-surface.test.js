@@ -165,7 +165,8 @@ test('every not-implemented answer names the phase that will implement it', asyn
   // answering rather than starting working) is the first test, not a count here.
   //
   // What remains deferred is reachable only with different params than this sweep sends:
-  // initBrain mode ingest, and rolePing once confirmed. Both are covered in their own tests.
+  // initBrain mode ingest, covered in its own test. rolePing left this list when its
+  // real implementation landed (owner field round 4).
   for (const method of deferred) assert.ok(method, method);
 });
 
@@ -174,10 +175,6 @@ test('the deferrals that remain are reachable, and still name their phase', asyn
   const ingest = errorOf(await daemon.request('initBrain', { repoPath, mode: 'ingest' }));
   assert.equal(ingest.code, ERR_NOT_IMPLEMENTED);
   assert.match(ingest.data.phase, /^P3/);
-
-  const ping = errorOf(await daemon.request('rolePing', { role: 'engineer', confirm: true }));
-  assert.equal(ping.code, ERR_NOT_IMPLEMENTED);
-  assert.match(ping.data.phase, /^P3/);
 });
 
 test('the handshake, repo lifecycle and settings are really wired', async () => {

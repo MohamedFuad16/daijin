@@ -22,9 +22,12 @@ async function withCatalog(mutate) {
   return file;
 }
 
-test('the committed catalog carries the five ruled providers, by id not by label', async () => {
+test('the committed catalog carries the six ruled providers, by id not by label', async () => {
+  // claude-code joined the five vendors (owner field round 4): it is not an API vendor
+  // but the owner's local CLI auth, and it lives in the same closed enum because a role
+  // stores exactly one provider id whatever transport answers it.
   const ids = await providerIds();
-  assert.deepEqual([...ids].sort(), ['anthropic', 'ollama', 'openai', 'xai', 'zai']);
+  assert.deepEqual([...ids].sort(), ['anthropic', 'claude-code', 'ollama', 'openai', 'xai', 'zai']);
   // The ids are VENDOR names. The display names differ deliberately ("Claude", "GLM",
   // "Grok"), and a client that sends what it renders would send a provider that does not
   // exist. Pinned so a well-meaning rename of a label cannot become a rename of an id.
@@ -41,7 +44,11 @@ test('every provider and model is renderable: no missing labels, endpoints or du
   for (const provider of catalog.providers) {
     assert.ok(provider.id && typeof provider.id === 'string', 'a provider needs an id');
     assert.ok(provider.label, `${provider.id} needs a label to render`);
-    assert.ok(provider.endpointDefault, `${provider.id} needs a default endpoint to offer`);
+    // claude-code is the one provider with NOTHING to dial: it launches a local CLI on
+    // the owner's login auth, so a default endpoint would be an invented fact.
+    if (provider.id !== 'claude-code') {
+      assert.ok(provider.endpointDefault, `${provider.id} needs a default endpoint to offer`);
+    }
     assert.equal(seenProviders.has(provider.id), false, `duplicate provider id ${provider.id}`);
     seenProviders.add(provider.id);
     assert.ok(provider.models.length > 0, `${provider.id} offers no models, so its dialog would be empty`);
@@ -81,11 +88,12 @@ test('an empty reasoningEffort list is normalised to null rather than carried', 
     'an empty list would read as "supported, with no valid values", which is not a state');
 });
 
-test('ollama is the only provider needing no key, and says its model list is a suggestion', async () => {
+test('only the two local-auth providers need no key, and ollama says its list is a suggestion', async () => {
   const catalog = await loadProviderCatalog();
+  const keyless = new Set(['ollama', 'claude-code']);
   for (const provider of catalog.providers) {
-    assert.equal(provider.keyRequired, provider.id !== 'ollama',
-      `${provider.id}: only a local endpoint can have no credential to point at`);
+    assert.equal(provider.keyRequired, !keyless.has(provider.id),
+      `${provider.id}: only local auth (a local endpoint, or the owner's own CLI login) can have no credential to point at`);
   }
   // The one place the catalog knowingly disagrees with reality: ollama's real models are
   // whatever is installed, which is locally knowable and deliberately not read here. The

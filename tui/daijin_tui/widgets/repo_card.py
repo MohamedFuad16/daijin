@@ -44,6 +44,7 @@ class RepoCard(Vertical):
         self.add_class("repo-card")
         self.history: list[float] = []
         self.has_brain: bool | None = None
+        self.stalled: str | None = None
         self.case_rate: dict[str, Any] | None = None
 
     @property
@@ -157,6 +158,19 @@ class RepoCard(Vertical):
             caption = "floor over time, no measurements yet"
         for child in self.query(Sparkline):
             child.set_values(self.history, caption)
+
+    def set_stalled(self, reason: str) -> None:
+        """Render this card as an error, naming the repo and what failed.
+
+        A card whose calls do not answer must say so and let its siblings
+        paint. Starving the screen on one bad repo is the same defect as a
+        fourth card no input can reach: one bad element hiding the rest.
+        """
+        self.stalled = reason
+        for child in self.query(".card-floor"):
+            child.update(f"[red]{reason}[/red]")
+        for child in self.query(".card-mcp"):
+            child.update("[dim]not read, because the calls above did not answer[/dim]")
 
     def set_has_brain(self, has_brain: bool) -> None:
         """Authoritative answer from analyze(repoPath).hasBrainFolder."""

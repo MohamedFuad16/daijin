@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from typing import Any, Iterable
 
 from textual import work
@@ -13,6 +15,11 @@ from ..rpc import RpcError
 from ..widgets import Banner, RepoCard, SectionTitle, format_count
 from ..widgets.wordmark import header_mark
 from .attach_dialog import AttachRepoScreen
+
+# A per-card bound. Long enough that a slow but working engine still fills the
+# card, short enough that a stalled one does not read as a hang. The owner's
+# case was analyze on "/" walking the whole disk, which never returns at all.
+CARD_TIMEOUT_SECONDS = 8.0
 from .base import DaijinScreen
 
 
@@ -74,15 +81,27 @@ class RepoHomeScreen(DaijinScreen):
         for repo in status.get("repos", []):
             await container.mount(RepoCard(repo))
 
+        # STATIC CONTENT FIRST. This block used to be painted after the
+        # per-repo fan-out, so a single repo whose analyze never returned left
+        # the whole screen on a spinner: no status, no attach box, nothing. A
+        # screen that gates its own skeleton on data is one bad repo from
+        # blank, and the owner met exactly that with an attached path of "/".
+        self.query_one("#engine-status", Static).update(self._engine_markup(status))
+        notice = self.query_one("#home-notice", Banner)
+        if status.get("repos"):
+            notice.set_notice(
+                f"{len(status['repos'])} repo(s) attached. Reading each one now.", "info"
+            )
+
         # The per-repo facts are independent of each other AND of the other
         # repos, so nine calls that cost sum(latency) become one round of
-        # max(latency). This is the boot screen: it is the first thing a user
-        # waits on, so it is the first thing worth not making them wait for.
-        await gather_iter(self._enrich(card) for card in self.query(RepoCard))
+        # max(latency). Each card is BOUNDED so max(latency) cannot become
+        # forever: the engine being bounded tomorrow does not excuse an
+        # unbounded await today, and the next call that never answers will
+        # come from somewhere neither of us has looked.
+        await gather_iter(self._enrich_bounded(card) for card in self.query(RepoCard))
 
-        self.query_one("#engine-status", Static).update(self._engine_markup(status))
         needs = [card.repo_path for card in self.query(RepoCard) if card.needs_brain]
-        notice = self.query_one("#home-notice", Banner)
         if not status.get("repos"):
             # Nothing is attached, so there are no cards to look at and the
             # only useful thing on this screen is the attach box. The splash is
@@ -104,6 +123,22 @@ class RepoHomeScreen(DaijinScreen):
             )
         else:
             notice.set_notice("Every connected repo has a brain.", "info")
+
+    async def _enrich_bounded(self, card: RepoCard) -> None:
+        """Enrich one card, or give up on it and say so.
+
+        The bound is per CARD rather than per call, so a repo cannot spend the
+        budget three times over.
+        """
+        try:
+            await asyncio.wait_for(self._enrich(card), timeout=CARD_TIMEOUT_SECONDS)
+        except asyncio.TimeoutError:
+            card.set_stalled(
+                f"did not answer within {CARD_TIMEOUT_SECONDS:.0f}s, so this repo is "
+                f"unread. The others are unaffected."
+            )
+        except Exception as error:  # noqa: BLE001 - one bad repo is not the screen
+            card.set_stalled(f"could not be read: {error}")
 
     async def _enrich(self, card: RepoCard) -> None:
         """Fill in the facts the card needs beyond serveStatus.

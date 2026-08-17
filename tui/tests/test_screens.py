@@ -6,6 +6,7 @@ path, pilot.click for the mouse path.
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 import pytest
@@ -2452,3 +2453,69 @@ async def test_an_attach_warning_offers_the_root_instead_of_a_retype():
         assert "ctrl+p" in notice, "the way out was not offered, so the owner retypes the path"
         assert "/Users/owner/code/portfolio-mine" in notice
         assert screen.pending_repository_root == "/Users/owner/code/portfolio-mine"
+
+
+@run_async
+async def test_one_repo_whose_analyze_never_answers_does_not_blank_the_screen():
+    """The owner's hang, reproduced as a shape rather than as a disk walk.
+
+    Their repos.json carried an attached path of "/", and analyze on it never
+    returned because it walked the whole disk. The home screen awaited that
+    call before painting ANYTHING, so the screen sat on a spinner with no
+    status block, no attach box and no cards.
+
+    Two separate failures, both fixed here: the screen gated its own static
+    content on per-repo data, and one bad repo starved every sibling.
+    """
+    from daijin_tui.screens import repo_home
+
+    stalled_path = mock_data.REPOS[0]["path"]
+    # The BOUND is what is under test, not its value, so it is shortened here
+    # to keep the stalled task's lifetime inside the test's.
+    original_timeout = repo_home.CARD_TIMEOUT_SECONDS
+    repo_home.CARD_TIMEOUT_SECONDS = 0.3
+
+    async with running_app() as (app, pilot):
+        screen = app.screen
+        original = app.client.call
+
+        async def never_answers(method, params=None):
+            if method == "analyze" and (params or {}).get("repoPath") == stalled_path:
+                await asyncio.sleep(30)
+            return await original(method, params)
+
+        app.client.call = never_answers
+        try:
+            screen.start_load()
+            await screen.wait_for_load()
+            await settle(pilot, 8)
+        finally:
+            app.client.call = original
+            repo_home.CARD_TIMEOUT_SECONDS = original_timeout
+
+        # The skeleton painted regardless.
+        status = text_of(screen.query_one("#engine-status", Static))
+        assert status.strip(), "the status block never painted, so the screen was blank"
+        assert "ollama" in status
+
+        cards = list(screen.query(RepoCard))
+        assert len(cards) == len(mock_data.REPOS), "cards were not mounted"
+
+        stalled = next(c for c in cards if c.repo_path == stalled_path)
+        assert stalled.stalled, "the stalled card did not report itself"
+        assert "did not answer" in stalled.stalled
+        # The FLOOR line specifically, not the card as a whole. Joining every
+        # Static let a different line satisfy this, so a mutation removing the
+        # floor update survived: the reason was still on screen, just not where
+        # the number it replaces used to be.
+        floor = " ".join(text_of(s) for s in stalled.query(".card-floor"))
+        assert "did not answer" in floor, (
+            f"the reason is not where the floor was: {floor!r}"
+        )
+
+        # And its siblings are unaffected, which is the whole point.
+        siblings = [c for c in cards if c.repo_path != stalled_path]
+        assert siblings, "no sibling to check, so this proves nothing"
+        assert all(c.stalled is None for c in siblings), (
+            "one bad repo dragged its siblings down with it"
+        )

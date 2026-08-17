@@ -2232,3 +2232,48 @@ async def test_a_blocked_phase_is_surfaced_and_the_action_waits_for_its_code():
         screen._render_events([{**blocked, "actionCode": "gold-set-too-thin"}])
         await settle(pilot)
         assert button.display is False, "a code with no action showed one anyway"
+
+
+@run_async
+async def test_a_role_from_an_aged_settings_file_never_renders_the_word_none():
+    """Found by an AGED state root, not by any test in this suite.
+
+    A settings.json written before `provider` existed comes back with provider
+    and endpoint null, and .get(key, "") does not help when the key is present
+    and the VALUE is null. Every fixture here is young; the machine with the
+    longest history is the one a user actually has.
+    """
+    from daijin_tui.screens.settings import ROLE_COLUMNS
+
+    aged = {
+        "role": "engineer", "provider": None, "model": "glm-4.6",
+        "modelKnown": None, "modelReason": None, "reasoningEffort": None,
+        "endpoint": None, "keyRef": "env:OLD_KEY", "keyMasked": None,
+        "keyResolvable": False, "keyReason": "unset", "ping": None,
+    }
+    never_set = {**aged, "role": "watcher", "model": None}
+
+    async with running_app() as (app, pilot):
+        await goto(pilot, "8")
+        screen = app.screen
+        screen.settings = {**(screen.settings or {}), "roles": [aged, never_set]}
+        screen._update_view()
+        await settle(pilot)
+
+        table = screen.query_one("#role-table", DataTable)
+        assert table.row_count == 2
+        for index in range(2):
+            cells = [str(cell) for cell in table.get_row_at(index)]
+            assert "None" not in cells, f"a null rendered as the word None: {cells}"
+
+        first = [str(c) for c in table.get_row_at(0)]
+        assert first[ROLE_COLUMNS.index("provider")] == "not set"
+        assert first[ROLE_COLUMNS.index("endpoint")] == "not set"
+        # A model IS configured here, so "no such control" is sayable.
+        assert first[ROLE_COLUMNS.index("reasoning")] == "not supported"
+
+        # With no model at all it is NOT sayable: nothing was chosen, so
+        # claiming the model lacks the control is a statement about a model
+        # nobody picked.
+        second = [str(c) for c in table.get_row_at(1)]
+        assert second[ROLE_COLUMNS.index("reasoning")] == "not set"

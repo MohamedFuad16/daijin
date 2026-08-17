@@ -2390,6 +2390,9 @@ async def test_a_role_from_an_aged_settings_file_never_renders_the_word_none():
         # nobody picked.
         second = [str(c) for c in table.get_row_at(1)]
         assert second[ROLE_COLUMNS.index("reasoning")] == "not set"
+
+
+@run_async
 async def test_the_unreachable_branch_is_reachable_in_the_mock():
     """A rendering for the state a user most needs help in, exercised.
 

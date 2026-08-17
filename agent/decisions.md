@@ -1298,3 +1298,18 @@ can write. The API student's every path goes through confinePath (lexical,
 after resolution, absolute and .. both refused). A malformed protocol reply
 is a nudge whose tokens still count, because the spend was real whatever
 the reply was worth.
+
+## D-0062 (2026-08-18) The teacher grades inline; the driver binds, the model judges
+
+The inline teacher divides authorship exactly where auditability needs it:
+the model proposes scores, citations, verdict and gaps; the driver supplies
+runId and both binding digests from the packet, because the digests exist to
+stop batch-import mixups and a model asked to echo a sha256 only
+manufactures refusals. Validation is shared with the external-batch path so
+the inline teacher enjoys no laxer rules. Grading runs only on gradable
+modes (the ledger's harness-debug refusal is respected as a boundary);
+grading failures leave the attempt pending rather than failing the cycle;
+and an unconfigured teacher refuses before consent, because a cycle whose
+grades can never arrive is a cycle sold under a wrong description. The
+attempt wire verdict prefers the rubric over the run row's null column,
+caught live in the first graded run.

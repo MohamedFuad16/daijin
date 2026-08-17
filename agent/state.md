@@ -1,5 +1,45 @@
 # Daijin build state (authoritative)
 
+## 2026-08-18 03:55 - THE TEACHER IS WIRED, and a live cycle came back GRADED
+
+Owner round 10 ("everything has to be wired"). The last unwired module is
+wired, tested, and proven live.
+
+NEW MODULE, teacher-driver.js: the teacher role authors the rubric (five
+cited axes, a verdict, gap tags); the DRIVER binds runId and both digests
+from the packet, because a model cannot compute a sha256 and the binding
+digests exist for batch import, not for judgment. Everything the teacher
+CLAIMS still walks grading.js's full refusal list: an invented citation, a
+withheld-document reference, or a same-identity grader dies exactly as it
+would from an external batch. The teacher reads the task, the diff, the
+gate results and the shown ids - NEVER the gold commit.
+
+WIRING. runGymCycle takes an optional teacher and grades each applied
+attempt inline on GRADABLE modes only (the ledger refuses rubrics for
+harness-debug; the boundary is respected, not tested). A grading refusal is
+a gym-grading-refused step and the attempt stays pending - a rubric can be
+written later, an attempt cannot be re-run. gymStart builds the teacher
+before the job via the new shared roleGenerate plumbing, and refuses an
+unconfigured teacher on a gradable mode BEFORE consent buys a cycle whose
+grades can never arrive. The TUI gym screen gained the mode picker
+(harness-debug ungraded default / experiment graded / evaluation SCORED
+RECORD), and the mode rides the consent dialog.
+
+PROVEN LIVE, the full chain in one run: Fable auditor mined and authored
+the exam -> promoted -> gate button -> GLM-5.3 student worked it (15
+rounds, 41,868 work tokens, submitted) -> the OPUS TEACHER (daijin-teacher
+sub-agent) graded it inline: verdict pass, five axes 5 of 5, each cited ->
+rubric stored beside the run -> gate re-blocked itself.
+
+The live read-back caught one wire defect: the attempt row served
+"VERDICT null" beside five populated axes, because attemptForWire read the
+run row's verdict column (which predates inline grading) instead of the
+rubric's. Fixed: the rubric's verdict wins when one exists.
+
+Every role now acts in production: the auditor mines and authors, the
+engineer attempts, the teacher grades, the watcher sweeps the tool. Suites
+green both sides.
+
 ## 2026-08-18 03:05 - THE GYM RAN LIVE, and the run caught two more defects first
 
 The full loop, live on a real fixture repo (a stack module with a real

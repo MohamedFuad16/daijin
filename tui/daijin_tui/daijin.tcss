@@ -456,3 +456,31 @@ App.-motion-off DataTable > .datatable--cursor {
     padding: 1;
     border: round $warning;
 }
+
+/* Intro splash. Centred, quiet, and the same texture family as the charts. */
+#splash-body {
+    align: center middle;
+    height: 100%;
+    width: 100%;
+}
+
+#splash-wordmark {
+    color: $accent;
+    height: auto;
+    width: auto;
+    content-align: center middle;
+}
+
+#splash-tagline {
+    height: auto;
+    width: auto;
+    padding: 1 0 0 0;
+    content-align: center middle;
+}
+
+#splash-status {
+    height: auto;
+    width: auto;
+    padding: 1 0 0 0;
+    content-align: center middle;
+}

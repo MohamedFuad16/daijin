@@ -42,6 +42,7 @@ from .screens import (
     InitFeedScreen,
     RepoHomeScreen,
     SettingsScreen,
+    SplashScreen,
     UpgradeScreen,
 )
 
@@ -85,12 +86,26 @@ class DaijinApp(App):
         # One Motion for the whole app: every animation goes through it, so
         # "off" is a single switch rather than a convention screens must keep.
         self.motion = Motion(DEFAULT_MODE)
+        self.splash: Any = None
+        # Set from the first serveStatus: nothing attached yet, so the home
+        # screen opens on the attach affordance instead of empty space.
+        self.first_run = False
         # Textual's header joins title and sub_title with an em dash, which this
         # project forbids, so the engine mode rides inside the title instead.
         self.title = "Daijin, mock engine" if is_mock else "Daijin, engine over stdio"
 
     async def on_mount(self) -> None:
+        # The splash is the loading screen. It goes up BEFORE the work starts
+        # and comes down when the work ends, so its duration is startup's
+        # duration and nothing waits on the animation. A failure below dismisses
+        # it and shows the real error rather than leaving the brand on screen,
+        # which would be the prettiest possible hang.
+        splash = SplashScreen(motion=self.motion)
+        self.splash = splash
+        await self.push_screen(splash)
+        splash.set_status("[dim]starting the engine[/dim]")
         await self.client.start()
+        splash.set_status("[dim]handshaking[/dim]")
         try:
             await self.client.handshake()
         except Exception as error:  # noqa: BLE001 - any failure is a hard stop
@@ -99,6 +114,7 @@ class DaijinApp(App):
             # use" as "Contract version mismatch" and threw away the stderr
             # tail the transports go out of their way to preserve.
             self.contract_error = error
+            await self._dismiss_splash()
             await self.push_screen(
                 UpgradeScreen(
                     engine_version=self.client.engine_version,
@@ -108,6 +124,7 @@ class DaijinApp(App):
             )
             return
         if not self.client.contract_matches:
+            await self._dismiss_splash()
             await self.push_screen(
                 UpgradeScreen(
                     engine_version=self.client.engine_version,
@@ -115,9 +132,47 @@ class DaijinApp(App):
                 )
             )
             return
+        # hello answered, so the status can stop naming steps and start
+        # reporting what the engine actually said.
+        splash.set_status(
+            f"engine [b]{self.client.engine_version or 'unknown'}[/b], "
+            f"contract [b]{self.client.contract_version or 'unknown'}[/b]"
+        )
         self.client.on_board_finding(self._on_board_finding)
         await self._load_motion_mode()
+        # The mode may have just changed under the splash, and a splash still
+        # animating in `off` would be the setting being ignored.
+        splash.motion = self.motion
+        if self.motion.mode == OFF:
+            splash.skip()
+        await self._first_status(splash)
+        await self._dismiss_splash()
         self.switch_mode("home")
+
+    async def _first_status(self, splash: SplashScreen) -> None:
+        """One serveStatus, so the splash reports a real world before it goes.
+
+        This is also what decides where the transition lands: a user with no
+        repos attached needs the attach affordance, not a screen of nothing.
+        """
+        try:
+            status = await self.client.call("serveStatus", {})
+        except Exception:  # noqa: BLE001 - the home screen reports this properly
+            return
+        repos = (status or {}).get("repos") or []
+        ollama = ((status or {}).get("ollama") or {}).get("reachable")
+        splash.set_status(
+            f"engine [b]{self.client.engine_version or 'unknown'}[/b], "
+            f"contract [b]{self.client.contract_version or 'unknown'}[/b], "
+            f"{len(repos)} repo{'' if len(repos) == 1 else 's'} attached, "
+            f"ollama {'reachable' if ollama else 'not reachable'}"
+        )
+        self.first_run = not repos
+
+    async def _dismiss_splash(self) -> None:
+        if getattr(self, "splash", None) is not None and self.splash in self.screen_stack:
+            self.pop_screen()
+        self.splash = None
 
     async def _load_motion_mode(self) -> None:
         """charts.motion is the user's accessibility setting, not a preference

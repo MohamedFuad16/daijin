@@ -37,6 +37,7 @@ async def running_app(
     contract_version: str | None = None,
     deferred: dict[str, str] | None = None,
     size: tuple[int, int] = TERMINAL_SIZE,
+    engine: MockEngine | None = None,
 ):
     """Boot the app against a zero delay mock engine.
 
@@ -48,7 +49,7 @@ async def running_app(
         kwargs["contract_version"] = contract_version
     if deferred is not None:
         kwargs["deferred"] = deferred
-    engine = MockEngine(**kwargs)
+    engine = engine or MockEngine(**kwargs)
     client = MockRpcClient(engine)
     app = DaijinApp(client, is_mock=True, repo=repo)
     async with app.run_test(size=size) as pilot:

@@ -146,47 +146,45 @@ class InitFeedScreen(DaijinScreen):
                     "warn",
                 )
 
-    # The closed set from the contract. Switching on the CODE is required
-    # rather than preferred: the prose is written for a person and must stay
-    # free to be reworded without unwiring a button.
-    BLOCK_ACTIONS = {
-        "too-little-material": "Attach the repository root instead",
-        "gold-set-too-thin": None,
-    }
+    # THE OFFER IS KEYED ON THE ROOT, NOT ON THE CODE.
+    #
+    # Measured 2026-08-17, three constructions on a real daemon:
+    #   standalone thin repo        too-little-material   no parent
+    #   nested thin subdirectory    too-little-material   parent present
+    #   nested subdir WITH material gold-set-too-thin     parent present
+    #
+    # The discriminator behind actionCode is the MINED CASE COUNT alone; the
+    # engine does not know about nesting and cannot. So the code does not carry
+    # the precondition this action needs: "attach the parent instead" is
+    # possible exactly when a parent EXISTS, which the nested-in-repository
+    # warning already says, and it is worth offering whenever a block happened
+    # regardless of why. Keying on the code hid the button on the owner's own
+    # shape, a nested subdirectory with enough material to fail on diversity
+    # instead of on count.
+    #
+    # actionCode is therefore consumed for nothing here, and that is the honest
+    # answer rather than a manufactured use: it twins the prose, and the prose
+    # is already displayed verbatim above the button.
+    ROOT_ACTION_LABEL = "Attach the repository root instead"
 
     def _render_block(self, event: dict[str, Any]) -> None:
         """Surface a blocked phase where the user is looking.
 
-        MEASURED 2026-08-17: the blocked step event carries
-        {ts, jobId, phase, step, detail, level} and NO actionCode. The field
-        exists on initBrain's report, which no method returns and which is not
-        written under the state root, so there is no path by which a client
-        receives it today. Reported to the extractor.
-
-        So the prose is shown, because it is real and it is what the engine
-        said, and the ACTION BUTTON stays hidden until a code arrives. A button
-        wired to the prose would be the thing the contract explicitly forbids,
-        and a button shown with no code behind it would be the inert control
-        this project has already fixed twice.
+        The prose is the engine's, shown verbatim. The ACTION is offered when
+        a repository root exists to attach, which analyze reports through the
+        same warning repoAttach carries, and withheld when there is none: an
+        offer that cannot be performed is an inert control wearing a label.
         """
         panel = self.query_one("#init-blocked", Static)
         button = self.query_one("#init-attach-root", Button)
         detail = str(event.get("detail") or "").strip()
-        code = event.get("actionCode")
         panel.display = True
         panel.update(
             f"[b][yellow]{event.get('phase', 'a phase')} blocked.[/yellow][/b]\n{detail}"
         )
-        label = self.BLOCK_ACTIONS.get(str(code)) if code else None
-        # The code is necessary and NOT sufficient. Measured on a real daemon
-        # 2026-08-17: a standalone one-file repo and a nested subdirectory BOTH
-        # block with too-little-material, and the standalone one has no parent
-        # at all (repoAttach returns warning null). Offering "attach the
-        # repository root instead" there is an action that cannot be performed,
-        # which is the inert control wearing a label.
+        # A block happened, so the offer is worth making IF there is a root.
         button.display = False
-        if label:
-            self._offer_root_if_there_is_one(label)
+        self._offer_root_if_there_is_one(self.ROOT_ACTION_LABEL)
 
     @work
     async def _offer_root_if_there_is_one(self, label: str) -> None:

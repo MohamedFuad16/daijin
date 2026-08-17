@@ -2244,67 +2244,51 @@ async def test_a_github_repo_already_on_disk_is_attached_rather_than_cloned():
 
 
 @run_async
-async def test_a_blocked_phase_is_surfaced_and_the_action_waits_for_its_code():
-    """MEASURED 2026-08-17: the blocked step event carries no actionCode.
+async def test_the_root_offer_follows_the_root_and_not_the_code():
+    """MEASURED on a real daemon, three constructions:
 
-    The field lives on initBrain's report, which no method returns and which
-    is not written under the state root, so nothing reaches a client today.
-    The prose is therefore shown, because it is real, and the button stays
-    hidden until a code arrives: keying it on the prose is what the contract
-    forbids, and showing it with nothing behind it is the inert control this
-    project has fixed twice already.
+        standalone thin repo         too-little-material   no parent
+        nested thin subdirectory     too-little-material   parent present
+        nested subdir WITH material  gold-set-too-thin     parent present
+
+    The discriminator behind actionCode is the mined CASE COUNT alone, so the
+    code does not carry the precondition this action needs. Keying on it hid
+    the button on the owner's own shape: a nested subdirectory with enough
+    material to fail on diversity rather than on count.
     """
-    from daijin_tui.screens.init_feed import InitFeedScreen
+    async def blocked(code):
+        return {
+            "ts": 400, "jobId": "job-init-0001", "phase": "goldset", "step": "blocked",
+            "detail": "the gold set did not pass its own integrity gates",
+            "level": "warn", "actionCode": code,
+        }
 
-    blocked = {
-        "ts": 400, "jobId": "job-init-0001", "phase": "goldset", "step": "blocked",
-        "detail": "Only 4 case(s) could be mined, which usually means the attached "
-                  "directory holds very little.",
-        "level": "warn",
-    }
-    async with running_app() as (app, pilot):
-        await goto(pilot, "2")
-        screen = app.screen
-        panel = screen.query_one("#init-blocked", Static)
-        button = screen.query_one("#init-attach-root", Button)
-        assert panel.display is False, "an empty block panel sits above every successful run"
-        assert button.display is False
+    for code in ("too-little-material", "gold-set-too-thin"):
+        async with running_app() as (app, pilot):
+            await goto(pilot, "2")
+            screen = app.screen
+            original = app.client.call
 
-        screen._render_events([blocked])
-        await settle(pilot)
-        assert panel.display is True
-        assert "goldset blocked" in text_of(panel)
-        assert "attached directory holds very little" in text_of(panel), (
-            "the engine's own sentence is not shown"
-        )
-        assert button.display is False, (
-            "an action was offered with no code behind it, which is a dead button"
-        )
+            async def with_root(method, params=None):
+                if method == "analyze":
+                    return {"hasBrainFolder": False,
+                            "warning": {"code": "nested-in-repository",
+                                        "repositoryRoot": "/code/parent"}}
+                return await original(method, params)
 
-        # WITH a code AND a root to attach, which is the owner's case.
-        original = app.client.call
+            app.client.call = with_root
+            try:
+                screen._render_events([await blocked(code)])
+                await settle(pilot, 15)
+            finally:
+                app.client.call = original
 
-        async def with_root(method, params=None):
-            if method == "analyze":
-                return {"hasBrainFolder": False,
-                        "warning": {"code": "nested-in-repository",
-                                    "repositoryRoot": "/code/parent"}}
-            return await original(method, params)
-
-        app.client.call = with_root
-        try:
-            screen._render_events([{**blocked, "actionCode": "too-little-material"}])
-            await settle(pilot, 15)
-            assert button.display is True
-            assert "repository root" in str(button.label)
+            button = screen.query_one("#init-attach-root", Button)
+            assert button.display is True, (
+                f"{code} with a parent present hid the offer, which is the owner's shape"
+            )
             assert screen.blocked_root == "/code/parent"
-        finally:
-            app.client.call = original
-
-        # The other code has no action, and must not borrow this one's button.
-        screen._render_events([{**blocked, "actionCode": "gold-set-too-thin"}])
-        await settle(pilot)
-        assert button.display is False, "a code with no action showed one anyway"
+            assert "repository root" in str(button.label)
 
 
 @run_async

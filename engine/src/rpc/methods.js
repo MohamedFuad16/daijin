@@ -705,10 +705,12 @@ export function createMethods({
    */
   const PROBE_CACHE_MS = 3_000;
   let probeCache = null;
-  const cachedProbe = async (key, probe) => {
-    if (probeCache && probeCache.key === key && now() - probeCache.at < PROBE_CACHE_MS) {
+  const cachedProbe = async (key, probe, { fresh = false } = {}) => {
+    if (!fresh && probeCache && probeCache.key === key && now() - probeCache.at < PROBE_CACHE_MS) {
       return probeCache.value;
     }
+    // A bypassed probe still WRITES its result, so an explicit check refreshes the window
+    // rather than leaving the stale entry behind it for the next automatic paint to serve.
     const value = await probe();
     probeCache = { key, at: now(), value };
     return value;
@@ -1004,7 +1006,22 @@ export function createMethods({
       };
     },
 
-    async serveStatus() {
+    async serveStatus(params) {
+      // EXPLICIT FRESHNESS, for a user-initiated check only (D-0044).
+      //
+      // Caching failures was right for the paint path and it created a lie behind the one
+      // button a user presses right after fixing the thing: start ollama, press refresh,
+      // read `unreachable` from a cache. ctrl+r is the user saying "I changed something,
+      // look again", which is exactly the input where a cached answer is wrong.
+      //
+      // Only an exact `true` bypasses, and anything else is REFUSED rather than coerced: a
+      // client sending `fresh: "yes"` would otherwise be silently ignored and would look
+      // like a broken refresh, which is the defect this parameter exists to fix.
+      if (params?.fresh !== undefined && typeof params.fresh !== 'boolean') {
+        throw invalidParams('fresh must be a boolean',
+          'Pass fresh: true only for an explicit user-initiated check; automatic refreshes should use the cache.');
+      }
+      const fresh = params?.fresh === true;
       const repos = await state.repos();
       const settings = await state.settings();
 
@@ -1092,7 +1109,7 @@ export function createMethods({
         };
       }
       return ollamaStatus;
-      });
+      }, { fresh });
 
       // The gate is observable BEFORE anything is attempted, per the contract. A user
       // should never discover the gate's state by being refused.

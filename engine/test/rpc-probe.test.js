@@ -179,3 +179,78 @@ test('changing the embedding model also re-probes, since the answer is about tha
     await server.close();
   }
 });
+
+// ---- the explicit bypass (D-0044) -------------------------------------------------------
+
+test('fresh: true re-probes, and the automatic path still uses the cache', async () => {
+  // The button this exists for: start ollama, press refresh. Without it the fix for a
+  // five-second hang leaves a three-second lie behind the one action a user takes right
+  // after fixing the thing.
+  let calls = 0;
+  const { server } = await harness({ probe: async () => { calls += 1; throw new Error('unreachable'); } });
+  try {
+    await server.methods.serveStatus({});
+    await server.methods.serveStatus({});
+    assert.equal(calls, 1, 'automatic paints share one probe');
+
+    await server.methods.serveStatus({ fresh: true });
+    assert.equal(calls, 2, 'an explicit check must not be served from the cache');
+  } finally {
+    await server.close();
+  }
+});
+
+test('a bypassed probe REFRESHES the window rather than leaving the stale entry behind', async () => {
+  // If fresh skipped the read without writing, the next automatic paint would serve the
+  // OLD entry: a user would press refresh, see the truth, and watch it revert.
+  let calls = 0;
+  let clock = 1_000;
+  const { server } = await harness({
+    probe: async () => { calls += 1; throw new Error('unreachable'); },
+    now: () => clock,
+  });
+  try {
+    await server.methods.serveStatus({});          // 1: fills the window at t=1000
+    clock += 2_000;                                 // still inside the window
+    await server.methods.serveStatus({ fresh: true }); // 2: bypass, and rewrite the window
+    assert.equal(calls, 2);
+    clock += 1_000;                                 // inside the NEW window, outside the old
+    await server.methods.serveStatus({});
+    assert.equal(calls, 2, 'the bypass did not refresh the window, so the old entry expired early');
+  } finally {
+    await server.close();
+  }
+});
+
+test('fresh: false and an omitted fresh both use the cache', async () => {
+  // The default must be the cache, or a client that always passes the parameter defeats it.
+  let calls = 0;
+  const { server } = await harness({ probe: async () => { calls += 1; throw new Error('unreachable'); } });
+  try {
+    await server.methods.serveStatus({});
+    await server.methods.serveStatus({ fresh: false });
+    await server.methods.serveStatus({});
+    assert.equal(calls, 1);
+  } finally {
+    await server.close();
+  }
+});
+
+test('a non-boolean fresh is REFUSED rather than quietly ignored', async () => {
+  // A client sending `fresh: "yes"` would otherwise be silently treated as cached, and
+  // would look like a broken refresh button - the exact defect this parameter fixes,
+  // reintroduced by a coercion.
+  let calls = 0;
+  const { server } = await harness({ probe: async () => { calls += 1; throw new Error('unreachable'); } });
+  try {
+    await assert.rejects(() => server.methods.serveStatus({ fresh: 'yes' }), (error) => {
+      assert.match(error.message, /fresh must be a boolean/);
+      // The refusal carries its action, and names the discipline the contract states.
+      assert.match(error.data.hint, /explicit user-initiated check/);
+      return true;
+    });
+    assert.equal(calls, 0, 'a refused call must not probe');
+  } finally {
+    await server.close();
+  }
+});

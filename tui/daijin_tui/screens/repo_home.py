@@ -17,6 +17,7 @@ from .base import DaijinScreen
 class RepoHomeScreen(DaijinScreen):
     mode_name = "home"
     notice_id = "#home-notice"
+    BINDINGS = [("ctrl+p", "attach_repository_root", "Attach parent repo")]
     heading = "Repo home"
     subheading = "connected repos, health, measured floor"
 
@@ -140,10 +141,10 @@ class RepoHomeScreen(DaijinScreen):
     def _said(value: Any, absent: str) -> str:
         """A field the engine did not report, said in words.
 
-        A bare "?" reads as a rendering fault rather than as a state, and it
-        was doing double duty for two different absences: a key the response
-        omitted and a key whose value was null. The default in .get() only
-        covered the first, so a null printed the word None.
+        A placeholder is a CLAIM about the engine, which is why reading the
+        wrong key is worse here than it was under a bare "?": this renderer
+        confidently reported "not reported" for fields that were present under
+        names it had stopped matching. Ambiguous was less wrong than certain.
         """
         if value is None or value == "":
             return f"[dim]{absent}[/dim]"
@@ -151,28 +152,40 @@ class RepoHomeScreen(DaijinScreen):
 
     @classmethod
     def _engine_markup(cls, status: dict[str, Any]) -> str:
+        """Render serveStatus in the words the engine used.
+
+        Shape verified against the daemon on 2026-08-17. The key set is FIXED:
+        every key is always present and unknown is null rather than absent.
+        endpoint, model and dimension are CONFIGURATION rather than probe
+        results, so they are real even when ollama is down; only version and
+        digest go null, and hint goes non-null and names the host it probed.
+        """
         ollama = status.get("ollama") or {}
         db = status.get("db") or {}
         gate = status.get("spendGate") or {}
         reachable = bool(ollama.get("reachable"))
         reach = "[green]reachable[/green]" if reachable else "[red]unreachable[/red]"
         gate_state = "[green]open[/green]" if gate.get("open") else "[yellow]blocked[/yellow]"
-        # An unreachable embedder has no endpoint or dimension to report, and
-        # saying so is different from saying the engine failed to tell us.
-        missing = "not reachable" if not reachable else "not reported"
-        size = db.get("sizeBytes")
-        return (
-            f"ollama {reach} at {cls._said(ollama.get('endpoint'), missing)}, "
-            f"embedder {cls._said(ollama.get('embedder'), missing)} "
-            f"dim {cls._said(ollama.get('dimension'), missing)}\n"
-            f"store {cls._said(db.get('driver'), 'not reported')} at "
-            f"{cls._said(db.get('path'), 'no store yet')}, "
-            f"{format_count(size) if size is not None else '[dim]size not measured yet[/dim]'}"
-            f"{' bytes' if size is not None else ''}, "
-            f"index digest {cls._said(db.get('indexDigest'), 'not measured yet')}\n"
+
+        lines = [
+            f"ollama {reach} at {cls._said(ollama.get('endpoint'), 'no endpoint configured')}, "
+            f"model {cls._said(ollama.get('model'), 'no model configured')} "
+            f"dim {cls._said(ollama.get('dimension'), 'no dimension configured')}",
+            f"version {cls._said(ollama.get('version'), 'not probed while unreachable')}, "
+            f"digest {cls._said(ollama.get('digest'), 'not probed while unreachable')}",
+            f"store {cls._said(db.get('backend'), 'not reported')} at "
+            f"{cls._said(db.get('stateRoot'), 'not reported')}, "
+            f"{format_count(db.get('repos'))} repos",
             f"spend gate {gate_state} at {cls._said(gate.get('path'), 'no gate file')}  "
-            f"[dim]observable here before anything is attempted[/dim]"
-        )
+            f"[dim]observable here before anything is attempted[/dim]",
+        ]
+        hint = ollama.get("hint")
+        if hint:
+            # The engine's own sentence, and it names the host it actually
+            # probed. Paraphrasing it here would let this line contradict the
+            # endpoint printed directly above it.
+            lines.insert(1, f"[yellow]{hint}[/yellow]")
+        return "\n".join(lines)
 
     async def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "attach-go":
@@ -198,8 +211,47 @@ class RepoHomeScreen(DaijinScreen):
             notice.set_notice(error.hint, "error")
             return
         field.value = ""
-        self.set_pending_notice(f"Attached {result.get('repo', {}).get('path', path)}.")
+        attached = (result.get("repo") or {}).get("path", path)
+        # repoAttach returns { repo, warning }, and the warning is not a
+        # refusal: the attach SUCCEEDED. Verified shape on 2026-08-17.
+        warning = result.get("warning")
+        if warning:
+            root = warning.get("repositoryRoot")
+            self.pending_repository_root = root
+            offer = (
+                f" Press ctrl+p to attach {root} instead."
+                if root
+                else ""
+            )
+            # The engine's own sentence, then the way out of the mistake. The
+            # field test stalled exactly here, on a user being told what was
+            # wrong and left to retype the path themselves.
+            self.set_pending_notice(
+                f"Attached {attached}, with a warning: {warning.get('detail', warning.get('code', ''))}{offer}",
+                "warn",
+            )
+        else:
+            self.pending_repository_root = None
+            self.set_pending_notice(f"Attached {attached}.")
         self.start_load()
+
+    async def action_attach_repository_root(self) -> None:
+        """Attach the real repository root the last warning named.
+
+        Carried so the owner does not have to retype a path the engine already
+        worked out, which is where the field test stalled.
+        """
+        root = getattr(self, "pending_repository_root", None)
+        notice = self.query_one("#home-notice", Banner)
+        if not root:
+            notice.set_notice(
+                "No repository root was offered. This acts on the last attach warning.",
+                "info",
+            )
+            return
+        self.query_one("#attach-input", Input).value = root
+        self.pending_repository_root = None
+        await self.attach_repo()
 
     async def on_repo_card_selected(self, message: RepoCard.Selected) -> None:
         message.stop()

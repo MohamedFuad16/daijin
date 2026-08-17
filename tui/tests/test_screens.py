@@ -89,7 +89,7 @@ async def test_repo_home_shows_a_card_per_repo_with_one_primary_action():
         assert len(without_brain) == 1
         assert without_brain[0].repo_path.endswith("kiln-api")
         assert str(without_brain[0].query_one(".card-action", Button).label) == "Initialize brain"
-        assert "sqlite-vec" in text_of(app.screen.query_one("#engine-status", Static))
+        assert "sqlite" in text_of(app.screen.query_one("#engine-status", Static))
         assert "kiln-api" in text_of(app.screen.query_one("#home-notice", Banner))
 
 
@@ -1726,6 +1726,62 @@ def test_the_mode_and_ungraded_vocabularies_match_the_contract_both_ways():
         assert UNGRADED_NOTE[code].strip(), f"{code} has no sentence to show"
 
 
+def test_engine_status_speaks_the_engines_field_names():
+    """The shape moved under this renderer and the placeholders made it worse.
+
+    embedder became model, driver became backend, path became stateRoot. The
+    renderer kept reading the old names and printed "not reported" for fields
+    that were right there, which is a CLAIM about the engine rather than the
+    ambiguous "?" it replaced. Confidently wrong beats vaguely wrong only for
+    the person who wrote it.
+
+    Shape verified against the daemon on 2026-08-17.
+    """
+    from daijin_tui.screens.repo_home import RepoHomeScreen
+
+    live = {
+        "ollama": {"reachable": True, "endpoint": "http://localhost:11434",
+                   "model": "bge-m3:latest", "dimension": 1024,
+                   "version": "0.32.1", "digest": "79076464", "hint": None},
+        "db": {"backend": "sqlite", "repos": 3, "stateRoot": "/Users/owner/.daijin"},
+        "spendGate": {"open": False, "path": ".daijin/GATE"},
+    }
+    markup = RepoHomeScreen._engine_markup(live)
+    for value in ("http://localhost:11434", "bge-m3:latest", "1024", "0.32.1",
+                  "79076464", "sqlite", "/Users/owner/.daijin"):
+        assert value in markup, f"{value} was reported by the engine and is not on screen"
+    assert "not reported" not in markup and "not probed" not in markup, (
+        f"a placeholder stood in for a field the engine sent: {markup!r}"
+    )
+
+
+def test_an_unreachable_embedder_keeps_its_configuration_and_shows_the_hint():
+    """endpoint, model and dimension are CONFIGURATION, not probe results.
+
+    They stay real when ollama is down. Only version and digest go null, and
+    the hint names the host actually probed, so paraphrasing it here would let
+    this line contradict the endpoint printed directly above it.
+    """
+    from daijin_tui.screens.repo_home import RepoHomeScreen
+
+    hint = ("Ollama not reachable at http://gpu-box.local:11434; check that the host "
+            "is up and reachable, or clear the configured endpoint to fall back to a "
+            "local ollama")
+    markup = RepoHomeScreen._engine_markup({
+        "ollama": {"reachable": False, "endpoint": "http://gpu-box.local:11434",
+                   "model": "bge-m3", "dimension": 1024,
+                   "version": None, "digest": None, "hint": hint},
+        "db": {"backend": "sqlite", "repos": 0, "stateRoot": "/Users/owner/.daijin"},
+        "spendGate": {"open": False, "path": ".daijin/GATE"},
+    })
+    assert "http://gpu-box.local:11434" in markup, "the configured endpoint vanished when it went down"
+    assert "bge-m3" in markup and "1024" in markup, "configuration was hidden behind unreachable"
+    assert hint in markup, "the engine's hint was dropped or paraphrased"
+    assert markup.count("not probed while unreachable") == 2, (
+        "version and digest are the only two that go null, and they should say so"
+    )
+
+
 def test_engine_status_never_shows_a_bare_question_mark():
     """A lone ? reads as a rendering fault, not as a state.
 
@@ -1739,8 +1795,9 @@ def test_engine_status_never_shows_a_bare_question_mark():
     for status in (
         {},
         {"ollama": {"reachable": False}, "db": {}, "spendGate": {}},
-        {"ollama": {"reachable": True, "endpoint": None, "embedder": None, "dimension": None},
-         "db": {"driver": None, "path": None, "sizeBytes": None, "indexDigest": None},
+        {"ollama": {"reachable": True, "endpoint": None, "model": None, "dimension": None,
+                    "version": None, "digest": None, "hint": None},
+         "db": {"backend": None, "repos": None, "stateRoot": None},
          "spendGate": {"open": False, "path": None}},
     ):
         markup = RepoHomeScreen._engine_markup(status)
@@ -1748,17 +1805,18 @@ def test_engine_status_never_shows_a_bare_question_mark():
         assert "None" not in markup, f"a null printed as the word None: {markup!r}"
         assert "not measured yet" in markup or "not reachable" in markup or "not reported" in markup
 
-    # And a fully reported status still shows the values themselves.
+    # And a fully reported status still shows the values themselves. The field
+    # NAMES are the engine's, not the ones this test was first written against.
     full = RepoHomeScreen._engine_markup({
         "ollama": {"reachable": True, "endpoint": "http://localhost:11434",
-                   "embedder": "bge-m3", "dimension": 1024},
-        "db": {"driver": "sqlite", "path": "~/.daijin/store.db",
-               "sizeBytes": 4210, "indexDigest": "ab12cd"},
+                   "model": "bge-m3", "dimension": 1024,
+                   "version": "0.32.1", "digest": "ab12cd", "hint": None},
+        "db": {"backend": "sqlite", "repos": 4, "stateRoot": "~/.daijin"},
         "spendGate": {"open": True, "path": ".daijin/GATE"},
     })
-    for value in ("http://localhost:11434", "bge-m3", "1024", "sqlite", "4,210", "ab12cd"):
+    for value in ("http://localhost:11434", "bge-m3", "1024", "sqlite", "ab12cd", "~/.daijin"):
         assert value in full, f"{value} was replaced by a placeholder"
-    assert "not measured" not in full and "not reported" not in full
+    assert "not reported" not in full and "not probed" not in full
 
 
 @run_async
@@ -1851,3 +1909,65 @@ def test_every_screen_with_a_banner_declares_which_banner_is_its_notice():
             f"pending notice it sets is discarded in silence"
         )
         assert screen.notice_id.startswith("#"), f"{name}'s notice_id is not a selector"
+
+
+@run_async
+async def test_the_unreachable_branch_is_reachable_in_the_mock():
+    """A rendering for the state a user most needs help in, exercised.
+
+    The mock served one ollama object with a true flag, so the down branch was
+    the unreachable-branch-nobody-exercises problem again, on the screen that
+    explains why nothing works.
+    """
+    from daijin_tui.rpc import MockEngine
+
+    engine = MockEngine(speed=0.0)
+    engine.set_ollama_reachable(False)
+    async with running_app(engine=engine) as (app, pilot):
+        await settle(pilot, 15)
+        status = text_of(app.screen.query_one("#engine-status", Static))
+        assert "unreachable" in status
+        assert "not reachable at" in status, "the engine's hint is not shown"
+        assert "127.0.0.1:11434" in status, "the configured endpoint vanished when it went down"
+        assert "bge-m3" in status, "configuration was hidden behind unreachable"
+
+
+@run_async
+async def test_an_attach_warning_offers_the_root_instead_of_a_retype():
+    """repoAttach returns { repo, warning } and the attach SUCCEEDED.
+
+    repositoryRoot is carried so the owner does not retype a path the engine
+    already worked out, which is where the field test stalled.
+    """
+    async with running_app() as (app, pilot):
+        screen = app.screen
+        original = app.client.call
+
+        async def warn(method, params=None):
+            if method == "repoAttach":
+                return {
+                    "repo": {"path": "/Users/owner/code/portfolio-mine/cd",
+                             "health": "no-brain", "floorScore": None, "mcpActive": False},
+                    "warning": {
+                        "code": "nested-in-repository",
+                        "detail": "that directory sits inside a git repository",
+                        "attached": "/Users/owner/code/portfolio-mine/cd",
+                        "repositoryRoot": "/Users/owner/code/portfolio-mine",
+                    },
+                }
+            return await original(method, params)
+
+        app.client.call = warn
+        try:
+            screen.query_one("#attach-input", Input).value = "/Users/owner/code/portfolio-mine/cd"
+            await screen.attach_repo()
+            await screen.wait_for_load()
+            await settle(pilot)
+        finally:
+            app.client.call = original
+
+        notice = text_of(screen.query_one("#home-notice", Banner))
+        assert "sits inside a git repository" in notice, "the engine's sentence was dropped"
+        assert "ctrl+p" in notice, "the way out was not offered, so the owner retypes the path"
+        assert "/Users/owner/code/portfolio-mine" in notice
+        assert screen.pending_repository_root == "/Users/owner/code/portfolio-mine"

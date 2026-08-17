@@ -34,6 +34,7 @@ import shutil
 import subprocess
 import tempfile
 from pathlib import Path
+from typing import Any
 
 import pytest
 from conftest import run_async
@@ -54,7 +55,17 @@ pytestmark = pytest.mark.skipif(
 # A path is dotted; a "[]" segment means "the rows of the list at this point".
 READS = [
     ("analyze", lambda repo: {"repoPath": repo}, ["hasBrainFolder"]),
-    ("serveStatus", lambda repo: {}, ["repos", "ollama", "db", "spendGate.open", "spendGate.path"]),
+    # This entry used to list only the TOP-LEVEL keys, so ollama and db could
+    # be renamed underneath it and the check stayed green. They were: embedder
+    # became model and driver became backend in a change already committed,
+    # and the status screen went on reading the old names and printing "not
+    # reported" for fields that were present. A path that stops at an object
+    # holds the engine to nothing about its contents.
+    ("serveStatus", lambda repo: {}, [
+        "repos", "db.backend", "db.repos",
+        "ollama.reachable", "ollama.model", "ollama.version", "ollama.digest",
+        "spendGate.open", "spendGate.path",
+    ]),
     ("documents", lambda repo: {"repoPath": repo}, ["[].id", "[].type", "[].area", "[].title", "[].tags"]),
     ("retrievalScore", lambda repo: {"repoPath": repo}, ["caseRate.exact", "caseRate.cases", "mrr", "violations", "chosenBudget", "rationale", "perCase"]),
     ("mcpSnippet", lambda repo: {"repoPath": repo}, ["unlocked", "threshold"]),
@@ -115,6 +126,7 @@ async def test_every_field_a_screen_reads_exists_on_the_live_engine():
     checked_paths = 0
     answered: list[str] = []
     gates_records: list[dict] = []
+    results: dict[str, Any] = {}
     observed_status: set[str] = set()
     observed_class: set[str] = set()
     skip_reason: str | None = None
@@ -162,6 +174,7 @@ async def test_every_field_a_screen_reads_exists_on_the_live_engine():
                         refused.append(f"{method}: {error.hint[:70]}")
                         continue
                     answered.append(method)
+                    results[method] = result
                     if method == "gatesGet":
                         gates_records.append(result)
                         for gate in ((result.get("discovered") or {}).get("gates") or []):
@@ -190,6 +203,33 @@ async def test_every_field_a_screen_reads_exists_on_the_live_engine():
 
     if skip_reason:
         pytest.skip(skip_reason)
+
+    # Paths a landing engine change will add. They are REPORTED every run and
+    # not failed on, because failing would make this branch red for a change
+    # on someone else's side; they are listed here rather than left out so the
+    # gap is visible instead of silent, and the list is meant to shrink to
+    # nothing when the change lands (staged 2026-08-17, serveStatus gaining
+    # endpoint, dimension, hint and stateRoot).
+    pending = {
+        "serveStatus": ["ollama.endpoint", "ollama.dimension", "ollama.hint", "db.stateRoot"],
+    }
+    still_missing, arrived = [], []
+    for method, paths in pending.items():
+        result = results.get(method)
+        if result is None:
+            continue
+        for path in paths:
+            (arrived if _resolve(result, path) else still_missing).append(f"{method}.{path}")
+    if still_missing:
+        print("\nPENDING WIRE PATHS, not yet on the engine: " + ", ".join(still_missing))
+    if arrived:
+        # Self-clearing: the moment the engine sends them, this says so, and
+        # leaving them here after that would be a gate that has stopped
+        # gating something it could now enforce.
+        print(
+            "\nPENDING PATHS HAVE ARRIVED, move them into READS: "
+            + ", ".join(arrived)
+        )
 
     # Real defects: the engine SUCCEEDED and the field a screen reads was not
     # in the response.

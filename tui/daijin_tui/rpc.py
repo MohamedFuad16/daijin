@@ -926,8 +926,29 @@ class MockEngine:
             # the engine does not have.
         return row
 
+    def set_ollama_reachable(self, reachable: bool) -> None:
+        """Flip the embedder between up and down.
+
+        Down is not "the same object with a false flag": version and digest go
+        null and hint fills in, and a client that never sees that branch has an
+        untested rendering for the state a user is most likely to need help in.
+        """
+        self.ollama_reachable = reachable
+
     async def _rpc_serveStatus(self, params: dict[str, Any]) -> dict[str, Any]:
         status = copy.deepcopy(mock_data.SERVE_STATUS)
+        if not getattr(self, "ollama_reachable", True):
+            endpoint = status["ollama"]["endpoint"]
+            status["ollama"].update({
+                "reachable": False,
+                "version": None,
+                "digest": None,
+                "hint": (
+                    f"Ollama not reachable at {endpoint}; check that the host is up "
+                    f"and reachable, or clear the configured endpoint to fall back "
+                    f"to a local ollama"
+                ),
+            })
         status["repos"] = [self._repo_row(repo) for repo in self.repos]
         status["spendGate"] = {"open": self.gate_open, "path": mock_data.SPEND_GATE["path"]}
         return status

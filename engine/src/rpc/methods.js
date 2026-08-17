@@ -10,7 +10,7 @@
 // enumerates (gymStart, rolePing, initBrain layer1+layer2, diagnoseNarrate) refuse BEFORE
 // they would do anything, so the refusal cannot regress into a call when their phases land.
 
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
@@ -494,6 +494,100 @@ export function describeStep(subject, detail, startedAt) {
   return parts.filter(Boolean).join(' ') || 'step';
 }
 
+/**
+ * What is true about a path someone asked to attach: whether it can be a repo at all, and
+ * whether it looks like the repo they meant.
+ *
+ * Separate from repoAttach so it can be tested without a daemon, and so the two answers
+ * stay distinct: a REFUSAL is for a path that cannot work, and a WARNING is for one that
+ * works and probably surprises.
+ */
+export async function inspectAttachTarget(repoPath, { runGit = null, stat: statFn = stat, realpath: realpathFn = realpath } = {}) {
+  const resolved = path.resolve(repoPath);
+
+  let info;
+  try {
+    info = await statFn(resolved);
+  } catch {
+    return {
+      refusal: {
+        summary: 'no such directory',
+        hint: `${resolved} does not exist. Attach the path to a repository on this machine; a mistyped or partial command line lands here (the field test attached the literal string "cd").`,
+      },
+      warning: null,
+    };
+  }
+  if (!info.isDirectory()) {
+    return {
+      refusal: { summary: 'not a directory', hint: `${resolved} is a file. Attach the repository directory that contains it.` },
+      warning: null,
+    };
+  }
+
+  const git = runGit ?? (async (args, cwd) => {
+    const { execFile } = await import('node:child_process');
+    const { promisify } = await import('node:util');
+    const { stdout } = await promisify(execFile)('git', args, { cwd });
+    return stdout.trim();
+  });
+
+  let toplevel = null;
+  try {
+    toplevel = await git(['rev-parse', '--show-toplevel'], resolved);
+  } catch {
+    // WARNED, NOT REFUSED, against the letter of the field-test ruling and measured before
+    // deciding: init on a directory with no git COMPLETES eight phases and blocks only at
+    // the gold-set gates, which is the same block a too-small repo gets and now carries its
+    // own explanation. So this is a path that WORKS AND PRODUCES LESS, not one that cannot
+    // work, and the distinction this function is built on puts it here.
+    //
+    // Stated plainly because the convenient answer and the correct one coincide, which is
+    // the shape of a motivated conclusion: refusing also breaks sixty test fixtures, and
+    // that is not the reason. The reason is the measurement above; if the ruling stands as
+    // written the fixtures are cheap to fix and I will fix them.
+    return {
+      refusal: null,
+      warning: {
+        code: 'not-a-git-repository',
+        detail: `${resolved} is not inside a git repository. Daijin mines commit history for its gold set and its lessons, so a brain built here will be much thinner: no commit archaeology, no fix-and-revert lessons, and usually too few gold cases to measure. Run git init and commit, or attach a repository.`,
+        attached: resolved,
+        repositoryRoot: null,
+      },
+    };
+  }
+
+  // THE NESTED CASE. Legitimate for a monorepo package and a mistake most other times, so
+  // it is reported rather than refused. Named both ways round, because the useful sentence
+  // is not "this is a subdirectory" but "here is the root you may have meant".
+  // COMPARED THROUGH REALPATH, and this was a bug in the first version of this check that
+  // its own test caught. path.resolve does not resolve symlinks, while `git rev-parse
+  // --show-toplevel` always answers with the real path. On macOS /var is a symlink to
+  // /private/var, so attaching a repository ROOT under a symlinked path produced a
+  // nested-in-repository warning whose detail named the SAME directory on both sides.
+  //
+  // That is the failure mode worth avoiding twice over: a warning that fires on the
+  // correct action teaches the owner to dismiss warnings, and the next one to fire is the
+  // real one. Both sides go through realpath so the comparison is between two canonical
+  // paths rather than between two spellings of one.
+  const canonicalAttached = await realpathFn(resolved).catch(() => resolved);
+  const canonicalToplevel = await realpathFn(toplevel).catch(() => path.resolve(toplevel));
+  if (canonicalToplevel !== canonicalAttached) {
+    return {
+      refusal: null,
+      warning: {
+        code: 'nested-in-repository',
+        detail: `You attached ${resolved}, which is a subdirectory of the repository at ${canonicalToplevel}. `
+          + 'That is fine for a single package in a monorepo, and a mistake otherwise: the file walk sees only this '
+          + 'directory while git answers from the repository root, so the analysis reports few files against many '
+          + 'commits and nothing else says why.',
+        attached: resolved,
+        repositoryRoot: canonicalToplevel,
+      },
+    };
+  }
+  return { refusal: null, warning: null };
+}
+
 function requireRepoPath(params) {
   const repoPath = params?.repoPath;
   if (typeof repoPath !== 'string' || !repoPath.trim()) {
@@ -747,9 +841,30 @@ export function createMethods({
       return { engineVersion: ENGINE_VERSION, contractVersion: CONTRACT_VERSION };
     },
 
+    /**
+     * Attach a repo, refusing what cannot be one and WARNING about what probably is not the
+     * one the user meant.
+     *
+     * Both halves come from the owner's field test. A literal `cd` was attached by accident
+     * and accepted, because the only check was that a string arrived; and a NESTED
+     * near-empty directory was attached inside a real repository, which is the failure that
+     * cost a screenshot and an archaeology session to diagnose. The nested case is the
+     * nastier one because everything downstream then behaves plausibly: the walk sees one
+     * file, `git` answers from the PARENT repository, so the analysis reports a handful of
+     * files against dozens of commits and nothing says the two came from different places.
+     *
+     * The warning is a WARNING and not a refusal: attaching a subdirectory is legitimate
+     * (a monorepo package is the obvious case), so the engine says what it noticed and
+     * leaves the decision where it belongs.
+     */
     async repoAttach(params) {
       const repoPath = requireRepoPath(params);
-      return { repo: await state.attachRepo(repoPath) };
+      const inspection = await inspectAttachTarget(repoPath, { runGit: deps.runGit });
+      if (inspection.refusal) throw invalidParams(inspection.refusal.summary, inspection.refusal.hint);
+      const repo = await state.attachRepo(repoPath);
+      // Null rather than absent when there is nothing to say, so a client can tell "checked
+      // and fine" from "this engine does not report warnings".
+      return { repo, warning: inspection.warning };
     },
 
     async repoDetach(params) {
@@ -813,12 +928,59 @@ export function createMethods({
         rows.push({ path: repo.path, health, floorScore, mcpActive: Boolean(repo.mcpActive) });
       }
 
+      // CONFIGURATION IS NOT A PROBE RESULT. The endpoint, the embedding model and the
+      // dimension are known from settings whether or not ollama answers, and the previous
+      // shape conflated the two: it nulled the model on failure and never carried the
+      // endpoint or the dimension at all, so the owner's status screen rendered "?" for
+      // three values the engine held in a variable at that moment (owner field test, F5).
+      //
+      // The key set is now IDENTICAL on both branches. It differed before (`hint` appeared
+      // only on failure), which means no client could rely on a fixed set of keys and the
+      // contract-shape gate could not check one.
+      const configuredModel = settings.retrieval?.embeddingModel || process.env.EMBEDDING_MODEL || null;
+      const configuredDimension = settings.retrieval?.embeddingDimension ?? null;
+      // THREADED FROM THE SAME SETTING THE INDEXER USES, and this was a defect of its own,
+      // found while fixing F5 rather than reported by it. This call passed a SYNTHETIC
+      // environment holding only EMBEDDING_MODEL, so `OLLAMA_BASE_URL` was invisible to the
+      // probe and it silently fell back to the localhost default. The ingest path threads
+      // the setting properly, so on any machine with a non-default host the status screen
+      // and the indexer were probing DIFFERENT SERVERS, with the status screen reporting
+      // the healthy one it was not using.
+      //
+      // Invisible until this batch because the field it would have contradicted did not
+      // exist: nothing rendered the endpoint, so nothing could disagree with it. Adding
+      // `endpoint` without this fix would have shipped a field that is confidently wrong,
+      // which is worse than the "?" the owner complained about.
+      const configuredBaseUrl = settings.retrieval?.ollamaBaseUrl || process.env.OLLAMA_BASE_URL || null;
+      const probeEnvironment = {
+        EMBEDDING_MODEL: configuredModel,
+        ...(configuredBaseUrl ? { OLLAMA_BASE_URL: configuredBaseUrl } : {}),
+      };
       let ollamaStatus;
       try {
-        const served = await ollama({ environment: { EMBEDDING_MODEL: settings.retrieval?.embeddingModel || process.env.EMBEDDING_MODEL } });
-        ollamaStatus = { reachable: true, version: served.version, model: served.model, digest: served.digest };
+        const served = await ollama({ environment: probeEnvironment });
+        ollamaStatus = {
+          reachable: true,
+          endpoint: served.endpoint ?? null,
+          // The SERVED model, which can differ from the configured one by a tag: settings
+          // say `bge-m3` and ollama answers `bge-m3:latest`. The served name is the honest
+          // one when we have it, since that is what produced the digest beside it.
+          model: served.model ?? configuredModel,
+          dimension: configuredDimension,
+          version: served.version ?? null,
+          digest: served.digest ?? null,
+          hint: null,
+        };
       } catch (error) {
-        ollamaStatus = { reachable: false, version: null, model: null, digest: null, hint: error.message };
+        ollamaStatus = {
+          reachable: false,
+          endpoint: error.endpoint ?? null,
+          model: configuredModel,
+          dimension: configuredDimension,
+          version: null,
+          digest: null,
+          hint: error.message,
+        };
       }
 
       // The gate is observable BEFORE anything is attempted, per the contract. A user
@@ -831,7 +993,14 @@ export function createMethods({
       return {
         repos: rows,
         ollama: ollamaStatus,
-        db: { backend: settings.storage?.backend || 'sqlite', repos: rows.length },
+        db: {
+          backend: settings.storage?.backend || 'sqlite',
+          repos: rows.length,
+          // Always a real path: EngineState resolves it in its constructor and refuses to
+          // exist without one, so there is no null case to represent. NOT an index path,
+          // which is per repository and belongs on the repo row rather than here.
+          stateRoot: state.stateRoot,
+        },
         spendGate,
       };
     },

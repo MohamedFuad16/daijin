@@ -277,6 +277,38 @@ test('PROVENANCE resolves every origin, and an invented commit kills it', () => 
   assert.match(ghost.failures[0].reason, /was not found by the deterministic scan/);
 });
 
+test('F1 every failing diversity check names its FLOOR beside its count', () => {
+  // The owner field test: the message said "2 active cases" and never said what was
+  // required, so it stated a conclusion the reader had no way to check. A count without
+  // its bar is not evidence. Pinned on the DETAIL STRING because that is the thing the
+  // owner reads; the structured `failures` array was already correct and was not what
+  // failed them.
+  const { evidence, units, history } = fixture();
+  const { cases } = mineGoldset({ evidence, units, history, chunkCount: 500 });
+  const unitsById = new Map(units.map((unit) => [unit.id, unit]));
+  const context = {
+    unitsById,
+    availableTypes: new Set(units.map((unit) => unit.type)).size,
+    availableAreas: new Set(units.map((unit) => unit.meta.area)).size,
+  };
+
+  const short = diversityGate(cases.slice(0, 2), context);
+  assert.equal(short.status, 'fail');
+  // Every failing check appears in the prose with BOTH numbers, derived from the gate's
+  // own structured failures rather than from a hardcoded list, so a new check cannot be
+  // added to the gate and silently skip its floor in the message.
+  assert.ok(short.failures.length > 0);
+  for (const { check, got, floor } of short.failures) {
+    assert.match(short.detail, new RegExp(`${check}[^;]*\\b${got}\\b[^;]*minimum ${floor}`),
+      `the ${check} failure must name its floor in the detail; got: ${short.detail}`);
+  }
+
+  // A count that CLEARED its floor stays bare: a bar beside a number that passed is noise.
+  const healthy = diversityGate(cases, context);
+  assert.equal(healthy.status, 'pass');
+  assert.doesNotMatch(healthy.detail, /minimum/);
+});
+
 test('DIVERSITY holds the floor, and 24 cases or 4 identifiers kill it', () => {
   const { evidence, units, history } = fixture();
   const { cases } = mineGoldset({ evidence, units, history, chunkCount: 500 });

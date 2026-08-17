@@ -8,7 +8,22 @@
 // The alignment and dimension assertions below are hard won safety and must survive any
 // port: the comment above assertBatchAlignment records exactly the silent corruption
 // they prevent.
-const OLLAMA_DOWN = 'Ollama not reachable at localhost:11434; start it with brew services start ollama';
+// The stable PREFIX every unreachable-ollama message starts with, kept exported so a
+// caller can still match on it. The message itself is built per endpoint below.
+const OLLAMA_DOWN = 'Ollama not reachable';
+
+// NAMES THE HOST IT ACTUALLY TRIED. The old constant hardcoded localhost:11434 and the
+// brew advice with it, so once serveStatus began reporting the real endpoint the hint
+// contradicted the endpoint on the same row, and a user pointed at a remote ollama was
+// told to start a service on the wrong machine. `brew services` is offered ONLY for a
+// local endpoint, because it is not advice that can help anyone else.
+function ollamaDown(baseUrl) {
+  const endpoint = normalizeBaseUrl(baseUrl);
+  const local = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:|$)/.test(endpoint);
+  return local
+    ? `${OLLAMA_DOWN} at ${endpoint}; start it with brew services start ollama`
+    : `${OLLAMA_DOWN} at ${endpoint}; check that the host is up and reachable, or clear the configured endpoint to fall back to a local ollama`;
+}
 
 function timeoutSignal(milliseconds) {
   return AbortSignal.timeout(milliseconds);
@@ -44,10 +59,19 @@ export async function checkOllama({ environment = process.env, fetchImpl = fetch
     const model = environment.EMBEDDING_MODEL;
     const installed = tags.models?.find((item) => item.name === model || item.name === `${model}:latest` || item.model === model);
     if (!installed) throw new Error(`Ollama model ${model} is not installed; run ollama pull ${model}`);
-    return { version: version.version, digest: installed.digest, model: installed.model || installed.name };
+    // `endpoint` is returned rather than kept private because a caller that renders status
+    // otherwise has to recompute this default to say WHERE it looked, and a status screen
+    // whose endpoint is a second guess at the same default is exactly how a wrong endpoint
+    // stays invisible: it would agree with itself while disagreeing with the probe.
+    return { endpoint: baseUrl, version: version.version, digest: installed.digest, model: installed.model || installed.name };
   } catch (error) {
-    if (/not installed/.test(error.message)) throw error;
-    throw new Error(OLLAMA_DOWN);
+    if (/not installed/.test(error.message)) { error.endpoint = baseUrl; throw error; }
+    const down = new Error(ollamaDown(baseUrl));
+    // Carried on the error so the failure branch can still report where it tried. A status
+    // screen is most useful precisely when the probe FAILED, and that is the branch that
+    // used to know the least.
+    down.endpoint = baseUrl;
+    throw down;
   }
 }
 
@@ -95,7 +119,7 @@ async function embedOllama(inputs, identity, environment, fetchImpl) {
     }, { fetchImpl });
     return { vectors: result.embeddings, tokens: result.prompt_eval_count || null, cost: 0 };
   } catch {
-    throw new Error(OLLAMA_DOWN);
+    throw new Error(ollamaDown(environment.OLLAMA_BASE_URL));
   }
 }
 
@@ -161,4 +185,4 @@ export async function resolveServedIdentity(identity, options = {}) {
   return { ...identity, digest: served.digest };
 }
 
-export { OLLAMA_DOWN };
+export { OLLAMA_DOWN, ollamaDown };

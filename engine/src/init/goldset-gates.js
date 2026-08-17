@@ -338,10 +338,18 @@ export function diversityGate(cases, { unitsById, floors = DEFAULT_FLOORS, avail
     areaFloor < floors.minimumAreas ? `area floor relaxed to ${areaFloor}: the brain only has ${availableAreas} areas` : null,
   ].filter(Boolean);
 
+  // EACH FAILING CHECK NAMES ITS FLOOR. "2 active cases" tells a reader what was counted
+  // and not what was required, and the owner's field test failed on exactly that: the
+  // number was there and the bar was not, so the message stated a conclusion the reader
+  // could not check. Passing counts stay bare, because a floor beside a number that
+  // cleared it is noise.
+  const shortfalls = failures.map(({ check, got, floor }) => `${check} ${got}, minimum ${floor}`);
   return gate(
     'diversity',
     failures.length === 0 ? 'pass' : 'fail',
-    `${active.length} active cases, ${identifiers} identifier, ${answerTypes.size} types, ${answerAreas.size} areas`
+    (failures.length
+      ? `${shortfalls.join('; ')} (of ${active.length} active cases, ${identifiers} identifier, ${answerTypes.size} types, ${answerAreas.size} areas)`
+      : `${active.length} active cases, ${identifiers} identifier, ${answerTypes.size} types, ${answerAreas.size} areas`)
       + (relaxed.length ? ` (${relaxed.join('; ')})` : ''),
     {
       failures,

@@ -594,14 +594,33 @@ export async function initBrain({
   if (!gated.passed) {
     const failed = gated.gates.filter((entry) => entry.status !== 'pass').map((entry) => `${entry.id}: ${entry.detail}`);
     report.floor = null;
+    // WHAT USUALLY CAUSES THIS, which is the half a conclusion cannot supply. A gold set
+    // this small almost always means the walk saw very little, and the two reasons it sees
+    // very little are a repo with nothing in it yet and a repo that is not the one the user
+    // meant. The owner's field test was the second: a nested directory attached by mistake.
+    const tiny = gated.cases.length < 5;
+    const action = tiny
+      ? `Only ${gated.cases.length} case(s) could be mined, which usually means the attached directory holds very little: check that you attached the repository root rather than a subdirectory, and that the repo has code and history to mine.`
+      : 'Mine more material, or attach a repository with more code and history; the gates above name what is short.';
+
     report.blocked = {
       at: 'goldset-gates',
       reason: 'The gold set did not pass its own integrity gates, so it is not fit to measure.',
       failed,
+      action,
     };
     report.finishedAt = clock();
     if (writeArtifacts) await writeReport(artifacts, report);
-    await steps.emit({ step: 'blocked', detail: report.blocked.reason, level: 'warn' });
+    // THE EVIDENCE TRAVELS WITH THE CONCLUSION. This emitted the bare reason while `failed`
+    // sat in a report file the user never opens, so the owner's field test showed a verdict
+    // with nothing to check it against and took a screenshot plus archaeology to diagnose.
+    // A refusal carries its reason and the action that clears it; this is the product's
+    // most important failure path and it was the one place we did not.
+    await steps.emit({
+      step: 'blocked',
+      detail: `${report.blocked.reason} Failed: ${failed.join(' | ')}. ${action}`,
+      level: 'warn',
+    });
     return { ...report, units, evidence, goldsetFile, cases: gated.cases };
   }
 

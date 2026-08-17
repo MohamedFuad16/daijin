@@ -299,7 +299,31 @@ test('a gold set that fails its own gates BLOCKS the measurement instead of scor
     assert.equal(report.floor, null, 'a failing gauge must not produce a floor');
     assert.equal(report.blocked.at, 'goldset-gates');
     assert.ok(report.blocked.failed.some((entry) => entry.startsWith('diversity:')));
-    assert.ok(steps.some((step) => step.step === 'blocked' && step.level === 'warn'));
+    const blocked = steps.find((step) => step.step === 'blocked' && step.level === 'warn');
+    assert.ok(blocked);
+
+    // F1, owner field test. The old message said only that the gold set failed its gates,
+    // which is a conclusion with neither its evidence nor a next move. Three properties,
+    // because the owner needed all three and had none:
+    //
+    // 1. an ACTION, not just a diagnosis
+    assert.ok(report.blocked.action, 'a blocked report must say what to do next');
+    // 2. the action reaches the WIRE. The report is an in-process object; the owner reads
+    //    the emitted step, and a fix that lands only on the report is invisible to them.
+    assert.ok(blocked.detail.includes(report.blocked.action),
+      'the action must reach the emitted step, not just the report object');
+    // 3. the EVIDENCE travels with it: every failed check named in the detail, each with
+    //    its own floor from the gate below.
+    for (const entry of report.blocked.failed) {
+      assert.ok(blocked.detail.includes(entry), `the detail must name the ${entry} failure`);
+    }
+    assert.match(blocked.detail, /minimum \d+/);
+
+    // This fixture is a ONE FILE repo, which is the shape the owner actually hit: too few
+    // cases to mine at all. That case gets the attach-the-root advice rather than the
+    // generic "mine more material", because a subdirectory attach is the likeliest cause
+    // and the generic line sends someone off to write code they already have.
+    assert.match(report.blocked.action, /repository root rather than a subdirectory/);
   } finally {
     await store.close();
     rmSync(directory, { recursive: true, force: true });

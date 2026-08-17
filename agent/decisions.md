@@ -1245,3 +1245,17 @@ The stamp is the authority because it records where THIS install actually
 came from; a hardcoded path or a remote URL would update something else. No
 merge resolution: an updater has no business resolving conflicts in the
 owner's checkout, and a diverged checkout fails loudly instead.
+
+## D-0058 (2026-08-18) Violations lock the MCP unlock, from the same row the case rate reads
+
+Caught by the dogfood run, not by any suite: mcpUnlock decided on case rate
+alone while the contract called violations an enforced floor, so a brain
+serving two must-not violations was offered a snippet. Ruled: any recorded
+violations > 0 lock the unlock whatever the case rate says, because a
+must-not pair surfacing means a wrong answer is being served. scoreHistory
+rows now carry violations; rows written before the field carry null, and
+null is SAID in the unlock reason (re-run init to enforce), never treated
+as zero, because silently zeroing an unrecorded floor is how enforced
+floors stop being enforced. The CLI ping identity fix rode the same batch:
+servedModelId is the modelUsage entry with the most tokens, since the CLI
+reports its housekeeping helper beside the main model.

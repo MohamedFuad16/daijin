@@ -1,5 +1,50 @@
 # Daijin build state (authoritative)
 
+## 2026-08-18 00:05 - The dogfood run: daijin drove daijin, and caught two real defects
+
+Owner-directed test run ("take it for a test run... all the pipelines should
+be working"). The daijin engine was driven headlessly over its real stdio RPC
+against the DAIJIN REPO ITSELF (296 files, 316 commits), on a scratch state
+root so the owner's record stayed untouched. Twenty checks, run twice.
+
+RUN 1 (20 pass by the harness's own lights) SURFACED TWO DEFECTS the green
+summary would have hidden, both caught by reading the numbers like a
+verifier:
+
+1. UNLOCK DESPITE VIOLATIONS. retrievalScore reported 23 of 25 with TWO
+   must-not violations, and mcpSnippet still offered the snippet: mcpUnlock
+   never saw violations, although the contract and README both call
+   violations an enforced floor. Fixed: mcpUnlock takes violations and locks
+   on any, whatever the case rate ("a wrong answer is being served");
+   scoreHistory rows now record violations so the snippet path can enforce
+   from history; pre-field rows carry null, which the reason SAYS and never
+   treats as zero.
+2. WRONG SERVED IDENTITY FROM THE CLI. claude-code pings reported
+   claude-haiku-4-5 for an opus request: modelUsage lists the CLI's
+   housekeeping helper beside the main model and the code took the first
+   key. Fixed: the served identity is the model with the MOST tokens
+   against its name.
+
+RUN 2, all green and honest: init walked identity > identify > evidence >
+scaffold > brain > ingest > gates > goldset > floor > done in ~30s; floor
+23 of 25, MRR 0.656, chosen budget 3000; permuted control 11 of 25
+(12 cases of headroom, the gauge discriminates hard on this corpus);
+mcpSnippet now REFUSES with the violations sentence; gates 2 of 4 carrying
+signal; gymStart refused -32050 (no gate file, correct); all four roles
+verified for real: engineer and watcher HTTP 200 served glm-5.3 (coding
+realm, reasoning on), teacher served claude-opus-5, auditor served
+claude-fable-5 through the CLI.
+
+Owner's role correction applied everywhere (real settings and the test):
+GLM roles are glm-5.3 with reasoning ON (the earlier glm-4.6 guess for the
+watcher is gone); auditor is the daijin-auditor sub-agent on FABLE, teacher
+daijin-teacher on OPUS.
+
+A finding about ourselves, kept: daijin's own brain misses g008 and g010
+and surfaces 2 violations, so daijin refuses to serve daijin. That is the
+floor doing its job; improving our own brain is a real work item, not a
+gauge problem (the control proves 12 cases of discrimination).
+
 ## 2026-08-17 23:15 - Owner round 8: layout diet, budget control, realm default, updater
 
 Solo batch off the owner's eighth field test (six screenshots, all against a

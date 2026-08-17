@@ -44,6 +44,11 @@ import { examListRow, parseExamRecord, quarantineExam, vetoExam } from '../gym/e
 import { GymLedger, gymDatabasePath } from '../gym/ledger.js';
 import { loadResultFiles } from '../gym/result-files.js';
 import { assertSpendGate, readSpendGate, gymSpendGatePath } from '../gym/spend-gate.js';
+import { mineCommits, selectBankWithAuditor, validateChosenExam } from '../gym/mining.js';
+import { buildCommitteeAuditor } from '../gym/committee.js';
+import { createRoleGenerate } from '../roles/driver.js';
+import { createSandbox } from '../gym/sandbox.js';
+import { expandGates, runGateSet } from '../gym/gates.js';
 import { createSqliteStore } from '../store/sqlite.js';
 import { noteOrigin, repoLayout } from '../state/layout.js';
 import { invalidParams, notImplemented, spendRefused } from './errors.js';
@@ -690,6 +695,12 @@ export function createMethods({
   const ping = deps.pingProvider || pingProvider;
   const resolveRoleKey = deps.resolveKey || resolveKey;
   const scanAgents = deps.scanAgentCatalog || scanAgentCatalog;
+  // The exam-mining seams, injectable so the funnel is testable with no git
+  // walk, no provider, and no worktree; production uses the real four.
+  const mine = deps.mineCommits || mineCommits;
+  const selectBank = deps.selectBank || selectBankWithAuditor;
+  const validateExam = deps.validateExam || validateChosenExam;
+  const makeAuditorGenerate = deps.createRoleGenerate || createRoleGenerate;
 
   /// The gym run in flight, or null. `jobs.activeGymRun?.()` was called and DID NOT EXIST,
   /// so gymStatus.activeRun was permanently absent although the contract names it. The job
@@ -1866,6 +1877,161 @@ export function createMethods({
         // examListRow so the wire format cannot drift from the one examList serves.
         return examListRow(ledger.getExam(params.examId));
       });
+    },
+
+    /**
+     * Mine the exam bank from this repo's real commit history. SPEND-TOUCHING:
+     * the committee is the AUDITOR role answering once over the eligible
+     * candidates, so the call sits behind the owner gate (scope exam-mining)
+     * AND per-call consent, the same two locks gymStart holds.
+     *
+     * A JOB: the git walk is seconds but the committee is minutes and the
+     * per-exam validation (worktree + baseline gates) is minutes more, so
+     * everything after the refusals streams. Steps ride the `mine` and
+     * `validate` phases; `done` carries the counts.
+     *
+     * Selected exams land as DRAFTS, move to `validated` when their worktree
+     * checks pass, and are PROMOTED only by the owner (examUpdate): mining
+     * proposes, validation verifies, the owner admits to the bank. The
+     * scored record never gains a row any model elected on its own.
+     */
+    async examMine(params) {
+      const repoPath = await requireAttached(params);
+      await assertGate('exam-mining', { file: gymSpendGatePath(repoPath) });
+      await requireConsent('examMine', params,
+        'Exam mining sends the eligible candidate commits to the auditor role for selection, which is a real provider generation. The gate authorizes the machine; this call still needs your explicit go ahead.');
+      const settings = await state.settings();
+      const auditorRole = settings.roles.find((row) => row.role === 'auditor');
+      if (!auditorRole?.provider || !auditorRole?.model) {
+        throw invalidParams('auditor not configured',
+          'The exam committee IS the auditor role, and it has no provider or model configured. Set it up in settings first.');
+      }
+      const catalog = await loadProviderCatalog();
+      const entry = catalog.providers.find((candidate) => candidate.id === auditorRole.provider);
+      let key = null;
+      if (entry?.keyRequired ?? true) {
+        if (!auditorRole.keyRef) {
+          throw invalidParams('no key pointer', `The auditor role has no key pointer and ${auditorRole.provider} needs one.`);
+        }
+        try {
+          key = await resolveRoleKey(auditorRole.keyRef);
+        } catch (error) {
+          throw invalidParams('key not resolvable', error.message);
+        }
+      }
+      let agentPath = null;
+      if (auditorRole.provider === 'claude-code' && auditorRole.agentRef) {
+        const agents = await scanAgents({ repoPaths: (await state.repos()).map((row) => row.path) });
+        agentPath = agents.find((agent) => agent.id === auditorRole.agentRef)?.path ?? null;
+      }
+      const endpoint = auditorRole.endpoint || entry?.endpointDefault || null;
+      const target = Number.isInteger(params?.target) && params.target > 0 ? Math.min(params.target, 25) : 10;
+
+      const jobId = jobs.start('mine', async ({ emit, cancelled }) => {
+        emit('mine', 'walk', 'walking the commit history through the deterministic filter');
+        const mined = await mine(repoPath);
+        emit('mine', 'filtered',
+          `${mined.candidates.length} candidate(s) kept, ${mined.dropped.length} dropped by the deterministic filter`
+          + (mined.capped.applied ? `; history capped at ${mined.capped.limit} of ${mined.capped.seen} commits` : ''),
+          { counts: { candidates: mined.candidates.length, dropped: mined.dropped.length } });
+        if (cancelled()) return;
+        if (mined.candidates.length === 0) {
+          emit('done', 'empty', 'No commit survived the deterministic filter, so there is nothing for the committee to read.', { level: 'warn' });
+          return;
+        }
+
+        const generate = makeAuditorGenerate({ ...auditorRole, endpoint }, { key, agentPath });
+        const auditor = buildCommitteeAuditor(generate, { target });
+        emit('mine', 'committee',
+          `the auditor (${auditorRole.provider} ${auditorRole.model}) is reading ${mined.candidates.length} candidate(s)`);
+        const selection = await selectBank(
+          { candidates: mined.candidates, auditor, repoPath },
+          { assertSpendGate: (scope) => assertGate(scope, { file: gymSpendGatePath(repoPath) }) },
+        );
+        if (cancelled()) return;
+        emit('mine', 'selected', `${selection.chosen.length} exam(s) selected by the committee`,
+          { counts: { chosen: selection.chosen.length, eligible: selection.eligible.length } });
+
+        // Gates for baseline validation: what discovery classified as able to
+        // carry signal. An empty list validates vacuously and the event says so.
+        let gateList = [];
+        try {
+          const parsed = parseGatesFile(await readFile(gatesFilePath(repoPath), 'utf8'));
+          gateList = (parsed.discovered?.gates || []).filter((gate) => gate.enabled && ['live', 'measured'].includes(gate.classification));
+        } catch {
+          gateList = [];
+        }
+        if (gateList.length === 0) {
+          emit('validate', 'no-gates',
+            'No live or measured gate exists, so baseline validation checks only the worktree and the diff. Run gate discovery for stronger validation.',
+            { level: 'warn' });
+        }
+
+        const written = [];
+        await withLedger(repoPath, async (ledger) => {
+          const existing = ledger.listExams({});
+          let next = existing.reduce((highest, row) => {
+            const match = /^exam-(\d{4})$/.exec(row.examId);
+            return match ? Math.max(highest, Number(match[1])) : highest;
+          }, 0);
+          const engineRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..', '..');
+          const layout = await layoutFor(repoPath);
+          for (const candidate of selection.chosen) {
+            if (cancelled()) break;
+            next += 1;
+            const examId = `exam-${String(next).padStart(4, '0')}`;
+            const baseCommit = candidate.parents?.[0];
+            if (!baseCommit) {
+              emit('validate', 'skipped', `${examId}: ${candidate.commit} has no parent to base the exam on`, { level: 'warn' });
+              continue;
+            }
+            emit('validate', 'checking', `${examId}: worktree at base, baseline gates, real diff (${String(candidate.subject).slice(0, 60)})`);
+            const verdict = await validateExam({
+              candidate: { ...candidate, baseCommit, goldCommit: candidate.commit, examId },
+              sourceRepo: repoPath,
+              gates: gateList,
+              engineRoot,
+              sandboxesRoot: path.join(layout.repoStateRoot, 'sandboxes'),
+            }, { createSandbox, runGateSet, expandGates });
+            const record = {
+              examId,
+              title: candidate.auditorTitle || candidate.subject,
+              status: verdict.ok ? 'validated' : 'draft',
+              benchmarkStatus: 'active',
+              heldOut: Boolean(candidate.heldOut),
+              scopeTier: verdict.scope.tier ?? 'S',
+              scopeFiles: Math.max(1, verdict.scope.files),
+              scopeInsertions: verdict.scope.insertions,
+              baseCommit,
+              goldCommit: candidate.commit,
+              task: candidate.auditorTask,
+              goldNotes: verdict.ok
+                ? (candidate.auditorRationale ?? null)
+                : `NOT VALIDATED: ${verdict.failures.join(' | ')}${candidate.auditorRationale ? ` (committee: ${candidate.auditorRationale})` : ''}`,
+              provenance: {
+                source: 'auditor-selection',
+                authoredBy: { role: 'auditor', model: auditorRole.model, endpoint: endpoint ?? 'default' },
+                commit: candidate.commit,
+              },
+            };
+            try {
+              ledger.putExam(record);
+              written.push({ examId, ok: verdict.ok });
+              emit('validate', verdict.ok ? 'validated' : 'draft-only',
+                `${examId} ${verdict.ok ? 'validated' : `stays a draft: ${verdict.failures.join('; ').slice(0, 140)}`}`,
+                verdict.ok ? undefined : { level: 'warn' });
+            } catch (error) {
+              emit('validate', 'rejected', `${examId} refused by the record parser: ${error.message}`, { level: 'warn' });
+            }
+          }
+        });
+        const validated = written.filter((row) => row.ok).length;
+        emit('done', 'mined',
+          `${written.length} exam(s) written: ${validated} validated, ${written.length - validated} draft(s). `
+          + 'Promote the ones you accept; only promoted exams can run.',
+          { counts: { written: written.length, validated } });
+      });
+      return { jobId };
     },
 
     async examUpdate(params) {

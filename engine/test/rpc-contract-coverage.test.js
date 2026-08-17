@@ -90,6 +90,7 @@ const PROSE = Object.freeze({
 
 const REFUSING = Object.freeze({
   gymStart: 'refuses for spend before returning a success shape',
+  examMine: 'refuses for spend before returning a success shape; the funnel is pinned in exam-mining-rpc.test.js',
   rolePing: 'refuses for spend before returning a success shape',
   diagnoseNarrate: 'refuses for spend before returning a success shape',
 });

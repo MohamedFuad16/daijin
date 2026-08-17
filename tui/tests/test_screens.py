@@ -1203,6 +1203,55 @@ async def test_radar_switches_to_bars_by_mouse():
 
 
 @run_async
+async def test_mining_needs_the_gate_and_consent_then_lands_exams_the_owner_promotes():
+    """The full mining flow against the mock: confirm dialog carries the
+    spend, the stream lands one validated exam and one draft, and PROMOTION
+    is a separate owner click that examUpdate carries to the wire."""
+    async with running_app(gate_open=True) as (app, pilot):
+        await goto(pilot, "6")
+        before = {r["examId"] for r in app.screen.exams}
+        await pilot.click("#exam-mine")
+        await settle(pilot)
+        await pilot.click("#spend-confirm")
+        await settle(pilot, 30)
+        mine_calls = [c for c in app.client.engine.calls if c[0] == "examMine"]
+        assert mine_calls, f"examMine never reached the engine; calls: {[c[0] for c in app.client.engine.calls]}"
+        assert mine_calls[0][1]["confirm"] is True
+        # The done event reloads the bank; the two mined exams are rows now.
+        for _ in range(40):
+            await settle(pilot, 4)
+            if "exam-0090" in {r["examId"] for r in app.screen.exams}:
+                break
+        ids = {r["examId"] for r in app.screen.exams}
+        assert "exam-0090" in ids and "exam-0091" in ids
+        assert ids - before == {"exam-0090", "exam-0091"}
+
+        # Promote the validated one: examUpdate carries status promoted.
+        # Selected through the same path a row click takes (show_exam sets
+        # exam_id); the cursor may already sit on row 0, which fires no
+        # highlight event.
+        await app.screen.show_exam("exam-0090")
+        await settle(pilot)
+        await pilot.click("#exam-promote")
+        await settle(pilot, 10)
+        updates = [c for c in app.client.engine.calls
+                   if c[0] == "examUpdate" and c[1].get("examId") == "exam-0090"]
+        assert updates, "examUpdate never reached the engine"
+        assert updates[0][1]["patch"] == {"status": "promoted"}
+
+
+@run_async
+async def test_mining_declined_at_the_dialog_sends_nothing():
+    async with running_app(gate_open=True) as (app, pilot):
+        await goto(pilot, "6")
+        await pilot.click("#exam-mine")
+        await settle(pilot)
+        await pilot.click("#spend-cancel")
+        await settle(pilot, 6)
+        assert not any(c[0] == "examMine" for c in app.client.engine.calls)
+
+
+@run_async
 async def test_exam_token_bars_and_history_come_from_exam_detail():
     async with running_app() as (app, pilot):
         await goto(pilot, "6")

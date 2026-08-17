@@ -203,7 +203,16 @@ export async function selectBankWithAuditor({
     // stage dropped is refused rather than reinstated, which is the same rule the gold-set
     // pipeline runs on ("the LLM may propose, mechanics accept").
     if (!candidate) throw new Error(`The auditor selected ${entry.commit}, which is not an eligible candidate.`);
-    return { ...candidate, auditorRationale: entry.rationale ?? null, heldOut: Boolean(entry.heldOut) };
+    // The auditor AUTHORS the task and title, not just the pick: the task is
+    // what the student reads, so it rides the selection rather than being
+    // reconstructed later from the subject line the student must not see.
+    return {
+      ...candidate,
+      auditorRationale: entry.rationale ?? null,
+      auditorTask: entry.task ?? null,
+      auditorTitle: entry.title ?? null,
+      heldOut: Boolean(entry.heldOut),
+    };
   });
   return { chosen, relations, layer2Material, eligible };
 }
@@ -237,11 +246,17 @@ export async function validateChosenExam({
     sandbox = await createSandbox({
       sourceRepo, baseCommit: candidate.baseCommit, examId: candidate.examId || 'exam-candidate', sandboxesRoot,
     });
-    const expanded = expandGates(gates, { engineRoot, sandbox: sandbox.directory });
-    baseline = await runGateSet(expanded, { cwd: sandbox.directory, timeoutMs: gateTimeoutMs });
-    const notPassing = baseline.filter((gate) => gate.status !== 'pass');
-    if (notPassing.length) {
-      failures.push(`baseline gates do not pass at ${candidate.baseCommit}: ${notPassing.map((gate) => `${gate.id}=${gate.status}`).join(', ')}`);
+    // ZERO GATES SKIPS THE BASELINE, NOT THE WORKTREE. expandGates refuses an
+    // empty list (correctly: a gate RUN over nothing is a lie), but a repo
+    // with no discovered gates can still prove its base commit checks out,
+    // and the caller has already warned that validation is weaker here.
+    if ((gates || []).length > 0) {
+      const expanded = expandGates(gates, { engineRoot, sandbox: sandbox.directory });
+      baseline = await runGateSet(expanded, { cwd: sandbox.directory, timeoutMs: gateTimeoutMs });
+      const notPassing = baseline.filter((gate) => gate.status !== 'pass');
+      if (notPassing.length) {
+        failures.push(`baseline gates do not pass at ${candidate.baseCommit}: ${notPassing.map((gate) => `${gate.id}=${gate.status}`).join(', ')}`);
+      }
     }
   } catch (error) {
     failures.push(`sandbox at base failed: ${error.message}`);

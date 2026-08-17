@@ -149,6 +149,8 @@ class ExamsScreen(DaijinScreen):
         with Horizontal(id="exam-filters"):
             yield Select(STATUS_OPTIONS, value="all", id="filter-exam-status", allow_blank=False)
             yield Select(BENCHMARK_OPTIONS, value="all", id="filter-exam-benchmark", allow_blank=False)
+            yield Button("Mine exams (spends)", id="exam-mine", variant="primary")
+            yield Button("Promote", id="exam-promote")
             yield Button("Veto", id="exam-veto", variant="warning")
             yield Button("Quarantine", id="exam-quarantine")
             yield Button("Release quarantine", id="exam-release")
@@ -167,6 +169,9 @@ class ExamsScreen(DaijinScreen):
         yield Static("[dim]no exam selected[/dim]", id="exam-provenance", markup=True)
 
     async def load(self) -> None:
+        if not getattr(self, "_mine_subscribed", False):
+            self.client.on_event(self._on_mine_event)
+            self._mine_subscribed = True
         self.refresh_heading()
         table = self.query_one("#exam-table", DataTable)
         if not table.columns:
@@ -423,12 +428,101 @@ class ExamsScreen(DaijinScreen):
 
     async def on_button_pressed(self, event: Button.Pressed) -> None:
         event.stop()
-        if event.button.id == "exam-veto":
+        if event.button.id == "exam-mine":
+            self.mine_exams()
+        elif event.button.id == "exam-promote":
+            self.promote_selected()
+        elif event.button.id == "exam-veto":
             self.veto_selected()
         elif event.button.id == "exam-quarantine":
             self.quarantine_selected()
         elif event.button.id == "exam-release":
             await self.release_selected()
+
+    @work
+    async def mine_exams(self) -> None:
+        """The exam funnel: gate, consent, then a streaming job.
+
+        Mining proposes and validation verifies; PROMOTION stays a separate
+        owner click, so the bank the gym runs on never gains a row any model
+        elected on its own.
+        """
+        repo = getattr(self.app, "selected_repo", None)
+        notice = self.query_one("#exam-notice", Banner)
+        if not repo:
+            notice.set_notice("No repo selected. Press 1 for the repo home and pick one.", "warn")
+            return
+        confirmed = await self.confirm_spend(
+            method="examMine",
+            summary=(
+                "Mining walks this repo's commit history through the free deterministic "
+                "filter, then sends the eligible candidates to the AUDITOR role for "
+                "selection - one real provider generation. It also needs the owner "
+                "gate open for the exam-mining scope."
+            ),
+            estimate_lines=["one auditor generation over the eligible candidates",
+                            "plus a local worktree validation per selected exam (free)"],
+            confirm_label="Mine exams and spend",
+        )
+        if not confirmed:
+            notice.set_notice("Not mined. Nothing was sent to a provider.", "info")
+            return
+        try:
+            started = await self.client.call("examMine", {"repoPath": repo, "confirm": True})
+        except RpcError as error:
+            self.report_rpc_error(error)
+            notice.set_notice(error.hint, "error")
+            return
+        self.mine_job_id = started.get("jobId")
+        notice.set_notice(
+            f"Mining started, job {self.mine_job_id}. The walk is seconds; the committee "
+            f"is minutes. This screen reloads itself when the job finishes.",
+            "info",
+        )
+
+    def _on_mine_event(self, event: dict) -> None:
+        """Mining progress lands in the banner; done reloads the bank."""
+        if event.get("jobId") != getattr(self, "mine_job_id", None) or not self.is_mounted:
+            return
+        notice = self.query_one("#exam-notice", Banner)
+        if event.get("phase") == "done":
+            self.mine_job_id = None
+            tone = {"error": "error", "warn": "warn"}.get(str(event.get("level") or "info"), "info")
+            notice.set_notice(f"Mining finished: {event.get('detail', '')}", tone)
+            self.start_load()
+        else:
+            notice.set_notice(f"Mining: {event.get('detail', '')}", "info")
+
+    def on_unmount(self) -> None:
+        if getattr(self, "_mine_subscribed", False):
+            self.client.off_event(self._on_mine_event)
+            self._mine_subscribed = False
+
+    @work
+    async def promote_selected(self) -> None:
+        """validated -> promoted, the owner's admission to the runnable bank."""
+        exam = self._selected()
+        notice = self.query_one("#exam-notice", Banner)
+        if exam is None:
+            notice.set_notice("Select an exam row first.", "warn")
+            return
+        if exam.get("status") == "promoted":
+            notice.set_notice(f"{exam['examId']} is already promoted.", "info")
+            return
+        try:
+            await self.client.call(
+                "examUpdate",
+                with_repo({"examId": exam["examId"], "patch": {"status": "promoted"}},
+                          getattr(self.app, "selected_repo", None)),
+            )
+        except RpcError as error:
+            self.report_rpc_error(error)
+            notice.set_notice(error.hint, "error")
+            return
+        notice.set_notice(
+            f"{exam['examId']} promoted. It is now in the bank gymStart draws from.", "info"
+        )
+        await self.reload_bank()
 
     @work
     async def veto_selected(self) -> None:

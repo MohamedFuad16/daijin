@@ -83,7 +83,7 @@ ERR_NOT_IMPLEMENTED = -32001
 # Exhaustive per the error convention. Adding to this set is a contract change,
 # not an implementation detail. Since v5 EVERY member requires confirm: true in
 # its params; the engine never infers consent, not even from an open gate.
-SPEND_TOUCHING = frozenset({"gymStart", "rolePing", "initBrain:layer1+layer2", "diagnoseNarrate"})
+SPEND_TOUCHING = frozenset({"gymStart", "examMine", "rolePing", "initBrain:layer1+layer2", "diagnoseNarrate"})
 
 # documents filter keys, fixed by v5.
 DOCUMENT_FILTER_KEYS = frozenset({"q", "type", "area"})
@@ -1312,6 +1312,45 @@ class MockEngine:
     async def _rpc_gymStatus(self, params: dict[str, Any]) -> dict[str, Any]:
         self._require_ledger(params.get("repoPath"))
         return copy.deepcopy(mock_data.GYM_STATUS)
+
+    async def _rpc_examMine(self, params: dict[str, Any]) -> dict[str, Any]:
+        """The mining funnel, mirrored: gate, consent, then a streaming job
+        that lands one validated exam and one draft in the bank."""
+        if not self.gate_open:
+            raise RpcError(
+                ERR_SPEND_GATE,
+                "spend gate is blocked",
+                {
+                    "gate": mock_data.SPEND_GATE["path"],
+                    "hint": (
+                        "The spend gate is blocked. Exam mining sends the eligible "
+                        "candidates to the auditor role, which is a paid generation."
+                    ),
+                },
+            )
+        if not params.get("confirm"):
+            self._refuse_spend(
+                "examMine",
+                "Exam mining sends the eligible candidate commits to the auditor role "
+                "for selection, which is a real provider generation.",
+            )
+        self._require_ledger(params.get("repoPath"))
+        job_id = self._new_job_id("mine")
+        mined = copy.deepcopy(mock_data.MINED_EXAMS)
+        existing = {row["examId"] for row in self.exams}
+        for row in mined:
+            if row["examId"] in existing:
+                continue
+            self.exams.append(row)
+            # A mined exam is inspectable IMMEDIATELY: no attempts yet, axes
+            # null (nobody graded), provenance carried from the bank row.
+            self.exam_details[row["examId"]] = {
+                "axes": None,
+                "attempts": [],
+                "provenance": copy.deepcopy(row.get("provenance") or {}),
+            }
+        self._start_stream(job_id, mock_data.mine_script(job_id))
+        return {"jobId": job_id}
 
     async def _rpc_examList(self, params: dict[str, Any]) -> Any:
         self._require_ledger(params.get("repoPath"))

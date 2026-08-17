@@ -40,6 +40,7 @@ function surface(repoPath) {
     ['gymStart', { repoPath, config: {} }],
     ['gymStatus', {}],
     ['examList', {}],
+    ['examMine', { repoPath }],
     ['examDetail', { examId: 'exam-0001' }],
     ['examVeto', { examId: 'exam-0001', reason: 'a reason long enough to be reviewable later' }],
     ['examUpdate', { examId: 'exam-0001', patch: {} }],
@@ -293,7 +294,7 @@ test('the spend-touching methods are exactly the four the contract enumerates', 
       const envelope = sweep.note(await daemon.request(method, params));
       if (envelope.error?.code === ERR_SPEND_REFUSED) refusing.push(method);
     }
-    assert.deepEqual(refusing.sort(), ['diagnoseNarrate', 'gymStart', 'rolePing'].sort(),
+    assert.deepEqual(refusing.sort(), ['diagnoseNarrate', 'examMine', 'gymStart', 'rolePing'].sort(),
       'initBrain only spends on layer1+layer2, which this sweep calls with layer1');
   } finally {
     await sweep.cleanup();

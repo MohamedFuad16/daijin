@@ -666,6 +666,70 @@ SCORE_HISTORY: dict[str, list[dict[str, Any]]] = {
 
 # examList rows carry the two orthogonal status axes plus the split flag.
 # status is the authoring pipeline; benchmarkStatus is measurement integrity.
+# What a mock mining run lands in the bank: one validated exam and one that
+# stayed a draft, so the promote flow and the not-validated rendering are
+# both exercisable offline.
+MINED_EXAMS: list[dict[str, Any]] = [
+    {
+        "examId": "exam-0090",
+        "title": "Correct the cache eviction order",
+        "status": "validated",
+        "benchmarkStatus": "active",
+        "heldOut": False,
+        "tier": "S",
+        "provenance": {
+            "repoPath": "/Users/owner/code/orchard-web",
+            "baseCommit": "77aa001",
+            "goldCommit": "77aa002",
+            "source": "auditor-selection",
+            "selectedBy": "auditor",
+            "supersedes": None,
+            "note": "Committee: single coherent intent with a statable outcome.",
+        },
+    },
+    {
+        "examId": "exam-0091",
+        "title": "Harden the retry parser",
+        "status": "draft",
+        "benchmarkStatus": "active",
+        "heldOut": True,
+        "tier": "M",
+        "provenance": {
+            "repoPath": "/Users/owner/code/orchard-web",
+            "baseCommit": "77aa003",
+            "goldCommit": "77aa004",
+            "source": "auditor-selection",
+            "selectedBy": "auditor",
+            "supersedes": None,
+            "note": "NOT VALIDATED: baseline gates do not pass at base.",
+        },
+    },
+]
+
+
+def mine_script(job_id: str) -> list[dict[str, Any]]:
+    """The examMine step stream, shape-faithful to the daemon's mine job."""
+    def ev(offset_ms, phase, step, detail, counts=None, level="info"):
+        row = {"ts": offset_ms, "jobId": job_id, "phase": phase, "step": step, "detail": detail, "level": level}
+        if counts:
+            row["counts"] = counts
+        return row
+    return [
+        ev(200, "mine", "walk", "walking the commit history through the deterministic filter"),
+        ev(900, "mine", "filtered", "12 candidate(s) kept, 31 dropped by the deterministic filter",
+           {"candidates": 12, "dropped": 31}),
+        ev(1_400, "mine", "committee", "the auditor (claude-code claude-fable-5) is reading 12 candidate(s)"),
+        ev(6_000, "mine", "selected", "2 exam(s) selected by the committee", {"chosen": 2, "eligible": 12}),
+        ev(6_500, "validate", "checking", "exam-0090: worktree at base, baseline gates, real diff"),
+        ev(8_000, "validate", "validated", "exam-0090 validated"),
+        ev(8_400, "validate", "checking", "exam-0091: worktree at base, baseline gates, real diff"),
+        ev(9_900, "validate", "draft-only", "exam-0091 stays a draft: baseline gates do not pass at base", None, "warn"),
+        ev(10_000, "done", "mined",
+           "2 exam(s) written: 1 validated, 1 draft(s). Promote the ones you accept; only promoted exams can run.",
+           {"written": 2, "validated": 1}),
+    ]
+
+
 EXAMS: list[dict[str, Any]] = [
     {
         "examId": "exam-0058",

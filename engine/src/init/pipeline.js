@@ -15,7 +15,8 @@
 // The report this returns is the honest record: whatever the floor turns out to be, it is
 // written down with its case counts, its budget curve, and the gates that did or did not
 // pass. Nothing in here rounds, and nothing in here retries a measurement it did not like.
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import YAML from 'yaml';
@@ -708,9 +709,16 @@ export async function initBrain({
   // the SAME cases with deliberately wrong answers, so it measures this gauge on this
   // corpus rather than a general property of small repos.
   let resolution = null;
+  // SCRATCH, never the repo. The permuted control is a measurement INPUT the
+  // range record makes reproducible, not an artifact: written under the repo
+  // it left a top-level control/ directory in the owner's working tree, found
+  // by the dogfood run's git status. The measured range lives in the report
+  // and the range file; the permuted file itself is derivable and disposable.
+  let controlScratch = null;
   try {
-    const controlPath = writeArtifacts
-      ? await writeGoldset(path.join(artifacts, 'control'), permuteAnswers(gated.active))
+    controlScratch = writeArtifacts ? await mkdtemp(path.join(tmpdir(), 'daijin-control-')) : null;
+    const controlPath = controlScratch
+      ? await writeGoldset(controlScratch, permuteAnswers(gated.active))
       : null;
     if (controlPath) {
       resolution = await measureResolution({
@@ -731,6 +739,8 @@ export async function initBrain({
     // itself worth saying, and it must not take the floor down with it.
     resolution = { unavailable: true, reason: error.message };
     await steps.emit({ step: 'resolution-unavailable', detail: error.message, level: 'warn' });
+  } finally {
+    if (controlScratch) await rm(controlScratch, { recursive: true, force: true }).catch(() => {});
   }
 
   // The unlock is decided AFTER the range is known, so the decision can carry it (finding

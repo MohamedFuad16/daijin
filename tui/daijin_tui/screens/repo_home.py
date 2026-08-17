@@ -16,10 +16,22 @@ from ..widgets import Banner, RepoCard, SectionTitle, format_count
 from ..widgets.wordmark import header_mark
 from .attach_dialog import AttachRepoScreen
 
-# A per-card bound. Long enough that a slow but working engine still fills the
-# card, short enough that a stalled one does not read as a hang. The owner's
-# case was analyze on "/" walking the whole disk, which never returns at all.
-CARD_TIMEOUT_SECONDS = 8.0
+# DERIVED, not chosen. analyze bounds its file walk with timeBudgetMs = 10_000
+# (engine/src/init/analyze.js and init/walk.js), so a legitimately slow but
+# BOUNDED engine can spend ten seconds inside one card and still answer. The
+# card bound is that ceiling plus a margin for the rest of the call, and the
+# three calls a card makes run concurrently so the walk is the dominant one.
+#
+# If the engine's budget moves, this should move with it: the number is the
+# engine's, not mine, and an inherited round number would have fired at 8s
+# before a working engine had finished.
+ENGINE_WALK_BUDGET_SECONDS = 10.0
+CARD_TIMEOUT_SECONDS = ENGINE_WALK_BUDGET_SECONDS + 2.0
+
+# How long the SKELETON waits before saying so. The status block is painted
+# immediately either way; this is only when its placeholder stops saying
+# "reading" and starts saying how long it has been.
+STATUS_PATIENCE_SECONDS = 3.0
 from .base import DaijinScreen
 
 
@@ -72,10 +84,35 @@ class RepoHomeScreen(DaijinScreen):
         self._draw_wordmark()
         container = self.query_one("#repo-cards", HorizontalScroll)
         await container.remove_children()
+
+        # THE SKELETON WAITS ON NOTHING. The status block is painted before the
+        # call is even made, so the attach box is live and the screen is
+        # readable while the engine is still thinking. A remote embedder that
+        # accepts and never replies made serveStatus a five second call, and
+        # the difference between a screen that says what it is doing and one
+        # that shows a spinner is the whole complaint.
+        status_block = self.query_one("#engine-status", Static)
+        status_block.update("[dim]reading the engine...[/dim]")
+
+        pending = asyncio.ensure_future(self.client.call("serveStatus", {}))
         try:
-            status = await self.client.call("serveStatus", {})
+            status = await asyncio.wait_for(asyncio.shield(pending), STATUS_PATIENCE_SECONDS)
+        except asyncio.TimeoutError:
+            # Still waiting, not failed. Say how long rather than implying an
+            # error the engine has not reported.
+            status_block.update(
+                f"[yellow]the engine has not answered in {STATUS_PATIENCE_SECONDS:.0f}s. "
+                f"Still waiting; the attach box below works meanwhile.[/yellow]"
+            )
+            try:
+                status = await pending
+            except RpcError as error:
+                self.show_rpc_error(error, "#home-notice")
+                status_block.update(f"[red]{error.hint}[/red]")
+                return
         except RpcError as error:
             self.show_rpc_error(error, "#home-notice")
+            status_block.update(f"[red]{error.hint}[/red]")
             return
 
         for repo in status.get("repos", []):

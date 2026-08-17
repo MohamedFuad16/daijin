@@ -66,6 +66,51 @@ def test_the_wordmark_reads_without_colour():
     assert len(glyphs) > 1, "a single repeated glyph is a slab, not a dither"
 
 
+def test_each_letterform_is_the_letter_it_claims_to_be():
+    """The mask above was PASTED from the font's own output.
+
+    So the code cannot move it, which is why the corruption mutation kills, but
+    both sides still came from one belief: if BLOCK_FONT had shipped a typo, the
+    hand-copied mask would have enshrined it and this suite would defend a
+    misspelled wordmark forever.
+
+    These assertions are written from what the LETTERS are, not from what the
+    table says. They are the independent side the mask comparison lacks.
+    """
+    rows = {letter: BLOCK_FONT[letter] for letter in "DAIJN"}
+
+    def col(mask, index):
+        return [row[index] for row in mask]
+
+    d = rows["D"]
+    assert all(ch == "#" for ch in col(d, 0)), "D has no left stem"
+    assert d[0].count("#") >= 4 and d[6].count("#") >= 4, "D has no top or bottom bar"
+    assert d[0][4] == "." and d[6][4] == ".", "D's bowl is closed square, not curved"
+    assert all(row[4] == "#" for row in d[1:6]), "D's bowl has no right side"
+
+    a = rows["A"]
+    assert a[3].count("#") == 5, "A has no crossbar"
+    assert a[0][0] == "." and a[0][4] == ".", "A has no apex"
+    assert all(row[0] == "#" and row[4] == "#" for row in a[1:]), "A has no legs"
+
+    i = rows["I"]
+    assert i[0].count("#") == 5 and i[6].count("#") == 5, "I has no serifs"
+    assert all(row.count("#") == 1 and row[2] == "#" for row in i[1:6]), "I has no centre stem"
+
+    j = rows["J"]
+    assert j[0].count("#") == 5, "J has no top bar"
+    assert all(row[3] == "#" for row in j[1:5]), "J has no descending stem"
+    assert j[6][3] == "." and "#" in j[6], "J has no hook at the foot"
+    assert j[5][0] == "#", "J's hook does not turn back"
+
+    n = rows["N"]
+    assert all(ch == "#" for ch in col(n, 0)), "N has no left stem"
+    assert all(ch == "#" for ch in col(n, 4)), "N has no right stem"
+    diagonal = [row.index("#", 1) for row in n[1:6]]
+    assert diagonal == sorted(diagonal), f"N's diagonal does not descend: {diagonal}"
+    assert diagonal[0] < diagonal[-1], "N has no diagonal at all"
+
+
 def test_a_partial_reveal_is_a_prefix_of_the_finished_mark():
     """Every frame comes from the same function, so the animation cannot drift."""
     full = wordmark_lines()

@@ -1770,13 +1770,21 @@ export function createMethods({
       const engineer = await createEngineer({ settings, repoPath });
 
       const jobId = jobs.start('gym', async ({ emit, cancelled }) => {
-        const store = await openStore(repoPath);
-        // Opened HERE so the finally below can close it. It used to be opened inline in the
-        // options object, where nothing held a reference to close, so every cycle leaked a
-        // better-sqlite3 handle for the life of the daemon.
-        const ledger = openLedger(repoPath);
-        activeGymRun = { jobId, mode: config.mode ?? 'harness-debug', exams: drawn.map((exam) => exam.examId), startedAt: new Date(now()).toISOString() };
+        // EVERYTHING inside one try, including the opens: the live run caught
+        // openStore throwing BEFORE the old try began, which skipped the gate
+        // re-block and left an authorization standing after a failed job.
+        let store = null;
+        let ledger = null;
         try {
+          // Through openBrain, not bare openStore: the index left the repo
+          // (D-0031) and a store opened without the layout's path resolves the
+          // legacy location - the live run failed on exactly this.
+          store = await openBrain(repoPath);
+          // Opened HERE so the finally below can close it. It used to be opened inline in
+          // the options object, where nothing held a reference to close, so every cycle
+          // leaked a better-sqlite3 handle for the life of the daemon.
+          ledger = openLedger(repoPath);
+          activeGymRun = { jobId, mode: config.mode ?? 'harness-debug', exams: drawn.map((exam) => exam.examId), startedAt: new Date(now()).toISOString() };
           const environment = await embedderEnvironment(store, { ollamaBaseUrl: settings.retrieval?.ollamaBaseUrl });
           // A brainless repo RUNS but cannot certify, so documents are optional and their
           // absence is not an error.
@@ -1835,8 +1843,8 @@ export function createMethods({
           // closed, so every cycle leaked a better-sqlite3 handle; the finally closed only
           // the store. withLedger exists for exactly this and could not be used here
           // because the ledger outlives the call that opens it.
-          await store.close?.();
-          ledger.close?.();
+          await store?.close?.();
+          ledger?.close?.();
           activeGymRun = null;
           // The gate re-blocks when the run ends (D-0060), same as mining.
           await reblockGate(repoPath);

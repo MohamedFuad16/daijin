@@ -21,6 +21,31 @@
 // like a surviving mutant. That is one of the two ways a survivor can lie; the other is a
 // mutation that applies but preserves the information the test measures, which no tool can
 // detect and which stays the reader's job.
+//
+// AND IT DISABLES THE ONE RUNTIME CACHE KNOWN TO OUTLIVE A RESTORE. Reported by
+// tui-builder and reproduced here: a .pyc header records the source mtime in WHOLE SECONDS
+// plus its size, and the cache is trusted when both match. A SAME-LENGTH mutation restored
+// inside the same wall-clock second therefore leaves bytecode Python believes, and a later
+// run executes MUTATED BYTECODE AGAINST RESTORED SOURCE.
+//
+// Measured here, restoring immediately after the mutated run:
+//
+//   mutated run  exit 1   KILLED, correct
+//   restored run exit 1   WRONG, and the source on disk was correct
+//
+// THE CONTAMINATION OUTLIVES THIS TOOL'S INVOCATION, which is what makes it worse than a
+// wrong result: the next unrelated run in that directory gets the mutated bytecode too.
+// Both polarities exist and the dangerous one is quiet, an unrelated later run PASSING
+// against mutated bytecode. Same-length mutations are the common case: a flipped
+// comparison, a changed constant, one glyph in a table.
+//
+// Set for EVERY run rather than only for `.py` targets, because the exposure comes from
+// the COMMAND's runtime and not the target's extension: mutating a JSON fixture and running
+// pytest has the same hole. It costs a recompile per run and nothing else.
+//
+// STATED BOUND: this verifies the SOURCE is restored and cannot verify that every runtime
+// cache agrees with it. Python is the instance that was found. Any runtime validating a
+// cache on a timestamp rather than on content has the same hole and this does not cover it.
 
 import { readFile, writeFile } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
@@ -86,7 +111,10 @@ async function main(file, find, replace, command) {
 
 function run(command) {
   return new Promise((resolve) => {
-    const child = spawn(command[0], command.slice(1), { stdio: ['ignore', 'inherit', 'inherit'] });
+    const child = spawn(command[0], command.slice(1), {
+      stdio: ['ignore', 'inherit', 'inherit'],
+      env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' },
+    });
     child.on('exit', (code) => resolve(code ?? 1));
     child.on('error', () => resolve(1));
   });

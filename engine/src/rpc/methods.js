@@ -11,6 +11,8 @@
 // they would do anything, so the refusal cannot regress into a call when their phases land.
 
 import { mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises';
+import { loadProviderCatalog } from '../roles/providers.js';
+import { cloneRepository, parseCloneUrl } from '../init/clone.js';
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
@@ -867,6 +869,50 @@ export function createMethods({
       return { repo, warning: inspection.warning };
     },
 
+    // ATTACH BY URL, as a job (D-0039). The clone is minutes of network work with a
+    // progress stream, so it is not an overload of repoAttach: a client must be able to
+    // tell a local row from a long remote operation before it calls, and the shape of an
+    // argument is not a way to tell it.
+    async repoClone(params) {
+      const url = params?.url;
+      if (typeof url !== 'string' || !url.trim()) {
+        throw invalidParams('url is required', 'repoClone needs the URL of a repository to clone.');
+      }
+      const name = params?.name ?? null;
+      if (name !== null && (typeof name !== 'string' || !name.trim())) {
+        throw invalidParams('name must be a non-empty string', 'Omit name to use the repository\'s own name.');
+      }
+      // REFUSED BEFORE THE JOB STARTS. A URL we cannot parse is knowable immediately, and
+      // handing back a jobId that fails on its first step makes the client render a
+      // progress screen for a mistake it could have been told about in the same breath.
+      if (!parseCloneUrl(url)) {
+        throw invalidParams('unparseable repository URL',
+          `${url} is not a repository URL this can clone. Expected something like https://github.com/owner/name or git@github.com:owner/name.git. To attach a directory you already have, use repoAttach.`);
+      }
+
+      const jobId = jobs.start('clone', async ({ emit, cancelled }) => {
+        const cloned = await cloneRepository({
+          url,
+          name,
+          stateRoot: state.stateRoot,
+          cancelled,
+          runGit: deps.runGit,
+          emit: async (step, detail, extra) => emit('clone', step, detail, extra),
+        });
+        if (!cloned || cancelled()) return;
+        await emit('clone', 'attaching', `attaching ${cloned.destination}`, { destination: cloned.destination });
+        const inspection = await inspectAttachTarget(cloned.destination, { runGit: deps.runGit });
+        if (inspection.refusal) {
+          // A clone that lands but does not inspect as a repository is a bug rather than a
+          // user error, and it is reported rather than swallowed into a bare failure.
+          throw Object.assign(new Error(inspection.refusal.summary), { hint: inspection.refusal.hint });
+        }
+        const repo = await state.attachRepo(cloned.destination);
+        return { repo, warning: inspection.warning, destination: cloned.destination, reused: cloned.reused };
+      });
+      return { jobId };
+    },
+
     async repoDetach(params) {
       const repoPath = requireRepoPath(params);
       const removed = await state.detachRepo(repoPath);
@@ -885,6 +931,13 @@ export function createMethods({
     async analyze(params) {
       const repoPath = requireRepoPath(params);
       const analysis = await analyze(repoPath);
+      // THE SAME WARNING ATTACH GIVES, because this is the method whose numbers the
+      // warning explains. A client calling analyze on a subdirectory sees the PARENT's
+      // commit count against a handful of files, and nothing in the response says why: the
+      // walk sees the subdirectory while git answers from the repository root. That exact
+      // reading is what stalled the owner's field test, and attach warning about it does
+      // not help a client that went straight here.
+      const inspection = await inspectAttachTarget(repoPath).catch(() => ({ warning: null }));
       // MAPPED AT THE BOUNDARY, like the attempts row. The internal function returns more
       // (name, repoPath, files, git, brainFolder) because gate discovery and the init
       // pipeline use it in process, and none of that is wire data: readership was verified
@@ -896,6 +949,7 @@ export function createMethods({
         structure: analysis.structure,
         gateCandidates: analysis.gateCandidates,
         hasBrainFolder: analysis.hasBrainFolder,
+        warning: inspection.warning,
       };
     },
 
@@ -1875,6 +1929,18 @@ export function createMethods({
         ? await gate({ file: gatePath }).then((row) => ({ open: row.open, path: row.file }))
         : { open: false, path: null };
       return settings;
+    },
+
+    // The catalog the settings dialog populates from. A SEPARATE METHOD rather than a key
+    // on settingsGet: a catalog is a constant and settings are user state, and folding a
+    // constant into the settings payload re-sends it on every screen paint.
+    //
+    // Zero spend and unprobeable: one local file read. It cannot list a provider's models
+    // over the API, because that is an authenticated call on every provider and a paid one
+    // on some, and a settings screen that spends money to render is not a settings screen.
+    // rolePing remains the only path that verifies a model or a key.
+    async providerCatalog() {
+      return loadProviderCatalog();
     },
 
     async settingsSet(params) {

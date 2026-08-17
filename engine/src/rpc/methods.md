@@ -17,6 +17,7 @@ pure client; every screen renders from these methods plus the event stream.
 | --- | --- | --- |
 | `hello` | `{ clientVersion }` | `{ engineVersion, contractVersion: "5" }` first call on connect; contractVersion tracks THIS document's version and must be bumped in the same edit that bumps the title; mismatch renders an upgrade screen, not a method error |
 | `repoAttach` | `{ repoPath }` | `{ repo, warning }` creates the connected-repo entry the home screen lists. [Amended 2026-08-17, owner field test: `warning` is NULL when there is nothing to say, and an object `{ code, detail, attached, repositoryRoot }` when there is. Null rather than absent so a client can tell "checked and fine" from "this engine does not report warnings". Codes are `nested-in-repository` (the attached path is a subdirectory of a git repo; `repositoryRoot` names the root) and `not-a-git-repository` (`repositoryRoot` is null). BOTH ARE WARNINGS AND NOT REFUSALS because both cases WORK: a monorepo package is a legitimate attach, and a directory with no git still builds a brain, it is simply much thinner. What IS refused, with `-32602`: a path that does not exist, and a path that is a file. The nested case is the one that cost the field test a diagnosis, because the file walk sees the subdirectory while git answers from the repository root, so the analysis reports few files against many commits and nothing else says why] |
+| `repoClone` | `{ url, name? }` | `{ jobId }` clones a repository into the managed location and attaches it. [Added 2026-08-17, D-0039, F3. A JOB rather than an overload of repoAttach: a clone is minutes of network work with a progress stream, and one method whose behaviour is decided by the shape of its argument leaves a client unable to tell a local row from a long remote operation before it calls. Steps are `resolving`, `cloning`, `cloned`, `attaching`, under the `clone` phase, then the runner's reserved `finished` / `failed` / `cancelled`. The job's result is `{ repo, warning, destination, reused }`, the same `repo` and `warning` repoAttach returns. Destination is `<stateRoot>/clones/<host>/<owner>/<name>`: host and owner are in the path because a bare name collides the moment two owners both have a repository called `engine`. `name` overrides ONLY the last segment, so an override still cannot collide across owners. CLONES ARE NOT CLEARED BY CLEAR-INDEX (D-0031): `index/` is disposable because it regenerates, and a working tree does not. REFUSALS, all -32602: an unparseable URL, refused before a jobId is issued so a client does not render progress for a mistake; a local path or file: URL, which is repoAttach's job; a destination holding a DIFFERENT repository, never overwritten, since that directory may be the only copy of work done in a clone; and a private repository refused BY NAME with the gh CLI named, because git's own \"authentication failed\" reads as a broken credential to someone who never had one. Cloning the same repository twice REUSES the existing clone and reports `reused: true`. NOT SPEND GATED: git talks to a code host, not a paid model API. It is network egress that writes outside the repository, so the remote and the destination are disclosed in the step stream BEFORE the write. Submodules are not recursed: a submodule URL is a second remote the owner did not name.] |
 | `repoDetach` | `{ repoPath }` | `{ ok }` |
 | `jobCancel` | `{ jobId }` | `{ cancelled }` stops an initBrain or gym job |
 
@@ -24,7 +25,7 @@ pure client; every screen renders from these methods plus the event stream.
 
 | method | params | returns |
 | --- | --- | --- |
-| `analyze` | `{ repoPath }` | `{ languages, commitCount, structure, gateCandidates, hasBrainFolder }` [Amended 2026-08-17, D-0035 batch: the engine was returning five further keys (`name`, `repoPath`, `files`, `git`, `brainFolder`) that NO client reads; readership was verified in the TUI, which takes `hasBrainFolder` and nothing else. They are mapped off at the daemon boundary rather than documented, on the standing argument that adding a field later is cheaper than removing one a client has started using. The internal analyze function still returns them; the wire does not] |
+| `analyze` | `{ repoPath }` | `{ languages, commitCount, structure, gateCandidates, hasBrainFolder, warning }` [Amended 2026-08-17, D-0035 batch: the engine was returning five further keys (`name`, `repoPath`, `files`, `git`, `brainFolder`) that NO client reads; readership was verified in the TUI, which takes `hasBrainFolder` and nothing else. They are mapped off at the daemon boundary rather than documented, on the standing argument that adding a field later is cheaper than removing one a client has started using. The internal analyze function still returns them; the wire does not] | [Amended 2026-08-17, D-0038: `warning` is the SAME object repoAttach returns, null when there is nothing to say. Added because this is the method whose numbers the warning explains: on a subdirectory the file walk sees the subdirectory while git answers from the repository root, so `commitCount` is the PARENT's against a handful of files, and nothing else in this response says why. A client that attaches and then analyzes would get the warning once; a client that calls analyze directly used to get the confusing numbers alone, which is the reading that stalled the owner field test.]
 | `initBrain` | `{ repoPath, mode: "ingest" \| "layer1" \| "layer1+layer2", scope?: { areas: string[] }, budget? }` | `{ jobId }` scope limits Layer 2 to named areas (sub-75 path). Mode `layer1+layer2` is SPEND-TOUCHING: Layer 2 runs LLM narration on the user's engineer key, so the estimated budget is displayed and confirmed by an explicit user action before the job starts; without confirmation the call is refused with `-32050` |
 | `diagnose` | `{ repoPath, control?: boolean }` | `{ caseRate: { exact, cases }, violations, cases, hits, misses, perCase, clusters: { byType, byArea, byArm }, identifierMisses, recommendation, discriminatingRange, controlSkipped }` [Amended 2026-08-17, D-0035 live tier: this row was PROSE, and prose is the right level for a return that is "the file, plus classification" and the wrong level for a structured result carrying clusters, a case rate, violations and a range. It was also the method that exposed the tiering hole: listed as live because it embeds, described in prose so nothing could compare it, and therefore checked by NO tier while the gate printed it as covered elsewhere. `discriminatingRange` is null when the control arm was not run and carries `measuredAt`, `fresh`, `stale` and `staleBecause` when it was, so a recalled measurement is never read as a fresh one; `controlSkipped` names why when the arm could not run. `recommendation` is null here by design: choosing between enriching docs, running Layer 2 or bootstrapping through the gym is the auditor's call, and that one spends] mechanical sub-75 diagnosis, zero-spend: missed gold cases clustered by type, area, and arm, from the retrieval-score tooling. [Addition 2026-08-16, v5, D-0030's surface: `control: true` (the LITERAL true; a truthy guess does not arm it) adds a permuted arm over the same store, embedder, k and budget, and returns `discriminatingRange: { caseRate: { candidate, control, range, casesOfHeadroom }, mrr: { candidate, control, range } }` or `controlSkipped` naming why (a corpus with under two distinct answers cannot be permuted). OFF by default because the arm doubles the call's wall clock; `discriminatingRange` is null when unmeasured, never zeroes, since a client must distinguish unmeasured from measured-and-found-nothing.] |
 | `diagnoseNarrate` | `{ repoPath }` | `{ recommendation }` SPEND-TOUCHING: the auditor narrates a recommendation over the mechanical diagnosis. Explicit user action per call |
@@ -62,6 +63,7 @@ pure client; every screen renders from these methods plus the event stream.
 | method | params | returns |
 | --- | --- | --- |
 | `settingsGet` | `{}` | full settings object, secrets masked [Claims verified 2026-08-17, claim audit: both assertions checked against the engine rather than assumed. FULL: every key in DEFAULT_SETTINGS is present in the response. MASKED: a role configured with a real key file returns the POINTER and never the value, verified with a sentinel that does not appear anywhere in the serialized response. Prose is retained because this row's answer is genuinely "the settings object", whose shape is DEFAULT_SETTINGS and would be a second copy of it here] |
+| `providerCatalog` | `{}` | `{ version, providers: [{ id, label, endpointDefault, keyRequired, note, models: [{ id, label, reasoningEffort, note }] }] }` the closed provider list and its suggested models, for the settings dialog to populate from. [Added 2026-08-17, D-0037, F4. ZERO SPEND AND UNPROBEABLE: one local read of `engine/config/providers.json`. It does not and cannot list a provider's models over the API, which would be an authenticated call everywhere and a paid one on some; `rolePing` remains the only path that verifies a model or a key. A SEPARATE METHOD rather than a key on settingsGet, because a catalog is a constant and settings are user state, and folding a constant into settings re-sends it on every screen paint. `reasoningEffort` on a model is the accepted values or NULL where there is no such control, so a client enables that field from the catalog rather than from a table of its own. `keyRequired` is false only for ollama, whose endpoint is local. `note` is optional and carries a disclosure: ollama's models are a SUGGESTION rather than an inventory, since what is installed is local truth this method deliberately does not read. The file is owner-maintained through ordinary commits and is explicitly a starting point, not a registry.] |
 | `settingsSet` | `{ patch }` | updated settings [Claims verified 2026-08-17, claim audit: the response is the full settings object, same key set as settingsGet, reflecting the patch] |
 | `rolePing` | `{ role: "engineer" \| "teacher" \| "auditor" \| "watcher" }` | `{ httpStatus, ttftMs, latencyMs, servedModelId }` SPEND-TOUCHING: a real provider generation. Only ever user-initiated from the TUI, never automatic, and retryable without a settings edit. servedModelId is the identity check; catalogue endpoints are not authoritative |
 | `board` | `{ filters? }` | `{ rows: [{ ts, source, severity, category, target, evidence, status }], total }` [Amended 2026-08-17, D-0035 batch: the row previously documented a FINDING where the method returns the page of them. The documented noun was wrong, and the fix is the noun; `total` is the count before any filter] |
@@ -132,8 +134,35 @@ and `activeRun: { jobId, examId, round, state, mode, edits, checks, extensions, 
 drawnFromResultFiles is the denominator rule made visible: drawn exams are
 counted from result files, never rows.
 
-`settingsGet` returns `{ roles, instructionFiles, retrieval, storage, spendGate, charts }`
-where each role is `{ role, preset, model, endpoint, keyRef, keyMasked, ping: { ok, httpStatus, ttftMs, latencyMs, servedModelId, at, hint? } | null }`.
+`settingsGet` returns `{ roles, instructionFiles, retrieval, storage, spendGate, charts, repoScanRoots }`
+where each role is `{ role, provider, model, reasoningEffort, endpoint, keyRef, keyMasked, keyResolvable, keyReason, modelKnown, modelReason, ping: { ok, httpStatus, ttftMs, latencyMs, servedModelId, at, hint? } | null }`.
+
+[Amended 2026-08-17, D-0037, F4: `preset` is REMOVED and `provider` replaces it. preset was
+declared in DEFAULT_SETTINGS, written by nothing, and rendered as a column by the TUI that
+was populated only in its mock data, so against a real engine that column was always blank
+and the test asserted only that the key existed. A name like "Claude" is a RENDERING of
+provider plus model rather than a stored value.
+
+`provider` is a CLOSED enum of vendor ids, derived from `engine/config/providers.json` so
+the enum and the catalog cannot drift; an unknown provider is REFUSED at set time, since a
+typo is a silent misroute later and no data-file edit makes it valid.
+
+`model` is NOT closed. The catalog calls itself a starting point rather than a registry, so
+an unrecognised model is DESCRIBED and used as written rather than refused: refusing would
+make the file authoritative over a fact it disclaims and would block a model that shipped
+today until someone edits JSON. `modelKnown` is true / false / null-for-unconfigured, the
+same three states as keyResolvable and for the same reason, with `modelReason` carrying the
+sentence. Both are DERIVED per read, never stored, and are ignored in a patch.
+
+`reasoningEffort` is null wherever the model has no such control, and null is the ONLY
+encoding of unsupported: a string like `none` would read as a supported setting deliberately
+turned off. It is refused at set time only when a KNOWN model contradicts it, because an
+unknown model cannot contradict anything.
+
+Roles are NORMALISED ON READ against the defaults: every row carries the full key set
+whatever is on disk, and retired keys are dropped. Without this an owner who configured
+roles before a field existed would keep rows missing that field, so the shape would be
+correct on a fresh state root and wrong on the only machine that matters.]
 `ping: null` is the canonical encoding for a never-verified role (v5): rolePing
 is spend-touching and never fires automatically, so a role that has never been
 paid for must be representable; clients render it as "never", and every stored
@@ -149,6 +178,23 @@ shape of a pasted key. Three unambiguous prefixed forms exist (env:, file:,
 and literal refusal for raw values). Role rows additionally carry
 keyResolvable (true / false / null for never-configured) and keyReason, so
 a client can render key health without any value crossing the wire.]
+
+`initBrain`'s report carries `blocked` when a phase stops the run:
+`{ at, reason, failed, action, actionCode }`. `reason` is the conclusion, `failed` names
+every gate that fell short WITH ITS FLOOR beside its count, and `action` is the next move
+in prose. `actionCode` (added 2026-08-17, D-0037) is the closed machine-readable twin of
+`action`: `too-little-material` when too few cases could be mined to judge, which usually
+means the attached directory holds very little, and `gold-set-too-thin` otherwise. A
+client offering an "attach the repository root instead" control switches on the CODE; the
+prose is written for a person and must stay free to be reworded without unwiring a button.
+
+`repoScanRoots` is the list of directories the attach dialog scans for repositories to
+offer, defaulting to `~/Documents` and `~/Documents/GitHub`. It lives in ENGINE settings
+rather than in a client config because it is a user preference that must survive the
+client: a scan root kept by a TUI is lost the first time another front end talks to the
+same daemon. A patch REPLACES the list wholesale rather than merging it, because a merge
+cannot express removing a root, and entries are resolved to absolute paths and refused if
+any is not a non-empty string.
 
 `board` returns `{ rows, total }`, rows as defined in its method row above.
 

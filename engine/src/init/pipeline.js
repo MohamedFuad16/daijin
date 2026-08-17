@@ -602,12 +602,19 @@ export async function initBrain({
     const action = tiny
       ? `Only ${gated.cases.length} case(s) could be mined, which usually means the attached directory holds very little: check that you attached the repository root rather than a subdirectory, and that the repo has code and history to mine.`
       : 'Mine more material, or attach a repository with more code and history; the gates above name what is short.';
+    // A CODE BESIDE THE PROSE. The TUI wants to offer "attach the root instead" as a
+    // button, and branching on the sentence would make the wording load-bearing: a comma
+    // moved in a message written for a human would silently unwire a control. The prose
+    // stays the thing a person reads and the code stays the thing a client switches on.
+    // Closed set, so a client can exhaust it.
+    const actionCode = tiny ? 'too-little-material' : 'gold-set-too-thin';
 
     report.blocked = {
       at: 'goldset-gates',
       reason: 'The gold set did not pass its own integrity gates, so it is not fit to measure.',
       failed,
       action,
+      actionCode,
     };
     report.finishedAt = clock();
     if (writeArtifacts) await writeReport(artifacts, report);

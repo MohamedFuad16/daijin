@@ -324,6 +324,13 @@ test('a gold set that fails its own gates BLOCKS the measurement instead of scor
     // generic "mine more material", because a subdirectory attach is the likeliest cause
     // and the generic line sends someone off to write code they already have.
     assert.match(report.blocked.action, /repository root rather than a subdirectory/);
+
+    // The CODE beside the prose, so the TUI can offer "attach the root instead" without
+    // branching on a sentence. Wording written for a human must stay free to change; a
+    // control wired to a comma is a control that breaks on an edit nobody thought was
+    // behavioural. Closed set, and this fixture is the tiny case.
+    assert.equal(report.blocked.actionCode, 'too-little-material');
+    assert.ok(['too-little-material', 'gold-set-too-thin'].includes(report.blocked.actionCode));
   } finally {
     await store.close();
     rmSync(directory, { recursive: true, force: true });

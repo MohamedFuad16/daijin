@@ -9,11 +9,13 @@
 
 import { randomUUID } from 'node:crypto';
 import { appendFile, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
 import path from 'node:path';
 
 import { writeJsonAtomic as sharedWriteJsonAtomic } from '../runtime/atomic.js';
 
 import { checkKeyRef, KEY_REF_FORMS, parseKeyRef } from '../roles/keys.js';
+import { checkRoleProvider, describeRoleModel } from '../roles/providers.js';
 
 export const ROLES = Object.freeze(['engineer', 'teacher', 'auditor', 'watcher']);
 export const AGENT_FILES = Object.freeze(['student', 'teacher', 'auditor', 'watcher']);
@@ -22,8 +24,20 @@ export const AGENT_FILES = Object.freeze(['student', 'teacher', 'auditor', 'watc
 export const DEFAULT_SETTINGS = Object.freeze({
   roles: ROLES.map((role) => ({
     role,
-    preset: null,
+    // `provider` replaces the removed `preset` (D-0037). preset was declared here, written
+    // by nothing, and rendered as a column by the TUI that was populated only in its mock
+    // data, so against a real engine that column was always blank. A name like "Claude" is
+    // a RENDERING of provider plus model rather than a stored value, and keeping both
+    // fields is how two names for one fact drift apart.
+    //
+    // The value is a vendor id from engine/config/providers.json, validated at set time
+    // against that catalog. The catalog owns the closed set; this file does not repeat it.
+    provider: null,
     model: null,
+    // Null is the ONLY encoding of "this model has no reasoning control". A string like
+    // 'none' would read as a supported setting deliberately turned off, which is a
+    // different claim about the model.
+    reasoningEffort: null,
     endpoint: null,
     keyRef: null,
     keyMasked: null,
@@ -48,9 +62,37 @@ export const DEFAULT_SETTINGS = Object.freeze({
     ollamaBaseUrl: null,
   },
   storage: { backend: 'sqlite' },
+  // Where the attach dialog looks for repositories to offer. ENGINE-SIDE because it is a
+  // user preference that must survive the client: a scan root kept in a TUI config is lost
+  // the first time the owner uses a different front end against the same daemon.
+  repoScanRoots: [path.join(homedir(), 'Documents'), path.join(homedir(), 'Documents', 'GitHub')],
   spendGate: { open: false, path: null },
   charts: { radar: 'unicode' },
 });
+
+// EVERY ROLE CARRIES THE FULL KEY SET, whatever is on disk.
+//
+// The top-level merge is shallow, so a stored settings.json replaces the default `roles`
+// array wholesale. Without this, an owner who configured roles BEFORE a field was added
+// keeps rows missing that field, and the contract promises a closed key set: the shape
+// would be right on a fresh state root and wrong on the only machine that matters. The
+// same reasoning retires `preset`, which is dropped here rather than left to linger in
+// one person's settings file forever.
+//
+// Unknown keys are dropped rather than preserved. A settings file is not a place to keep
+// data nothing reads: it reappears in settingsGet, where a client cannot tell a retired
+// field from a live one.
+function normalizeRoles(stored) {
+  const byRole = new Map((stored || []).map((role) => [role.role, role]));
+  return DEFAULT_SETTINGS.roles.map((template) => {
+    const found = byRole.get(template.role) || {};
+    const row = { ...structuredClone(template) };
+    for (const key of Object.keys(template)) {
+      if (key !== 'role' && found[key] !== undefined) row[key] = found[key];
+    }
+    return row;
+  });
+}
 
 function maskKeyRef(keyRef) {
   if (!keyRef) return null;
@@ -167,7 +209,9 @@ export class EngineState {
   async rawSettings() {
     const stored = await readJson(this.settingsFile, null);
     if (!stored) return structuredClone(DEFAULT_SETTINGS);
-    return { ...structuredClone(DEFAULT_SETTINGS), ...stored };
+    const merged = { ...structuredClone(DEFAULT_SETTINGS), ...stored };
+    merged.roles = normalizeRoles(merged.roles);
+    return merged;
   }
 
   /**
@@ -187,6 +231,11 @@ export class EngineState {
       ...(role.keyRef
         ? await checkKeyRef(role.keyRef).then((checked) => ({ keyResolvable: checked.resolvable, keyReason: checked.reason }))
         : { keyResolvable: null, keyReason: null }),
+      // Derived, never stored, exactly like keyResolvable: a model that is in the catalog
+      // today can leave it tomorrow when the file is corrected, and a stored answer would
+      // outlive the question. Three states, same encoding as keyResolvable: null is no
+      // model configured, which is a different claim from configured-and-unrecognised.
+      ...(await describeRoleModel(role)),
     })));
     return settings;
   }
@@ -207,6 +256,7 @@ export class EngineState {
         // Derived, never stored: writing them back would let a client claim a role is
         // reachable without anything having checked.
         if (key === 'keyResolvable' || key === 'keyReason') continue;
+        if (key === 'modelKnown' || key === 'modelReason') continue;
         // A malformed pointer is refused AT SET TIME. Stored unchecked it fails later, at
         // the moment of a provider call, where the user reads it as the provider being
         // down rather than as a setting they mistyped. A bare name is the common mistake
@@ -217,9 +267,25 @@ export class EngineState {
         }
         role[key] = value;
       }
+      // THE TRIO IS VALIDATED AFTER THE WHOLE PATCH IS APPLIED, not per key, because a
+      // client sets provider and model together and either one alone reads as invalid
+      // against the other's old value. Refused at set time for the same reason keyRef is:
+      // stored unchecked it fails at the moment of a provider call, where the user reads
+      // it as the provider being down rather than as a setting they mistyped.
+      const reason = await checkRoleProvider(role);
+      if (reason) throw new Error(`Unusable provider settings for the ${role.role} role: ${reason}`);
     }
     for (const key of ['retrieval', 'storage', 'charts']) {
       if (patch[key]) settings[key] = { ...settings[key], ...patch[key] };
+    }
+    if (patch.repoScanRoots !== undefined) {
+      // REPLACED WHOLESALE, never merged: it is a list, and spreading a list over a list
+      // by key would leave a shorter new list wearing the tail of the old one. Removing a
+      // scan root has to be possible, and a merge cannot express removal.
+      if (!Array.isArray(patch.repoScanRoots) || patch.repoScanRoots.some((entry) => typeof entry !== 'string' || !entry.trim())) {
+        throw new Error('repoScanRoots must be a list of non-empty directory paths.');
+      }
+      settings.repoScanRoots = patch.repoScanRoots.map((entry) => path.resolve(entry.trim()));
     }
     await writeJsonAtomic(this.settingsFile, settings);
     return this.settings();

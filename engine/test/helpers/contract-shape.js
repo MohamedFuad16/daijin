@@ -124,8 +124,8 @@ export async function documentedKeys(method, { field = null, file = METHODS_MD }
   const shape = shapeTextOf(cell);
 
   if (field) {
-    const match = shape.match(new RegExp(`${field}\\s*:\\s*\\[\\s*\\{([^}]*)\\}`));
-    return match ? splitKeys(match[1]) : null;
+    const body = nestedBody(shape, field);
+    return body === null ? null : splitKeys(stripNested(body));
   }
 
   const opened = shape.indexOf('{');
@@ -144,9 +144,67 @@ export async function documentedKeys(method, { field = null, file = METHODS_MD }
   return splitKeys(stripNested(shape.slice(opened + 1, closed)));
 }
 
+/**
+ * The span from `open` to its MATCHING close, counting depth.
+ *
+ * The one bracket walker, shared. Both readers in this file used their own shallow regex
+ * (`[^\]]*` in the strip, `[^}]*` in the field reader) and BOTH broke on the same input for
+ * the same reason: a nested list ends at the first closing bracket, which belongs to the
+ * inner list rather than the outer one. Two expressions of one rule in two places is how a
+ * fix at one site leaves the other broken, so the rule lives here now.
+ */
+function balancedEnd(text, open) {
+  let depth = 0;
+  for (let index = open; index < text.length; index += 1) {
+    const character = text[index];
+    if (character === '[' || character === '{') depth += 1;
+    if (character === ']' || character === '}') {
+      depth -= 1;
+      if (depth === 0) return index;
+    }
+  }
+  return -1;
+}
+
+/// The members of `field: [{ ... }]` or `field: { ... }`, or null when it is not documented.
+function nestedBody(shape, field) {
+  const marker = new RegExp(`\\b${field}\\s*:\\s*`).exec(shape);
+  if (!marker) return null;
+  let open = marker.index + marker[0].length;
+  if (shape[open] === '[') {
+    const listEnd = balancedEnd(shape, open);
+    if (listEnd === -1) return null;
+    open = shape.indexOf('{', open);
+    if (open === -1 || open > listEnd) return null;
+  }
+  if (shape[open] !== '{') return null;
+  const end = balancedEnd(shape, open);
+  return end === -1 ? null : shape.slice(open + 1, end);
+}
+
 /// Remove `name: [{ ... }]` bodies so the top level keeps the NAME and drops the members.
+///
+/// DEPTH AWARE, and it was not before. The old version matched `:\s*\[[^\]]*\]`, which stops
+/// at the FIRST closing bracket, so a shape nesting a list inside a list left a dangling
+/// ` }]` glued to the following key. That key then failed the identifier test in
+/// splitEntries and was DROPPED FROM THE DOCUMENTED SET ENTIRELY, so the gate compared the
+/// engine against a contract it had silently mis-parsed and reported the missing key as an
+/// ENGINE EXTRA. A gate that quietly narrows what it checks is the failure this suite
+/// exists to prevent, so the walk below counts brackets and braces instead.
 function stripNested(text) {
-  return text.replace(/:\s*\[[^\]]*\]/g, '').replace(/:\s*\{[^}]*\}/g, '');
+  let out = '';
+  let index = 0;
+  while (index < text.length) {
+    const character = text[index];
+    if (character !== ':') { out += character; index += 1; continue; }
+    // A colon opens a nested body only if the next non-space character opens one.
+    let scan = index + 1;
+    while (scan < text.length && /\s/.test(text[scan])) scan += 1;
+    if (text[scan] !== '[' && text[scan] !== '{') { out += character; index += 1; continue; }
+    const end = balancedEnd(text, scan);
+    index = end === -1 ? text.length : end + 1;
+  }
+  return out;
 }
 
 function splitKeys(text) {

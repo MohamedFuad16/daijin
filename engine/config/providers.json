@@ -1,0 +1,84 @@
+{
+  "version": 1,
+  "note": "The provider and model catalog the settings dialog populates from. A STARTING POINT, NOT A REGISTRY: model identifiers change, are retired, and are added far faster than this file is edited, so treat a missing model as this file being out of date rather than as the model not existing. Nothing here is probed or verified. The engine never calls a provider to build this list, and cannot be made to: rolePing is the only path that verifies a model or a key, and it is spend-touching and fires only when a user asks for it by hand.",
+  "maintenance": "Owned by the repository owner and corrected through ordinary commits, so a wrong or missing model identifier is a one-line edit rather than a code change. Adding a provider means adding an entry here AND to the closed enum the engine validates against; the engine derives that enum from this file, so the two cannot drift.",
+  "fields": {
+    "id": "The value stored in a role's `provider`. The VENDOR name, not a display name.",
+    "label": "For rendering only. A client shows this; it never sends it.",
+    "endpointDefault": "Offered when a role picks this provider. A role may override it.",
+    "keyRequired": "false only where the endpoint is local and no credential exists to point at.",
+    "models[].reasoningEffort": "The accepted values, or NULL where the model has no such control. Null is the only encoding of unsupported: a string like 'none' would read as a supported setting deliberately turned off, which is a different claim.",
+    "models[].note": "Optional. Present where a model's reasoning control does not work the way the field name suggests."
+  },
+  "providers": [
+    {
+      "id": "openai",
+      "label": "OpenAI",
+      "endpointDefault": "https://api.openai.com/v1",
+      "keyRequired": true,
+      "models": [
+        { "id": "gpt-5.2", "label": "GPT-5.2", "reasoningEffort": ["low", "medium", "high"] },
+        { "id": "gpt-5.1", "label": "GPT-5.1", "reasoningEffort": ["low", "medium", "high"] },
+        { "id": "gpt-5", "label": "GPT-5", "reasoningEffort": ["low", "medium", "high"] },
+        { "id": "gpt-5-mini", "label": "GPT-5 mini", "reasoningEffort": ["low", "medium", "high"] },
+        { "id": "gpt-4.1", "label": "GPT-4.1", "reasoningEffort": null },
+        { "id": "o3", "label": "o3", "reasoningEffort": ["low", "medium", "high"] }
+      ]
+    },
+    {
+      "id": "anthropic",
+      "label": "Claude",
+      "endpointDefault": "https://api.anthropic.com/v1",
+      "keyRequired": true,
+      "models": [
+        {
+          "id": "claude-opus-4-5",
+          "label": "Claude Opus 4.5",
+          "reasoningEffort": ["low", "medium", "high"],
+          "note": "Anthropic's control is an extended-thinking token budget rather than a named tier. These names map onto budgets engine-side; a provider that changes that mapping changes behaviour without changing this file."
+        },
+        {
+          "id": "claude-sonnet-4-5",
+          "label": "Claude Sonnet 4.5",
+          "reasoningEffort": ["low", "medium", "high"],
+          "note": "Same budget mapping as Opus."
+        },
+        { "id": "claude-haiku-4-5", "label": "Claude Haiku 4.5", "reasoningEffort": null }
+      ]
+    },
+    {
+      "id": "xai",
+      "label": "Grok",
+      "endpointDefault": "https://api.x.ai/v1",
+      "keyRequired": true,
+      "models": [
+        { "id": "grok-4", "label": "Grok 4", "reasoningEffort": ["low", "high"] },
+        { "id": "grok-3", "label": "Grok 3", "reasoningEffort": ["low", "high"] },
+        { "id": "grok-3-mini", "label": "Grok 3 mini", "reasoningEffort": ["low", "high"] }
+      ]
+    },
+    {
+      "id": "zai",
+      "label": "GLM",
+      "endpointDefault": "https://api.z.ai/api/paas/v4",
+      "keyRequired": true,
+      "models": [
+        { "id": "glm-4.6", "label": "GLM-4.6", "reasoningEffort": null, "note": "GLM exposes thinking as an on/off switch rather than as graded effort, so there is no tier to choose and the field is null." },
+        { "id": "glm-4.5", "label": "GLM-4.5", "reasoningEffort": null },
+        { "id": "glm-4.5-air", "label": "GLM-4.5 Air", "reasoningEffort": null }
+      ]
+    },
+    {
+      "id": "ollama",
+      "label": "Ollama (local)",
+      "endpointDefault": "http://localhost:11434",
+      "keyRequired": false,
+      "note": "THESE ARE SUGGESTIONS, NOT AN INVENTORY. Every other provider's list is unknowable without a paid call, so a static list is the only honest option there. Ollama is different: what is actually installed is local truth, reported by `ollama list` and by /api/tags, and this list will happily name models the owner does not have. Reading the installed set would be zero-spend and correct, and it is deliberately NOT done here because providerCatalog is specified as a static unprobeable table. If a client shows this list to pick a local model, say that it is a suggestion.",
+      "models": [
+        { "id": "qwen3:8b", "label": "Qwen3 8B", "reasoningEffort": null },
+        { "id": "llama3.1:8b", "label": "Llama 3.1 8B", "reasoningEffort": null },
+        { "id": "deepseek-r1:8b", "label": "DeepSeek-R1 8B", "reasoningEffort": null }
+      ]
+    }
+  ]
+}

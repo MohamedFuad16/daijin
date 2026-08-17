@@ -150,6 +150,11 @@ async function fixture() {
 function recipes(repoPath) {
   return {
     hello: { params: {} },
+    // COVERED rather than prose, deliberately: it is a pure local file read with no
+    // fixture cost, so there is no reason for it to buy an exemption. The subject is the
+    // top-level envelope; the nested provider and model shapes are pinned in
+    // roles-providers.test.js against the committed catalog.
+    providerCatalog: { params: {} },
     jobCancel: { params: { jobId: 'job-none-0000' } },
     documents: { params: { repoPath }, pick: (result) => result[0] },
     serveStatus: { params: {} },
@@ -174,6 +179,10 @@ function recipes(repoPath) {
     gatesSet: { params: { repoPath, patch: { content: 'gates: []\n' } } },
     agentFileGet: { params: { repoPath, role: 'student' } },
     initBrain: { params: { repoPath, mode: 'layer1' }, skipCall: true },
+    // skipCall like its siblings: calling it would start a real clone against the network.
+    // Its refusals and its step stream are covered offline in init-clone.test.js against a
+    // local bare repository, and what that does NOT prove is stated there rather than here.
+    repoClone: { params: { url: 'https://example.test/owner/name' }, skipCall: true },
     gatesDiscover: { params: { repoPath }, skipCall: true },
     analyze: { params: { repoPath } },
     repoAttach: { params: { repoPath } },
@@ -200,6 +209,55 @@ function recipes(repoPath) {
 // removals (analyze's five extras and examDetail's exam) taken OFF the wire after
 // readership was verified in the client rather than assumed.
 const DIVERGENT = Object.freeze({});
+
+test('the NESTED shapes of serveStatus are checked, not merely documented', async () => {
+  // Newly possible, and worth taking. The field reader used to match only `field: [{...}]`,
+  // a LIST of objects, and returned null for every plain-object field, so `ollama`, `db`
+  // and `spendGate` were documented and unreadable: nothing asked for them, so no gate went
+  // quietly weak, but the F5 amendment that wrote those key sets down could not be enforced
+  // by the gate that exists to enforce key sets. Documented and reachable are different
+  // claims, and this makes them the same claim here.
+  const kit = await fixture();
+  const server = createRpcServer({ stateRoot: kit.stateRoot, write: () => {} });
+  try {
+    const status = await server.methods.serveStatus({});
+    for (const field of ['ollama', 'db', 'spendGate']) {
+      const documented = await documentedKeys('serveStatus', { field });
+      assert.ok(documented, `serveStatus.${field} must be documented with a shape`);
+      assert.deepEqual(Object.keys(status[field]).sort(), documented,
+        `serveStatus.${field} and its contract row disagree`);
+    }
+    // The ollama row is the one F5 closed: the key set must be IDENTICAL whether or not the
+    // probe succeeded, which is the property that let a client stop rendering "?".
+    assert.equal(Object.hasOwn(status.ollama, 'hint'), true,
+      'hint is present on both branches, or no client can rely on a fixed key set');
+  } finally {
+    await server.close();
+    await kit.cleanup?.();
+  }
+});
+
+test('the shape parser survives a list nested inside a list, and does not drop the key', async () => {
+  // THE PARSER ITSELF, gated. The strip that hides nested members used to match to the
+  // FIRST closing bracket, so `a: [{ b, c: [{ d }] }]` left a dangling `}]` glued to the
+  // next key, which then failed the identifier test and VANISHED from the documented set.
+  // The gate would have compared the engine against a contract it had mis-read and blamed
+  // the engine for the key it lost itself. No shipped row was deep enough to trip it, which
+  // is why it had never been seen: the first row that was, was the one being added.
+  const file = path.join(await mkdtemp(path.join(tmpdir(), 'contract-')), 'methods.md');
+  await writeFile(file, [
+    '| method | params | result |',
+    '| --- | --- | --- |',
+    '| `deep` | `{}` | `{ alpha, beta: [{ id, gamma: [{ x, y }] }], omega }` a doubly nested shape |',
+    '| `flat` | `{}` | `{ one, two: [{ a, b }], three }` one level, the case that always worked |',
+  ].join('\n'));
+
+  assert.deepEqual(await documentedKeys('deep', { file }), ['alpha', 'beta', 'omega'],
+    'a key AFTER a doubly nested list must survive the strip');
+  assert.deepEqual(await documentedKeys('flat', { file }), ['one', 'three', 'two']);
+  // The nested reader still reaches into the outer list, which is the other half of the job.
+  assert.deepEqual(await documentedKeys('deep', { file, field: 'beta' }), ['gamma', 'id']);
+});
 
 test('the contract-shape gate partitions the WHOLE surface, and says what it does not cover', async () => {
   const methods = await documentedMethods();

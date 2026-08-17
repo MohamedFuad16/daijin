@@ -162,6 +162,36 @@ export async function sweepBudgets({
 }
 
 /**
+ * The wide-bar caution for a floor measured from few cases, or null above the band.
+ *
+ * THE COUNT FORM ALREADY TELLS THE TRUTH about its denominator - "16 of 18" carries what
+ * "88.9%" hides - but it leaves the reader to infer the error bars from it, and most
+ * readers will not. Between the measurability floor and the low-resolution ceiling the
+ * report says the bars out loud.
+ *
+ * Two numbers, and they are different kinds of thing:
+ *   perCasePoints is EXACT ARITHMETIC. One case is 1/N of the rate. It cannot drift.
+ *   spreadPoints is MEASURED, and it is the standard deviation of the floor across 30
+ *     independent equally-valid minings of one corpus at this size. Evidence and method:
+ *     docs/verification/goldset-floor-sweep/. It is quoted as "about" because it is an
+ *     estimate from one corpus, and an earlier version of this measurement (a range over
+ *     six draws) moved by a factor of three between runs, which is why this one reports a
+ *     dispersion over thirty.
+ */
+export function lowResolutionCaution(cases, floors) {
+  if (!cases || cases >= floors.lowResolutionBelow) return null;
+  const perCasePoints = 100 / cases;
+  return {
+    cases,
+    perCasePoints: Number(perCasePoints.toFixed(1)),
+    spreadPoints: 6,
+    note: `This floor was measured from ${cases} cases, so one case is worth ${perCasePoints.toFixed(1)} points. `
+      + 'Floors from sets this small vary by about 6 points across equally valid minings of the same repository, '
+      + 'so read it as a wide-bar reading rather than a precise number. More material narrows the bars.',
+  };
+}
+
+/**
  * The gauge's own resolution, measured on the same corpus and store as the floor.
  *
  * D-0030: every floor report carries this. The reason is a measurement, not a principle.

@@ -7,10 +7,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { tokens } from '../src/rag/tokens.js';
-import {
-  BUDGET_SWEEP, MCP_UNLOCK_THRESHOLD, caseRateOf, checkContentSurvival, chooseBudget,
-  localCorpus, mcpUnlock, sourceContentFor, sweepBudgets,
-} from '../src/init/floor.js';
+import { BUDGET_SWEEP, MCP_UNLOCK_THRESHOLD, caseRateOf, checkContentSurvival, chooseBudget, localCorpus, lowResolutionCaution, mcpUnlock, sourceContentFor, sweepBudgets } from '../src/init/floor.js';
+import { DEFAULT_FLOORS } from '../src/init/goldset-gates.js';
 
 const point = (tokenBudget, hits, total = 25) => ({
   tokenBudget,
@@ -249,4 +247,36 @@ test('the sweep hands the environment to the harness instead of lending process.
   assert.ok(seen.every((call) => call.environment.EMBEDDING_MODEL === 'injected-only'), 'every point receives it');
   assert.ok(seen.every((call) => call.envDuring === before.EMBEDDING_MODEL), 'and process.env is never written');
   assert.deepEqual({ ...process.env }, before);
+});
+
+// ---- the low-resolution caution (D-0046) -------------------------------------------------
+
+test('the caution appears only in the band where a floor is real but coarse', () => {
+  // Below the measurability floor there is no floor to caution about; at 15 and above the
+  // count form carries enough on its own. A caution that appeared everywhere would be
+  // noise, and one that never appeared would leave the widest-bar case silent - both
+  // mutations survived until this test existed.
+  assert.equal(lowResolutionCaution(15, DEFAULT_FLOORS), null, 'at the ceiling the count form suffices');
+  assert.equal(lowResolutionCaution(25, DEFAULT_FLOORS), null);
+  assert.equal(lowResolutionCaution(null, DEFAULT_FLOORS), null, 'no cases, nothing to say');
+  assert.ok(lowResolutionCaution(12, DEFAULT_FLOORS), 'at the floor the bars must be named');
+  assert.ok(lowResolutionCaution(14, DEFAULT_FLOORS));
+});
+
+test('the per-case weight is DERIVED from the count, not a number typed once', () => {
+  // Exact arithmetic: one case is 1/N of the rate. A hardcoded 8.3 would be right at 12 and
+  // a lie at every other size in the band, and that mutation survived before this.
+  assert.equal(lowResolutionCaution(12, DEFAULT_FLOORS).perCasePoints, 8.3);
+  assert.equal(lowResolutionCaution(13, DEFAULT_FLOORS).perCasePoints, 7.7);
+  assert.equal(lowResolutionCaution(14, DEFAULT_FLOORS).perCasePoints, 7.1);
+});
+
+test('the caution names both numbers and says which way to fix it', () => {
+  const caution = lowResolutionCaution(14, DEFAULT_FLOORS);
+  assert.equal(caution.cases, 14);
+  assert.match(caution.note, /14 cases/);
+  assert.match(caution.note, /7\.1 points/, 'the per-case weight travels in the prose, not only in the field');
+  assert.match(caution.note, /vary by about \d+ points/, 'the measured spread is stated, not implied');
+  // A caution that only says "this is imprecise" leaves the reader with nothing to do.
+  assert.match(caution.note, /More material narrows the bars/);
 });

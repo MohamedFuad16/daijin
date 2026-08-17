@@ -281,6 +281,28 @@ means the attached directory holds very little, and `gold-set-too-thin` otherwis
 client offering an "attach the repository root instead" control switches on the CODE; the
 prose is written for a person and must stay free to be reworded without unwiring a button.
 
+[Amended 2026-08-17, D-0046, the owner's 18-case repo: `blocked.at` now takes TWO values and
+`actionCode` a third. `goldset-gates` is the gauge not being fit to measure; `discrimination`
+is the gauge having measured and being unable to see, with `actionCode`
+`gauge-cannot-discriminate`. Different problems with different next moves: the first asks
+for more material, the second says the corpus is small enough that presence is nearly free
+so almost any answer scores, which more cases of the same material will not fix. A client
+that renders both the same way sends the user to mine when mining is not the problem.
+
+THE COUNT FLOOR IS NO LONGER THE TARGET. `targetCases` stays 25, which is what mining aims
+for; `minimumCases` is 12, the count below which a case rate stops being a measurement.
+They were one number, so a repository that mined 18 well-diversified cases was refused on
+headcount with every other check passing. The identifier floor SCALES with the set
+(`max(3, ceil(0.2 x count))`, capped at the configured value) instead of being a fixed 5,
+which is 20 percent of the target and 42 percent of a 12-case set - without scaling,
+lowering the count would have moved the refusal rather than lifting it.
+
+`floor.lowResolution` is null above 15 cases and otherwise carries `{ cases, perCasePoints,
+spreadPoints, note }`: the band where a floor is real but coarse names itself, rather than
+leaving a reader to infer error bars from a denominator. `perCasePoints` is exact
+arithmetic (one case is 1/N); `spreadPoints` is measured, and its evidence and its own
+retraction are in `docs/verification/goldset-floor-sweep/`.]
+
 `repoScanRoots` is the list of directories the attach dialog scans for repositories to
 offer, defaulting to `~/Documents` and `~/Documents/GitHub`. It lives in ENGINE settings
 rather than in a client config because it is a user preference that must survive the

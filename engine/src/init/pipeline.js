@@ -25,14 +25,12 @@ import { adoptKnowledgeFolder } from './adopt.js';
 import { readBrainArtifacts, writeBrainArtifacts } from './brain-artifacts.js';
 import { analyze, readSources } from './analyze.js';
 import { buildEvidence } from './evidence.js';
-import {
-  BUDGET_SWEEP, checkContentSurvival, collectDeliveries, localCorpus, mcpUnlock, measureResolution, sweepBudgets,
-} from './floor.js';
+import { BUDGET_SWEEP, checkContentSurvival, collectDeliveries, localCorpus, lowResolutionCaution, mcpUnlock, measureResolution, sweepBudgets } from './floor.js';
 import { collectGateSources, discoverGates, gatesFilePath, probeGateCandidates, renderGatesYaml } from './gate-discovery.js';
 import { readHistory, shaIndex } from './git.js';
 import { caseKey, mineAdoptedGoldset, mineGoldset } from './goldset.js';
 import { permuteAnswers } from './rerank-ab.js';
-import { runGoldsetGates } from './goldset-gates.js';
+import { DEFAULT_FLOORS as FLOORS, runGoldsetGates } from './goldset-gates.js';
 import { importRelationships, ingestUnits } from './ingest.js';
 import { narrate, SpendRefusedError } from './narrate.js';
 import { scaffoldLayer1, validateCitations } from './scaffold.js';
@@ -608,6 +606,10 @@ export async function initBrain({
     // this small almost always means the walk saw very little, and the two reasons it sees
     // very little are a repo with nothing in it yet and a repo that is not the one the user
     // meant. The owner's field test was the second: a nested directory attached by mistake.
+    // TWO KINDS OF BLOCK, because they are different problems with different next moves.
+    // This one is "the gauge is not fit to measure"; the discrimination block below is
+    // "the gauge measured and cannot see". A client that renders both the same way sends
+    // the user to mine more material when the material is not the problem.
     const tiny = gated.cases.length < 5;
     const action = tiny
       ? `Only ${gated.cases.length} case(s) could be mined, which usually means the attached directory holds very little: check that you attached the repository root rather than a subdirectory, and that the repo has code and history to mine.`
@@ -738,6 +740,42 @@ export async function initBrain({
     await steps.emit({ step: 'mcp-saturation', detail: unlock.saturation, level: 'warn' });
   }
 
+  // THE GAUGE MUST BE ABLE TO SEE AN EFFECT BEFORE ITS NUMBER IS PUBLISHED (D-0046).
+  //
+  // This REVERSES a documented decision. measureResolution says "Reported, never gated",
+  // on the reasoning that a narrow range is a fact about the corpus rather than a failure.
+  // That reasoning is right about the FACT and wrong about what to do with it: a floor
+  // published from a gauge with no discriminating room reads as "retrieval is perfect
+  // here" when it means "this gauge cannot tell", which is the same class as scoring a
+  // gold set that failed its own integrity gates - a number that looks exactly like a real
+  // one. The range stays reported either way; what changes is that a set with no room does
+  // not also get a floor.
+  //
+  // Unavailable is NOT a failure. A corpus that cannot be permuted (fewer than two distinct
+  // answers) yields no range, and absence of evidence must not become evidence of absence.
+  const headroom = resolution && !resolution.unavailable
+    ? resolution.caseRate?.casesOfHeadroom ?? null
+    : null;
+  if (headroom !== null && headroom < FLOORS.minimumHeadroomCases) {
+    report.floor = null;
+    report.blocked = {
+      at: 'discrimination',
+      reason: 'The gold set scores almost as well with deliberately wrong answers, so it cannot tell a working retriever from a broken one.',
+      failed: [`headroom: ${headroom} case(s), minimum ${FLOORS.minimumHeadroomCases}`],
+      action: 'This is a property of the corpus rather than of the repository: the brain is small enough that presence is nearly free, so almost any answer scores. Add material, or accept that a floor here would not mean what it appears to mean.',
+      actionCode: 'gauge-cannot-discriminate',
+    };
+    report.finishedAt = clock();
+    if (writeArtifacts) await writeReport(artifacts, report);
+    await steps.emit({
+      step: 'blocked',
+      detail: `${report.blocked.reason} ${report.blocked.failed[0]}. ${report.blocked.action}`,
+      level: 'warn',
+      actionCode: report.blocked.actionCode,
+    });
+    return report;
+  }
+
   report.floor = {
     caseRate: sweep.chosenPoint.caseRate,
     mrr: sweep.chosenPoint.mrr,
@@ -751,6 +789,9 @@ export async function initBrain({
     k,
     contentSurvival: survival,
     resolution,
+    // Null above the band. Present when the number is real but coarse, so the widest-bar
+    // case names itself instead of relying on a reader to derive bars from a denominator.
+    lowResolution: lowResolutionCaution(sweep.chosenPoint.caseRate?.total ?? null, FLOORS),
     mcp: unlock,
     perCase: sweep.chosenPoint.results.map((entry) => ({
       caseId: entry.id,

@@ -12,8 +12,18 @@ import {
   commitCases, identifierCases, mineGoldset, selectCases, structuralCases, subjectToQuery, targetCaseCount,
 } from '../src/init/goldset.js';
 import {
-  diversityGate, existenceGate, findStaleCases, leakageGate, longestSharedSpan,
-  pruneVanishedConstraints, provenanceGate, retireCases, runGoldsetGates, stalenessGate,
+  DEFAULT_FLOORS,
+  diversityGate,
+  existenceGate,
+  findStaleCases,
+  identifierFloorFor,
+  leakageGate,
+  longestSharedSpan,
+  provenanceGate,
+  pruneVanishedConstraints,
+  retireCases,
+  runGoldsetGates,
+  stalenessGate,
 } from '../src/init/goldset-gates.js';
 import { scaffoldLayer1 } from '../src/init/scaffold.js';
 
@@ -323,19 +333,35 @@ test('DIVERSITY holds the floor, and 24 cases or 4 identifiers kill it', () => {
   assert.ok(healthy.counts.cases >= 25 && healthy.counts.identifiers >= 5);
 
   // MUTATION 1: one case below the floor.
-  const short = diversityGate(cases.slice(0, 24), context);
+  //
+  // RENUMBERED FOR D-0046, and the old numbers are worth recording rather than replacing
+  // silently: this used to assert that 24 cases FAIL, which was correct while the floor
+  // WAS the 25-case target. The ruling separated them, so 24 now passes and the mutation
+  // that has to kill is one case below the MEASURABILITY floor. The property under test is
+  // unchanged - the count check has teeth - only the threshold moved.
+  const short = diversityGate(cases.slice(0, 11), context);
   assert.equal(short.status, 'fail');
-  assert.ok(short.failures.some((entry) => entry.check === 'count' && entry.got === 24 && entry.floor === 25));
+  assert.ok(short.failures.some((entry) => entry.check === 'count' && entry.got === 11 && entry.floor === 12));
 
-  // MUTATION 2: one identifier case below the subset floor. The miner may seat more than
-  // the quota once the widening pass runs, so the mutation removes down to four rather
-  // than removing a fixed one and assuming the total.
-  const identifierTotal = cases.filter((entry) => entry.identifier).length;
-  let removed = 0;
-  const fewIdentifiers = cases.filter((entry) => !(entry.identifier && removed++ < identifierTotal - 4));
+  // And 24, which the old floor refused, now measures: that is the owner-facing change.
+  assert.equal(diversityGate(cases.slice(0, 24), context).status, 'pass');
+
+  // MUTATION 2: one identifier case below the subset floor. The floor SCALES now, so the
+  // target is computed from the set rather than assumed to be 5. The miner may seat more
+  // than the quota once the widening pass runs, so the mutation removes down to one below
+  // the scaled floor rather than removing a fixed one and assuming the total.
+  // The flag is FLIPPED rather than the case removed, so the set size - and therefore the
+  // scaled floor - stays put. Removing cases shrinks the set, which lowers the floor, which
+  // is why the removal version of this mutation started passing once the floor scaled.
+  const wanted = identifierFloorFor(cases.length) - 1;
+  let kept = 0;
+  const fewIdentifiers = cases.map((entry) => (
+    entry.identifier && kept++ >= wanted ? { ...entry, identifier: false } : entry
+  ));
   const identifierFail = diversityGate(fewIdentifiers, context);
   assert.equal(identifierFail.status, 'fail');
-  assert.ok(identifierFail.failures.some((entry) => entry.check === 'identifier-cases' && entry.floor === 5));
+  assert.ok(identifierFail.failures.some((entry) => entry.check === 'identifier-cases'
+    && entry.floor === identifierFloorFor(fewIdentifiers.length)));
 });
 
 test('the relaxed type and area floors are visible in the detail line, never silent', () => {
@@ -434,4 +460,65 @@ test('runGoldsetGates reports what it pruned rather than doing it silently', asy
   const result = await runGoldsetGates(cases, { store, units, files: [], commits: new Set(), date: '2026-08-16', floors: { minimumCases: 1, minimumIdentifierCases: 0, minimumTypes: 1, minimumAreas: 1 } });
   assert.deepEqual(result.constraintsPruned, [{ case: 'g001', dropped: ['gone'] }]);
   assert.equal(result.passed, true);
+});
+
+// ---- the target and the floor are different numbers (D-0046) -----------------------------
+
+test('a legitimate modest repo MEASURES instead of being refused on headcount', () => {
+  // The owner's re-test: 18 well-diversified cases, refused by a bare count gate at 25.
+  // 25 was the platform's TARGET, measured on a large corpus, being used as a floor for
+  // every repo. Nothing about measurability fired - identifier, types and areas all passed.
+  // BUILT, not sliced. Slicing a mined set changes every proportion at once - count,
+  // identifier share, type and area coverage - so a failure names whichever dimension the
+  // slice happened to starve rather than the one under test. This varies ONE thing: size.
+  const build = (count) => {
+    const units = [];
+    const cases = [];
+    for (let index = 0; index < count; index += 1) {
+      const id = `u${index}`;
+      units.push({ id, type: ['concept', 'api', 'decision'][index % 3], meta: { area: `area${index % 4}` } });
+      cases.push({ id: `c${index}`, must_return: [id], identifier: index % 4 === 0, retired: false });
+    }
+    return {
+      cases,
+      context: { unitsById: new Map(units.map((unit) => [unit.id, unit])), availableTypes: 3, availableAreas: 4 },
+    };
+  };
+
+  const modest = build(18);
+  const measured = diversityGate(modest.cases, modest.context);
+  assert.equal(measured.status, 'pass', `18 diversified cases must measure, not refuse: ${measured.detail}`);
+
+  // And the floor still refuses what cannot be measured.
+  // And the floor still refuses what cannot be measured, same construction, fewer cases.
+  const thin = build(11);
+  const tooThin = diversityGate(thin.cases, thin.context);
+  assert.equal(tooThin.status, 'fail');
+  assert.ok(tooThin.failures.some((entry) => entry.check === 'count' && entry.floor === 12));
+
+  // 24 measures now, which is the owner-facing change: it was refused by the old floor.
+  const nearTarget = build(24);
+  assert.equal(diversityGate(nearTarget.cases, nearTarget.context).status, 'pass');
+});
+
+test('the identifier floor SCALES, so lowering the count does not just move the block', () => {
+  // A fixed floor of 5 is 20 percent of the 25-case target and 42 percent of a 12-case set.
+  // Without scaling, a 12-case set with 3 identifier cases fails identifier-cases instead
+  // of count, and the refusal moves rather than lifting.
+  assert.equal(identifierFloorFor(25), 5, 'unchanged at the target, which is the proportion the fixed 5 encoded');
+  assert.equal(identifierFloorFor(34), 5, 'and does not grow past it');
+  assert.equal(identifierFloorFor(18), 4);
+  assert.equal(identifierFloorFor(12), 3);
+  // Never below 3: the check must not evaporate on a small set.
+  assert.equal(identifierFloorFor(5), 3);
+  assert.equal(identifierFloorFor(1), 3);
+});
+
+test('the target and the floor are separate values, not one number doing two jobs', () => {
+  // The defect in one line: DEFAULT_FLOORS.minimumCases WAS the target. A mining goal and a
+  // measurability threshold answer different questions and only coincide by accident.
+  assert.equal(DEFAULT_FLOORS.targetCases, 25);
+  assert.equal(DEFAULT_FLOORS.minimumCases, 12);
+  assert.ok(DEFAULT_FLOORS.minimumCases < DEFAULT_FLOORS.targetCases,
+    'a floor at the target refuses every repo that does not reach it');
 });

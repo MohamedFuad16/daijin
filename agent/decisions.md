@@ -894,3 +894,187 @@ its floors and the likely cause. Refuse-versus-warn is the distinction
 the inspection exists to draw. The 60-fixture cost of refusal was
 named by the extractor as a motivated-conclusion hazard and was not
 the basis of the ruling.
+
+## D-0037 (2026-08-17) `preset` is removed; `provider` replaces it
+
+`preset` was declared in the role row, written by nothing, and rendered as a
+column by the TUI that was populated only in its mock data - so against a
+real engine that column was always blank, and the client test asserted only
+that the key existed. A name like "Claude" is a RENDERING of provider plus
+model rather than a stored value, and two fields meaning nearly the same
+thing is how they drift.
+
+Decision: `preset` removed, `provider` added as a closed enum of vendor ids
+derived from `engine/config/providers.json` so the enum and the catalog
+cannot drift. `reasoningEffort` added, with null as the only encoding of
+unsupported. `model` is NOT closed: the catalog calls itself a starting point
+rather than a registry, so an unrecognised model is described (`modelKnown`,
+`modelReason`) and used as written rather than refused - refusing would make
+the file authoritative over a fact it disclaims, and would block a model that
+shipped this morning until someone edits JSON. Roles are normalised on read
+so every row carries the full key set whatever is on disk.
+
+## D-0038 (2026-08-17) `analyze` carries the attach warning
+
+A client calling `analyze` on a subdirectory saw the PARENT's commit count
+against a handful of files, with nothing in the response saying why: the file
+walk sees the subdirectory while git answers from the repository root. That
+exact reading stalled the owner's field test. `analyze` now returns the same
+`warning` object `repoAttach` does, because this is the method whose numbers
+the warning explains.
+
+## D-0039 (2026-08-17) `repoClone` is a job, not an overload of `repoAttach`
+
+A clone is minutes of network work with a progress stream. One method whose
+behaviour is decided by the shape of its argument leaves a client unable to
+tell a local row from a long remote operation before it calls.
+
+Decision: `repoClone { url, name? }` returns `{ jobId }`. Destination is
+`<stateRoot>/clones/<host>/<owner>/<name>` - host and owner in the path
+because a bare name collides the moment two owners both have a repository
+called `engine`. Clones are never cleared by clear-index: `index/` is
+disposable because it regenerates and a working tree does not. Submodules are
+not recursed, because a submodule URL is a second remote the owner did not
+name. Cloning the same repository twice reuses the clone; a failed clone
+removes the partial directory it left behind; a destination holding a
+different repository is refused and never overwritten.
+
+## D-0040 (2026-08-17) Prefixed key pointers are shape checked
+
+`KEY_REF_FORMS` advertised `file:/abs/path` and `env-file:/abs/path#NAME`
+while the parser accepted any string after the prefix. A relative pointer
+resolves against the DAEMON's working directory rather than the user's shell,
+so the same setting named a different file depending on how the process
+started. `env:` accepted anything at all, so a pasted key parsed and failed
+much later as an unset variable.
+
+Found by tui-builder's conformance test running inputs through the engine's
+own parser and comparing verdicts against an independent mirror: THE MIRROR
+WAS STRICTER THAN THE ENGINE. Neither side could have found it by re-reading,
+because each matched what its own author believed the rule was.
+
+Decision: paths must be absolute; env names must match
+`[A-Za-z_][A-Za-z0-9_]*`. Refusals carry their action and NEVER ECHO THE
+VALUE THEY REFUSED - the likeliest wrong value at that input is a pasted API
+key, and the message crosses the RPC boundary into logs.
+
+## D-0041 (2026-08-17) `actionCode` reaches the client on the step event
+
+The field existed on `initBrain`'s in-process report, which no method returns
+and nothing writes to disk, so it was unreachable by any client. A step
+crosses FOUR reconstructions between the pipeline and a client, each a
+positive whitelist that dropped unlisted keys in silence; the field was added
+at the source and died three times without a word.
+
+Decision: extras pass through the pipeline stepper and the initBrain
+forwarder; `stepEvent` carries `actionCode`, omitted rather than null when
+absent so a control keyed on presence cannot be switched on by an empty
+field. A test drives a real run and fails if the pipeline emits a key the
+forwarder does not carry.
+
+## D-0042 (2026-08-17) The file walk is bounded in files and in time
+
+The owner's home screen hung forever on an attached `/`, left from before
+attach validated anything. There WAS a cap of 50,000 files, applied after the
+walk finished: walk everything, sort, slice. It bounded the ANSWER and not the
+WORK, so on `/` the walk never reached the trim. `analyze('/')` never
+returned; the client awaited it per card.
+
+Decision: both bounds go into the walk, because they stop different things - a
+file cap stops a tree that is too large, a deadline stops one that is too slow
+(a network mount, a volume that went away), and a count cap alone still hangs
+on slow directories. The truncation is reported ON THE WIRE as
+`walk: { filesSeen, capped, stoppedBy, limit }`; it was previously known to
+the engine and unreachable, since the old flag lived on a field the D-0035
+batch had removed from the wire. The filesystem root and the home directory
+are refused as `not a project` - they were always on the cannot-work side of
+D-0036 and were simply never named.
+
+## D-0043 (2026-08-17) The status probe is bounded and cached
+
+With `retrieval.ollamaBaseUrl` pointing at a host that accepts and never
+answers, `serveStatus` cost 5,017 ms on EVERY call. A refused connection and
+an unresolvable name are both instant, so every earlier unreachable-endpoint
+fixture failed fast and none of them noticed.
+
+Decision: probe timeout 1.5 s, because this runs on a screen paint rather than
+on the embedding path; result cached for a few seconds, KEYED ON ENDPOINT AND
+MODEL so a settings change re-probes at once rather than reporting the state
+of a server the engine is no longer using. FAILURES ARE CACHED TOO - the
+unreachable endpoint is the expensive case, so a success-only cache would have
+missed the defect entirely.
+
+## D-0044 (2026-08-17) `fresh` bypasses the probe cache for explicit user action
+
+Caching failures was right for the paint path and it put a stale answer behind
+the one button a user presses immediately after fixing the thing. `ctrl+r` is
+the user saying "I changed something, look again", which is exactly the input
+where a cached answer is wrong.
+
+Decision: `serveStatus({ fresh })`. A bypassed probe WRITES its result, so an
+explicit check refreshes the window rather than leaving the stale entry for
+the next paint. A non-boolean is refused rather than coerced, because a silent
+coercion produces exactly the broken-refresh symptom the parameter exists to
+remove. The constraint - `fresh` is for explicit user action, automatic paints
+use the cache - is contract text, because the engine cannot enforce it.
+
+## D-0045 (2026-08-17) `probedAt` says when the probe ran
+
+The roles section already required this of measurements: every stored ping is
+historical, recorded at `at`, never a live reading, because a measurement
+rendered as current when it is not is a lie with a timestamp missing. The
+probe cache turned `ollama` into that class of value and it shipped without an
+`at`. This applies the existing rule to the value that missed it.
+
+Decision: `ollama.probedAt`, an ISO string, stamped when the PROBE ran so a
+cached response carries the original time rather than the moment it was
+served - stamping at serve time would make every cached answer look fresh,
+which is the thing the field exists to prevent. Convention, stated once
+because a mixed one inside a payload gets copied: `ts` is a number on the
+event stream, `at` is an ISO string on a record.
+
+## D-0046 (2026-08-17) The gold-set target and its measurability floor are different numbers
+
+The owner's re-test mined 18 cases from a real repository and the gold set
+BLOCKED, on a bare count gate at 25 with every other check passing. 25 was
+the platform's TARGET, measured on a large corpus, being used as a floor for
+every repository - one number answering two questions that only coincide by
+accident.
+
+Decision: `targetCases` stays 25 and mining still aims for it. `minimumCases`
+becomes 12, the measurability floor. Between 12 and 14 the floor report
+carries an explicit low-resolution caution; at 15 and above the count form
+alone suffices. A discrimination gate (headroom over a permuted control >= 3
+cases) is added alongside, and the identifier floor scales with the set
+instead of sitting fixed at 5.
+
+The floor is a PRODUCT JUDGMENT INFORMED BY ARITHMETIC, and it is recorded
+that way because it was first proposed as an empirical threshold and was not
+one. One case is 1/N of the rate: 8.3 points at 12, 5.6 at 18, 4.0 at 25.
+That is exact and does not move. The ruling's reason is that a legitimate
+modest repository deserves a measurement with wide bars rather than a
+refusal; the same evidence supports 15 or 18 equally well and does not
+distinguish them.
+
+Two claims made while arguing for this number were RETRACTED before it
+landed, and both retractions are in the evidence directory rather than only
+here. There is no knee in the data: the statistic that showed one was a range
+over six draws and moved by a factor of three between runs, while a proper
+30-draw dispersion declines smoothly (6.1, 5.5, 4.8, 3.2) with no threshold
+in it. And the caveat that subsampling a mature corpus is a best case was
+measured and found false - clustered draws, which are what a small repository
+mines, showed identical spread and better headroom.
+
+D-0030's discriminating range was expected to be the principled source of
+this floor and turned out not to be: headroom never reaches zero at any size
+tested, down to six cases. It is kept as a separate gate because it catches a
+set that is large and degenerate, which a count cannot see, and it is
+expected to bind rarely. Adding it reverses `measureResolution`'s documented
+"reported, never gated": the range stays reported either way, and what
+changes is that a set with no discriminating room no longer also gets a
+floor, on the same reasoning that stops a gold set which failed its own
+integrity gates from scoring.
+
+Consequences: repositories between 12 and 24 cases now init and measure where
+they were refused. Their numbers are coarse and say so. Evidence, both
+instruments and both retractions: docs/verification/goldset-floor-sweep/.

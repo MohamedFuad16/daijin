@@ -23,12 +23,55 @@ export const LEAKAGE_SPAN = 6;
 /** Below this many tokens a query is too short for the substring rule to mean anything. */
 export const LEAKAGE_MIN_QUERY_TOKENS = 4;
 
+/**
+ * THE TARGET AND THE FLOOR ARE DIFFERENT NUMBERS, which they were not before (D-0046).
+ *
+ * `targetCases` is what mining aims for and is the platform's 25, measured on a large
+ * corpus. It was also being used as a hard minimum, so a legitimate repo that mined 18
+ * well-diversified cases was REFUSED on headcount alone - the owner's re-test found exactly
+ * that, with every other gate passing.
+ *
+ * `minimumCases` is the MEASURABILITY floor: the count below which a case rate stops being
+ * a measurement. It is argued from arithmetic rather than from a threshold in data. One
+ * case is 1/N of the rate, so at 12 a single case moves the floor 8.3 points and below 12
+ * one case is a tenth of the scale or worse. The sweep in docs/verification/
+ * goldset-floor-sweep/ is the evidence, including the part that did NOT support a
+ * threshold: discrimination against a permuted control holds at every size down to six, so
+ * D-0030's range cannot pick this number and the choice is a product judgment about how
+ * coarse a published number may be.
+ */
 export const DEFAULT_FLOORS = Object.freeze({
-  minimumCases: 25,
+  targetCases: 25,
+  minimumCases: 12,
+  // Below this many cases of headroom over a permuted control, the set is not measuring
+  // retrieval at all. Rarely binds - the sweep never saw it reached - and it exists because
+  // a set can be large and degenerate, which a count can never see.
+  minimumHeadroomCases: 3,
+  // The band where a floor is real but coarse. Reports in it carry an explicit caution
+  // rather than leaving the reader to infer error bars from a denominator.
+  lowResolutionBelow: 15,
   minimumIdentifierCases: 5,
   minimumTypes: 3,
   minimumAreas: 3,
 });
+
+/**
+ * The identifier-case floor SCALES WITH THE SET, instead of being a fixed 5.
+ *
+ * 5 is 20 percent of the 25-case target and 42 percent of a 12-case set, so lowering the
+ * count floor alone would have moved the block rather than removed it: a 12-case set with
+ * 3 identifier cases failed identifier-cases as well as count. This keeps the proportion
+ * the fixed number already encoded at the target, with a hard minimum of 3 so the check
+ * cannot evaporate on a small set.
+ */
+export function identifierFloorFor(count, floors = DEFAULT_FLOORS) {
+  // THE CONFIGURED VALUE IS THE CEILING, always. An earlier version put the hard minimum
+  // on the OUTSIDE - Math.max(3, ...) - which floored every caller at 3 and silently
+  // overrode an explicit request for a lower one. A caller that configures 0 means 0, and
+  // a scaling rule that cannot be turned off is not a default, it is a law. Caught by an
+  // existing test that configures the floors down for a fixture.
+  return Math.min(floors.minimumIdentifierCases, Math.max(3, Math.ceil(0.2 * count)));
+}
 
 function gate(id, status, detail, extra = {}) {
   return { id, status, detail, ...extra };
@@ -324,8 +367,9 @@ export function diversityGate(cases, { unitsById, floors = DEFAULT_FLOORS, avail
   if (active.length < floors.minimumCases) {
     failures.push({ check: 'count', got: active.length, floor: floors.minimumCases });
   }
-  if (identifiers < floors.minimumIdentifierCases) {
-    failures.push({ check: 'identifier-cases', got: identifiers, floor: floors.minimumIdentifierCases });
+  const identifierFloor = identifierFloorFor(active.length, floors);
+  if (identifiers < identifierFloor) {
+    failures.push({ check: 'identifier-cases', got: identifiers, floor: identifierFloor });
   }
   if (answerTypes.size < typeFloor) {
     failures.push({ check: 'types', got: answerTypes.size, floor: typeFloor });

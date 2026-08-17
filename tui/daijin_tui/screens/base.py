@@ -179,7 +179,27 @@ class DaijinScreen(Screen):
         self.app.switch_mode(mode)
 
     def action_reload(self) -> None:
+        """ctrl+r is the user saying "I changed something, look again".
+
+        That is the one case where a cached answer is wrong, so the next load
+        is marked user-initiated and a screen may ask the engine to bypass its
+        caches for it. Every automatic paint, poll and timer leaves the flag
+        alone and stays on the cache: the contract row says a client passing
+        fresh on every paint restores the defect the cache exists to prevent.
+        """
+        self.user_initiated_load = True
         self.start_load()
+
+    def take_user_initiated(self) -> bool:
+        """Read the flag ONCE and clear it.
+
+        Cleared on read so a single keypress cannot leak into the automatic
+        reload that follows it, which is exactly how "only on ctrl+r" would
+        quietly become "on everything after the first ctrl+r".
+        """
+        wanted = bool(getattr(self, "user_initiated_load", False))
+        self.user_initiated_load = False
+        return wanted
 
     # Helpers -------------------------------------------------------------
 

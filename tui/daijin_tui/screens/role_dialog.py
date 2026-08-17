@@ -189,12 +189,22 @@ class RoleConfigScreen(ModalScreen[dict[str, Any] | None]):
         role_name = self.role.get("role", "role")
         with Vertical(id="role-dialog", classes="dialog"):
             yield Static(f"[b]{role_name}[/b]", markup=True)
-            yield Select(
-                [(p.get("label", p.get("id")), p.get("id")) for p in self.providers],
-                id="role-provider",
-                prompt="provider",
-                value=self.role.get("provider") or Select.BLANK,
-            )
+            # NO SELECTION IS EXPRESSED BY OMITTING THE VALUE, not by a
+            # sentinel. Select.BLANK in Textual 8.2.8 is a legacy alias equal to
+            # `False`, and the widget's own validator REFUSES it, so
+            # `provider or Select.BLANK` handed the Select an illegal value for
+            # every role with no provider - which is every role a fresh user
+            # has. Select.NULL is the real sentinel, and not passing a value at
+            # all is simpler than naming it.
+            configured = self.role.get("provider")
+            provider_options = [
+                (p.get("label", p.get("id")), p.get("id")) for p in self.providers
+            ]
+            if configured and any(value == configured for _, value in provider_options):
+                yield Select(provider_options, id="role-provider", prompt="provider",
+                             value=configured)
+            else:
+                yield Select(provider_options, id="role-provider", prompt="provider")
             yield Select([], id="role-model", prompt="model", allow_blank=True)
             yield Select([], id="role-reasoning", prompt="reasoning effort", allow_blank=True)
             yield Static("", id="role-model-note", markup=True)
@@ -248,7 +258,7 @@ class RoleConfigScreen(ModalScreen[dict[str, Any] | None]):
 
     def _describe_model(self, provider_id: Any, model_id: Any) -> None:
         note = self.query_one("#role-model-note", Static)
-        if not model_id or model_id is Select.BLANK:
+        if not model_id or model_id is Select.NULL:
             note.update("")
             return
         model = self._model(provider_id, model_id)
@@ -306,14 +316,16 @@ class RoleConfigScreen(ModalScreen[dict[str, Any] | None]):
         model = self.query_one("#role-model", Select).value
         reasoning = self.query_one("#role-reasoning", Select)
         patch: dict[str, Any] = {"role": self.role.get("role")}
-        if provider is not Select.BLANK:
+        if provider is not Select.NULL and provider:
             patch["provider"] = provider
-        if model is not Select.BLANK:
+        if model is not Select.NULL and model:
             patch["model"] = model
         # Unsupported stays null. Sending a string would encode a setting the
         # model does not have.
         patch["reasoningEffort"] = (
-            None if reasoning.disabled or reasoning.value is Select.BLANK else reasoning.value
+            None
+            if reasoning.disabled or reasoning.value is Select.NULL or not reasoning.value
+            else reasoning.value
         )
         patch["keyRef"] = self.query_one("#role-keyref", Input).value.strip() or None
         return patch

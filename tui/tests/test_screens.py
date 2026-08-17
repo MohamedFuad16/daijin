@@ -2748,3 +2748,69 @@ async def test_the_cache_caveat_points_at_the_way_out():
     })
     assert "may be cached" in down
     assert "ctrl+r" in down, "the caveat does not say how to get a fresh reading"
+
+
+@run_async
+async def test_a_role_with_no_provider_opens_its_dialog_instead_of_crashing():
+    """The owner's launch crash: InvalidSelectValueError, Illegal select value False.
+
+    Select.BLANK in Textual 8.2.8 is a legacy alias equal to `False`, and the
+    widget's own validator REFUSES it, so `provider or Select.BLANK` handed an
+    illegal value to the Select for every role with no provider. That is EVERY
+    ROLE A FRESH USER HAS: teacher and auditor are null even on a configured
+    machine, so the default state took the screen down.
+
+    Select.NULL is the real sentinel, and no selection is now expressed by
+    omitting the value rather than by naming one.
+    """
+    from daijin_tui.screens.role_dialog import RoleConfigScreen
+    from textual.widgets import Select
+
+    async with running_app() as (app, pilot):
+        catalog = await app.client.call("providerCatalog", {})
+
+        # The owner's shape, and the shape of every unconfigured role.
+        for role in (
+            {"role": "teacher", "provider": None, "model": None, "reasoningEffort": None},
+            {"role": "auditor", "provider": None, "model": "gpt-5.2"},
+            # And a provider the catalog does not offer, which must also not be
+            # handed to the widget as a value it will refuse.
+            {"role": "watcher", "provider": "retired-vendor", "model": None},
+        ):
+            screen = RoleConfigScreen(role=role, catalog=catalog)
+            await app.push_screen(screen)
+            await settle(pilot, 8)
+
+            provider = screen.query_one("#role-provider", Select)
+            assert provider.value is Select.NULL or isinstance(provider.value, str), (
+                f"the provider Select holds {provider.value!r}"
+            )
+            # Nothing anywhere may be the False alias.
+            for select_id in ("#role-provider", "#role-model", "#role-reasoning"):
+                value = screen.query_one(select_id, Select).value
+                assert value is not False, f"{select_id} holds the illegal False sentinel"
+
+            # And the patch it would send carries no sentinel either.
+            patch = screen._patch()
+            for key, value in patch.items():
+                assert value is not False, f"patch[{key}] is the False sentinel"
+                assert value is not Select.NULL, f"patch[{key}] leaked a Select sentinel"
+            app.pop_screen()
+            await settle(pilot, 2)
+
+
+def test_no_screen_uses_the_false_select_alias():
+    """Select.BLANK is `False` here and the validator refuses it.
+
+    Grepping the siblings is the practice: one occurrence crashed the product,
+    so the check is that there are none rather than that this one is fixed.
+    """
+    from pathlib import Path
+
+    package = Path(__file__).resolve().parents[1] / "daijin_tui"
+    offenders = []
+    for path in sorted(package.rglob("*.py")):
+        for number, line in enumerate(path.read_text().splitlines(), start=1):
+            if "Select.BLANK" in line and not line.strip().startswith("#"):
+                offenders.append(f"{path.name}:{number}")
+    assert not offenders, f"the False-valued alias is still in use: {offenders}"

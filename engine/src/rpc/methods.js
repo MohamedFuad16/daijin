@@ -1078,6 +1078,18 @@ export function createMethods({
         EMBEDDING_MODEL: configuredModel,
         ...(configuredBaseUrl ? { OLLAMA_BASE_URL: configuredBaseUrl } : {}),
       };
+      // WHEN THE PROBE RAN, stamped INSIDE the cached callback so a cached response
+      // carries the ORIGINAL probe time rather than the time it was served. Serving the
+      // moment of the reply would make every cached answer look fresh, which is the exact
+      // thing this field exists to prevent.
+      //
+      // The rule is already this document's, about ping: "every stored ping is historical
+      // (recorded at `at`), never a live reading." The cache turned `ollama` into that
+      // class of value and it had no `at`. This is that rule applied, not a new one.
+      //
+      // ISO string, because that is what every `at` in this codebase is. `ts` is a number
+      // on the event stream; `at` is an ISO string on a record; and probedAt is an
+      // at-shaped name for an at-shaped thing.
       // One probe per window, whatever the paint rate. The whole block is cached rather
       // than the raw call, so both branches are covered: an unreachable endpoint is the
       // expensive case and caching only success would have missed it entirely.
@@ -1087,6 +1099,7 @@ export function createMethods({
         const served = await ollama({ environment: probeEnvironment });
         ollamaStatus = {
           reachable: true,
+          probedAt: new Date(now()).toISOString(),
           endpoint: served.endpoint ?? null,
           // The SERVED model, which can differ from the configured one by a tag: settings
           // say `bge-m3` and ollama answers `bge-m3:latest`. The served name is the honest
@@ -1100,6 +1113,7 @@ export function createMethods({
       } catch (error) {
         ollamaStatus = {
           reachable: false,
+          probedAt: new Date(now()).toISOString(),
           endpoint: error.endpoint ?? null,
           model: configuredModel,
           dimension: configuredDimension,

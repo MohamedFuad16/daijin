@@ -254,3 +254,72 @@ test('a non-boolean fresh is REFUSED rather than quietly ignored', async () => {
     await server.close();
   }
 });
+
+// ---- probedAt (D-0045) ------------------------------------------------------------------
+
+test('a CACHED answer carries the original probe time, not the time it was served', async () => {
+  // The whole point. Stamping when the response is assembled would make every cached
+  // answer look fresh, which is exactly what this field exists to prevent - the cache
+  // would then be undisclosed rather than merely brief.
+  let clock = Date.parse('2026-08-17T09:00:00.000Z');
+  const { server } = await harness({
+    probe: async () => { throw new Error('unreachable'); },
+    now: () => clock,
+  });
+  try {
+    const first = await server.methods.serveStatus({});
+    assert.equal(first.ollama.probedAt, '2026-08-17T09:00:00.000Z');
+
+    clock += 2_000; // still inside the cache window
+    const cached = await server.methods.serveStatus({});
+    assert.equal(cached.ollama.probedAt, first.ollama.probedAt,
+      'a cached answer reported itself as freshly probed');
+  } finally {
+    await server.close();
+  }
+});
+
+test('probedAt MOVES on an explicit check, which is a behavioural test for fresh itself', async () => {
+  // A client can verify the flag is honoured without trusting the parameter: an engine
+  // that predates `fresh` accepts and ignores it, and an unknown param has no capability
+  // signal of its own. This is the observable difference that stands in for one.
+  let clock = Date.parse('2026-08-17T09:00:00.000Z');
+  const { server } = await harness({
+    probe: async () => { throw new Error('unreachable'); },
+    now: () => clock,
+  });
+  try {
+    const first = await server.methods.serveStatus({});
+    clock += 1_000;
+    const automatic = await server.methods.serveStatus({});
+    assert.equal(automatic.ollama.probedAt, first.ollama.probedAt, 'an automatic paint must not re-probe');
+
+    const explicit = await server.methods.serveStatus({ fresh: true });
+    assert.notEqual(explicit.ollama.probedAt, first.ollama.probedAt, 'an explicit check must re-probe');
+    assert.equal(explicit.ollama.probedAt, '2026-08-17T09:00:01.000Z');
+  } finally {
+    await server.close();
+  }
+});
+
+test('probedAt is an ISO string on BOTH branches, and parses', async () => {
+  // Present whether or not the probe succeeded, like every other key on this object: the
+  // unreachable branch is the one a user stares at, and it is the one that most needs to
+  // say how old the reading is.
+  for (const probe of [
+    async () => ({ endpoint: 'http://localhost:11434', version: '0.0.0', digest: 'sha256:x', model: 'bge-m3' }),
+    async () => { throw new Error('unreachable'); },
+  ]) {
+    const { server } = await harness({ probe });
+    try {
+      const { ollama } = await server.methods.serveStatus({});
+      assert.equal(typeof ollama.probedAt, 'string');
+      // ISO, not epoch milliseconds: `ts` is a number on the event stream, `at` is an ISO
+      // string on a record, and a mixed convention inside one payload gets copied.
+      assert.match(ollama.probedAt, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+      assert.ok(Number.isFinite(Date.parse(ollama.probedAt)));
+    } finally {
+      await server.close();
+    }
+  }
+});

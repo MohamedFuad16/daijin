@@ -1,5 +1,47 @@
 # Daijin build state (authoritative)
 
+## 2026-08-18 02:30 - Owner round 9: the gym runs, the gate is a button, bare daijin
+
+Three directives ("this gate opening and closing has to be a button", "the
+exams has to work fix it", "i want to just type daijin"), all landed solo.
+
+THE STUDENT DRIVER IS REAL (engineer-driver.js). Two transports, one frozen
+contract (engineer.next -> one action per round, diff from the worktree):
+- claude-code: one confined agentic CLI attempt in the sandbox, file tools
+  only, NO BASH (the harness owns running gates; a student with a shell can
+  read its own grader), acceptEdits, the owner's chosen sub-agent file as
+  the system prompt. Tokens from the CLI usage report; created files from
+  git's own untracked list (with no shell, the only writer is the student).
+- API providers: a strict JSON action protocol (read / edit / check /
+  submit) where the DAEMON executes edits with confinePath holding every
+  proposed path inside the sandbox. A malformed reply is a nudge whose
+  tokens still count; forced submit overrides whatever the model wanted.
+gymStart builds the engineer BEFORE the job (unconfigured role refuses at
+the call, not inside a consented job) and loads gates from the repo's own
+gates.yaml (signal-carrying rows) when config.gates is absent; a repo with
+no such gate is refused before consent is spent.
+
+THE GATE IS A BUTTON, WITH THE FLIP STILL THE OWNER'S (D-0060). spendGateSet:
+blocked always works; authorized needs scope, a written reason (>= 20 chars)
+and confirm: true, recorded as consent. Every spending job (examMine and
+gymStart) re-blocks the gate in its finally, so an authorization lives
+exactly as long as the run it authorized. In the TUI, a gate refusal on Mine
+or Start becomes the open-the-gate dialog and a retry. The mutation guard
+("no code path can open the gate") was AMENDED, not weakened: all gate
+writes moved into spend-gate.js, the one opening write carries an
+ownerAction marker the scanner licences exactly once - and the marker lands
+IN the gate file, so an authorization is auditable at rest. New plants pin
+the licence (a second marked write is flagged; an unmarked authorized write
+stays the classic offence).
+
+BARE `daijin` WORKS: the repo argument is optional; with none, home opens on
+the attached repos (selection syncs to the first) or the attach box.
+
+Suites: engine 767 pass. Known gap, said rather than hidden: the cycle
+records attempts UNGRADED (the teacher rubric module exists but is not yet
+wired to a live teacher generate); examDetail renders "not graded"
+honestly. Wiring the teacher is the next build item.
+
 ## 2026-08-18 01:10 - Exam mining is BUILT, and proven live with the Fable auditor
 
 The owner said "Build it". The last missing pipeline exists end to end.

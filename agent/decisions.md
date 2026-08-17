@@ -1273,3 +1273,28 @@ runnable bank without the owner's promote click (mining writes draft or
 validated, gymStart draws promoted only); and provenance records the
 authoring model at write time. Zero discovered gates skips the baseline
 check but never the worktree check, and says so on the stream.
+
+## D-0060 (2026-08-18) The gate is a button; the licence is one marked write
+
+Owner ruling: "this gate opening and closing has to be a button." The
+invariant "the engine can only ever write the gate blocked" is amended, not
+dropped: spendGateSet opens a gate only off an explicit owner action with a
+scope, a written reason and recorded consent, and every spending job
+re-blocks the gate in its finally, so an authorization cannot outlive its
+run. The mutation guard keeps its teeth by moving every gate write into
+spend-gate.js and licensing EXACTLY ONE opening write, recognized by an
+ownerAction marker that is code (comments are stripped before scanning) and
+that lands in the gate file itself. Plants pin both failure modes: a second
+marked write and an unmarked authorized write are flagged.
+
+## D-0061 (2026-08-18) The student has no shell, and paths are accepted by mechanics
+
+The live engineer driver confines both transports the same way the exam
+committee is confined: the model proposes, mechanics accept. The claude-code
+student gets file tools only - no Bash, because the harness owns running
+gates and a student with a shell can read its own grader; its created files
+come from git's untracked list, which is sound exactly because nothing else
+can write. The API student's every path goes through confinePath (lexical,
+after resolution, absolute and .. both refused). A malformed protocol reply
+is a nudge whose tokens still count, because the spend was real whatever
+the reply was worth.

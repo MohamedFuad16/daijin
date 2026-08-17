@@ -2098,3 +2098,65 @@ async def test_the_attach_dialog_refuses_only_what_the_engine_refuses(tmp_path_f
         await settle(pilot)
         assert "Ready" in text_of(note)
         app.pop_screen()
+
+
+@run_async
+async def test_the_provider_note_is_shown_because_the_catalog_asks_for_it():
+    """ollama's note says its model list is a SUGGESTION, not an inventory.
+
+    The catalog says outright that a client showing that list must repeat the
+    caveat: what is installed is local truth it deliberately does not read, so
+    the list will name models the owner does not have. Rendering the list
+    without the note makes a claim the file itself refuses to make.
+    """
+    from daijin_tui.screens.role_dialog import RoleConfigScreen
+    from textual.widgets import Select
+
+    async with running_app() as (app, pilot):
+        catalog = await app.client.call("providerCatalog", {})
+        noted = next(p for p in catalog["providers"] if p.get("note"))
+        plain = next(p for p in catalog["providers"] if not p.get("note"))
+
+        screen = RoleConfigScreen(role={"role": "watcher", "provider": noted["id"]},
+                                  catalog=catalog)
+        await app.push_screen(screen)
+        await settle(pilot)
+        shown = text_of(screen.query_one("#role-provider-note", Static))
+        assert "SUGGESTIONS" in shown or "suggestion" in shown.lower(), (
+            f"the provider's own caveat is not shown: {shown!r}"
+        )
+
+        # And a provider without a note does not invent one.
+        screen.query_one("#role-provider", Select).value = plain["id"]
+        await settle(pilot)
+        assert text_of(screen.query_one("#role-provider-note", Static)).strip() == ""
+        app.pop_screen()
+
+
+@run_async
+async def test_the_endpoint_defaults_from_the_catalog_but_never_overwrites_a_users_own():
+    from daijin_tui.screens.role_dialog import RoleConfigScreen
+    from textual.widgets import Input, Select
+
+    async with running_app() as (app, pilot):
+        catalog = await app.client.call("providerCatalog", {})
+        first, second = catalog["providers"][0], catalog["providers"][1]
+
+        screen = RoleConfigScreen(role={"role": "engineer", "provider": first["id"]},
+                                  catalog=catalog)
+        await app.push_screen(screen)
+        await settle(pilot)
+        field = screen.query_one("#role-endpoint", Input)
+        field.value = ""
+        screen.query_one("#role-provider", Select).value = second["id"]
+        await settle(pilot)
+        assert field.value == second["endpointDefault"], "the default was not offered"
+
+        # A user's own endpoint survives a provider change.
+        field.value = "http://my-proxy.internal/v1"
+        screen.query_one("#role-provider", Select).value = first["id"]
+        await settle(pilot)
+        assert field.value == "http://my-proxy.internal/v1", (
+            "a provider change overwrote an endpoint the user typed"
+        )
+        app.pop_screen()

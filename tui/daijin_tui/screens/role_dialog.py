@@ -111,7 +111,15 @@ class RoleConfigScreen(ModalScreen[dict[str, Any] | None]):
             )
             yield Select([], id="role-model", prompt="model", allow_blank=True)
             yield Select([], id="role-reasoning", prompt="reasoning effort", allow_blank=True)
+            # The PROVIDER's own note, not just the model's. The ollama entry
+            # uses it to say its model list is a suggestion rather than an
+            # inventory, and it says outright that a client showing that list
+            # must repeat the caveat. Rendering the list without it makes a
+            # claim the catalog itself refuses to make.
+            yield Static("", id="role-provider-note", markup=True)
             yield Static("", id="role-model-note", markup=True)
+            yield Input(placeholder="endpoint", id="role-endpoint",
+                        value=str(self.role.get("endpoint") or ""))
             yield Input(
                 placeholder="env:NAME, file:/abs/path, or env-file:/abs/path#NAME",
                 id="role-keyref",
@@ -135,7 +143,24 @@ class RoleConfigScreen(ModalScreen[dict[str, Any] | None]):
 
     # Cascade -------------------------------------------------------------
 
+    def _describe_provider(self, provider_id: Any) -> None:
+        provider = self._provider(provider_id) or {}
+        note = provider.get("note")
+        self.query_one("#role-provider-note", Static).update(
+            f"[yellow]{note}[/yellow]" if note else ""
+        )
+
+    def _default_endpoint(self, provider_id: Any) -> None:
+        """Offer the provider's default when the field is empty or was another
+        provider's default. A user's own endpoint is never overwritten."""
+        field = self.query_one("#role-endpoint", Input)
+        defaults = {p.get("endpointDefault") for p in self.providers}
+        if field.value.strip() and field.value.strip() not in defaults:
+            return
+        field.value = str((self._provider(provider_id) or {}).get("endpointDefault") or "")
+
     def _fill_models(self, provider_id: Any, selected: Any = None) -> None:
+        self._describe_provider(provider_id)
         models = self._models(provider_id)
         model_select = self.query_one("#role-model", Select)
         model_select.set_options([(m.get("label", m.get("id")), m.get("id")) for m in models])
@@ -180,6 +205,7 @@ class RoleConfigScreen(ModalScreen[dict[str, Any] | None]):
         event.stop()
         if event.select.id == "role-provider":
             self._fill_models(event.value)
+            self._default_endpoint(event.value)
             self._check_key_ref()
         elif event.select.id == "role-model":
             provider = self.query_one("#role-provider", Select).value
@@ -224,6 +250,9 @@ class RoleConfigScreen(ModalScreen[dict[str, Any] | None]):
             None if reasoning.disabled or reasoning.value is Select.BLANK else reasoning.value
         )
         patch["keyRef"] = self.query_one("#role-keyref", Input).value.strip() or None
+        endpoint = self.query_one("#role-endpoint", Input).value.strip()
+        if endpoint:
+            patch["endpoint"] = endpoint
         return patch
 
     def action_cancel(self) -> None:

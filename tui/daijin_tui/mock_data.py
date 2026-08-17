@@ -1480,7 +1480,14 @@ PROVIDER_CATALOG: dict[str, Any] = {
             # The one provider that needs NO key, so the dialog must not
             # demand a pointer for it.
             "keyRequired": False,
-            "note": None,
+            # The real catalog carries this and says outright that a client
+            # showing the list must repeat it. A mock with note None would
+            # leave the branch that renders it unexercised.
+            "note": (
+                "THESE ARE SUGGESTIONS, NOT AN INVENTORY. What is actually installed is "
+                "local truth reported by `ollama list`, deliberately not read here, so "
+                "this list will name models the owner does not have."
+            ),
             "models": [
                 {"id": "qwen3:8b", "label": "Qwen3 8B", "reasoningEffort": None, "note": None},
             ],

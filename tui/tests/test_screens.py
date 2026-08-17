@@ -1679,3 +1679,48 @@ async def test_experiment_is_marked_unscored_not_dropped_into_unknown():
         )
 
 
+
+
+def test_the_mode_and_ungraded_vocabularies_match_the_contract_both_ways():
+    """Swept after the baseline.status gap: subset alone is half a check.
+
+    Subset catches a value we invented; equality also catches one the contract
+    documents that nothing here can produce, whose rendering would then be
+    dead code no use can disprove.
+
+    BOUND, stated because both halves are mine: DOCUMENTED_MODES and
+    UNGRADED_NOTE are hand-copied from methods.md, so this proves the mock
+    agrees with this repo rather than with the engine. Read off the contract on
+    2026-08-17: mode is evaluation | experiment | harness-debug "as the ledger
+    enforces them", and ungradedCode is exactly one of unsubmitted,
+    apply-error, pending.
+    """
+    from daijin_tui import mock_data
+    from daijin_tui.screens.exams import DOCUMENTED_MODES, UNGRADED_NOTE
+
+    modes, codes = set(), set()
+    for detail in mock_data.EXAM_DETAIL.values():
+        for attempt in detail.get("attempts") or []:
+            if attempt.get("mode") is not None:
+                modes.add(attempt["mode"])
+            if attempt.get("ungradedCode") is not None:
+                codes.add(attempt["ungradedCode"])
+
+    documented = set(DOCUMENTED_MODES)
+    # One row carries a mode the ledger forbids, on purpose, to exercise the
+    # show-it-verbatim branch. It is excluded here rather than silently
+    # widening the vocabulary, and asserted separately below so removing it
+    # cannot pass unnoticed.
+    assert "sideways" in modes, "the out-of-contract probe row is gone, so that branch is untested"
+    probes = {"sideways"}
+
+    assert modes - probes == documented, (
+        f"mode vocabulary drift. undocumented: {sorted(modes - probes - documented)}, "
+        f"documented but unreachable: {sorted(documented - modes)}"
+    )
+    assert codes == set(UNGRADED_NOTE), (
+        f"ungraded code drift. undocumented: {sorted(codes - set(UNGRADED_NOTE))}, "
+        f"documented but unreachable: {sorted(set(UNGRADED_NOTE) - codes)}"
+    )
+    for code in UNGRADED_NOTE:
+        assert UNGRADED_NOTE[code].strip(), f"{code} has no sentence to show"

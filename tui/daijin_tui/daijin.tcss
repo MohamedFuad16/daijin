@@ -484,3 +484,11 @@ App.-motion-off DataTable > .datatable--cursor {
     padding: 1 0 0 0;
     content-align: center middle;
 }
+
+/* The persistent mark on the repo home. Same family as the splash. */
+#home-wordmark {
+    color: $accent;
+    height: auto;
+    width: auto;
+    padding: 0 0 1 0;
+}

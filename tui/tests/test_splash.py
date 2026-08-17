@@ -301,3 +301,79 @@ async def test_the_splash_uses_the_motion_tokens_and_no_literal_durations():
         assert literal not in body, f"a hard-coded timing appeared in the splash: {literal}"
     assert module.VIEW_SECONDS == DURATIONS[VIEW]
     assert module.REVEAL_SECONDS == DURATIONS[REVEAL]
+
+
+# The small mark, written out BY HAND from what the letters are, not pasted
+# from the font's output. The full mark's version was a paste with a delay,
+# which the extractor's clause caught: immovable by the code and still written
+# from the same belief.
+SMALL_MASK = (
+    "##..###.###.###.###.#.#",
+    "#.#.#.#..#...#...#..###",
+    "##..#.#.###.##..###.#.#",
+)
+
+
+def test_the_small_mark_is_the_same_object_at_a_smaller_size():
+    from daijin_tui.widgets.wordmark import (
+        SMALL_FONT,
+        header_mark,
+        small_wordmark_lines,
+        small_wordmark_width,
+    )
+
+    lines = small_wordmark_lines()
+    assert len(lines) == 3, "the header mark is not three rows"
+    assert tuple(mask_of(lines, small_wordmark_width())) == SMALL_MASK, (
+        "the small letterforms are not what they claim to be"
+    )
+    # Same ramp and same gradient, so it reads as the mark rather than as a
+    # second piece of branding.
+    glyphs = {ch for line in lines for ch in line if ch != " "}
+    assert glyphs <= set(NEUTRAL.ramp) | {NEUTRAL.cap}
+    assert len(glyphs) > 1, "the small mark lost the density gradient"
+    assert lines[0][0] != lines[0][-1], "the gradient does not run across the mark"
+
+    # Independent letterform properties, the same discipline as the full mark.
+    assert SMALL_FONT["I"][1].count("#") == 1, "small I has no stem"
+    assert SMALL_FONT["A"][0].count("#") == 3, "small A has no crown"
+    assert SMALL_FONT["N"][1].count("#") == 3, "small N has no crossing"
+    assert SMALL_FONT["D"][0][2] == "." and SMALL_FONT["D"][1][2] == "#", "small D has no bowl"
+
+
+def test_the_header_mark_degrades_rather_than_wraps():
+    """A wrapped wordmark is not a smaller wordmark, it is a broken one."""
+    from daijin_tui.widgets.wordmark import header_mark, small_wordmark_width
+
+    full = small_wordmark_width()
+    assert len(header_mark(full)) == 3, "the mark does not fit at its own width"
+    assert len(header_mark(full - 1)) == 1, "one column short did not fall back"
+    assert header_mark(full - 1) == ["DAIJIN"]
+    assert header_mark(len("DAIJIN")) == ["DAIJIN"]
+    assert header_mark(len("DAIJIN") - 1) == [], (
+        "a terminal too narrow for the word still got something to wrap"
+    )
+    for width in range(0, full + 4):
+        for line in header_mark(width):
+            assert len(line) <= max(width, 0), (
+                f"at {width} columns the mark returned a {len(line)} column line"
+            )
+
+
+@run_async
+async def test_the_home_screen_carries_the_mark_and_drops_it_when_it_cannot_fit():
+    from daijin_tui.widgets.wordmark import small_wordmark_width
+
+    async with running_app() as (app, pilot):
+        await settle(pilot, 12)
+        mark = app.screen.query_one("#home-wordmark")
+        assert mark.display is True, "the home screen lost the mark at a normal width"
+        rendered = text_of(mark)
+        assert rendered.strip(), "the mark is mounted but empty"
+        assert len(rendered.splitlines()) == 3
+
+    async with running_app(size=(small_wordmark_width() - 2, 40)) as (app, pilot):
+        await settle(pilot, 12)
+        mark = app.screen.query_one("#home-wordmark")
+        rendered = text_of(mark)
+        assert "\n" not in rendered.strip(), "the mark wrapped instead of degrading"

@@ -155,3 +155,64 @@ def reveal_steps(text: str = "DAIJIN", steps: int = 6) -> Iterable[int]:
     if steps <= 1:
         return [width]
     return [round(width * (index + 1) / steps) for index in range(steps)]
+
+
+# The small form. The full mark is 35 columns and seven rows, which is right
+# for an intro and wrong for a header, so this is the same object at a size a
+# header can hold: three rows, the same ramp, the same left-to-right density
+# gradient, so it reads as the mark rather than as different branding.
+SMALL_FONT: dict[str, tuple[str, ...]] = {
+    "D": ("##.", "#.#", "##."),
+    "A": ("###", "#.#", "#.#"),
+    "I": ("###", ".#.", "###"),
+    "J": ("###", ".#.", "##."),
+    "N": ("#.#", "###", "#.#"),
+}
+
+SMALL_HEIGHT = 3
+SMALL_WIDTH = 3
+
+
+def small_wordmark_lines(text: str = "DAIJIN", *, texture: Texture = NEUTRAL) -> list[str]:
+    """Three-row wordmark for a header."""
+    letters = [SMALL_FONT[ch] for ch in text.upper() if ch in SMALL_FONT]
+    if not letters:
+        return []
+    width = len(letters) * SMALL_WIDTH + (len(letters) - 1) * LETTER_GAP
+    lines: list[str] = []
+    for row in range(SMALL_HEIGHT):
+        cells: list[str] = []
+        column = 0
+        for index, mask in enumerate(letters):
+            if index:
+                cells.append(" " * LETTER_GAP)
+                column += LETTER_GAP
+            for x, cell in enumerate(mask[row]):
+                cells.append(
+                    texture.glyph(_density(column + x, row, width, SMALL_HEIGHT))
+                    if cell == "#"
+                    else " "
+                )
+            column += SMALL_WIDTH
+        lines.append("".join(cells).rstrip())
+    return lines
+
+
+def small_wordmark_width(text: str = "DAIJIN") -> int:
+    count = len([ch for ch in text.upper() if ch in SMALL_FONT])
+    return count * SMALL_WIDTH + max(0, count - 1) * LETTER_GAP
+
+
+def header_mark(available: int, text: str = "DAIJIN") -> list[str]:
+    """The widest form that FITS, degrading rather than wrapping.
+
+    A wrapped wordmark is not a smaller wordmark, it is a broken one, so a
+    terminal too narrow for the three-row mark gets the plain word and a
+    terminal too narrow for that gets nothing at all. Returning nothing is a
+    real answer: a header is not worth a broken mark.
+    """
+    if available >= small_wordmark_width(text):
+        return small_wordmark_lines(text)
+    if available >= len(text):
+        return [text.upper()]
+    return []

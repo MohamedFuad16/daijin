@@ -1,5 +1,61 @@
 # Daijin build state (authoritative)
 
+## 2026-08-18 01:10 - Exam mining is BUILT, and proven live with the Fable auditor
+
+The owner said "Build it". The last missing pipeline exists end to end.
+
+NEW SURFACE. examMine (contract row added): a job under BOTH locks gymStart
+holds (owner gate scoped exam-mining, per-call consent). Phases: mine (git
+walk, deterministic filter, committee, selected) then validate (worktree at
+base, baseline gates where any live/measured gate exists, real-diff scope),
+ending done/mined with written/validated counts.
+
+NEW MODULES. roles/driver.js: the first real LLM driver - one generate per
+configured role (OpenAI shape with GLM's thinking switch, Anthropic messages,
+claude-code running the owner's CHOSEN sub-agent file as the appended system
+prompt; frontmatter stripped). gym/committee.js: the auditor committee -
+deterministic prompt over candidates and superseding relations, STRICT JSON
+reply (fence-tolerant, prose-extracting, never repairing), and the auditor
+object mining.js stage 2 froze. Stage 2 now carries the auditor's task and
+title through selection, because the auditor AUTHORS what the student reads.
+mining.js: zero gates skips the baseline, never the worktree (expandGates
+rightly refuses an empty list; a repo with no discovered gates still proves
+its base checks out).
+
+AUTHORSHIP AND ADMISSION RULES HELD. Selected exams land draft, move to
+validated when worktree checks pass, and are PROMOTED only by the owner
+(examUpdate patch; a Promote button on the Exams screen). gymStart banks
+promoted exams only, so no model elects its own exam into the scored record.
+Provenance is auditor-selection with authoredBy naming the committee's model
+at write time (P7 clause 4). A committee reply naming a filtered commit
+FAILS the job ("the auditor proposes; mechanics accept").
+
+PROVEN LIVE, exploratory (scratch state root; gate written scoped
+exam-mining for the run and the checkout cleaned after): the daijin repo's
+306 commits -> filter kept 152, dropped 154 -> the REAL daijin-auditor
+sub-agent on claude-fable-5 read all 152 and selected 2 real exams with
+authored tasks ("Stop jobs from forging runner terminal events", "Role
+without a provider must not crash the TUI" - both are actual defects this
+build fixed) -> both validated in 38s -> exam-0001 promoted -> gymStart
+STILL refused (-32050) because the gate scope was exam-mining, which is the
+scope enforcement working live.
+
+TUI: Mine exams (spends) button with the spend dialog; live job progress in
+the banner; Promote beside Veto/Quarantine. Mock engine mirrors the funnel
+(gate, consent, stream, one validated + one draft landed). The client
+spend set grew to five with the contract, caught by the parity test.
+
+One more dogfood catch, fixed in the same batch: the permuted control
+goldset was written to <repo>/control/.daijin/goldset.yaml, leaving a
+top-level control/ directory in the owner's working tree on every init that
+ran the control arm. It now lives in a mkdtemp scratch removed in a finally:
+the control is a measurement input the range record makes reproducible, not
+an artifact.
+
+Suites: engine 758 pass, TUI green after the spend-set parity fix. What
+remains before the gym RUNS: the engineer driver (createEngineer) - the gym
+now has a bank to draw from.
+
 ## 2026-08-18 00:05 - The dogfood run: daijin drove daijin, and caught two real defects
 
 Owner-directed test run ("take it for a test run... all the pipelines should

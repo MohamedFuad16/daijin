@@ -1259,3 +1259,17 @@ as zero, because silently zeroing an unrecorded floor is how enforced
 floors stop being enforced. The CLI ping identity fix rode the same batch:
 servedModelId is the modelUsage entry with the most tokens, since the CLI
 reports its housekeeping helper beside the main model.
+
+## D-0059 (2026-08-18) The committee is the auditor role, and the owner admits to the bank
+
+Exam mining's LLM step runs on the AUDITOR role the owner configured (any
+provider; claude-code roles run the owner's chosen sub-agent file as the
+system prompt with frontmatter stripped). The committee authors each exam's
+task and title - the words the student reads - and its reply is strict JSON
+with one mechanical extraction allowance and no repair. Three boundaries,
+each tested: a selection naming a commit the deterministic filter dropped
+fails the job rather than being reinstated; selected exams cannot enter the
+runnable bank without the owner's promote click (mining writes draft or
+validated, gymStart draws promoted only); and provenance records the
+authoring model at write time. Zero discovered gates skips the baseline
+check but never the worktree check, and says so on the stream.

@@ -36,6 +36,20 @@ ROLE_COLUMNS = (
 # modelKnown is three-valued and null is NOT false: unconfigured is not the
 # same claim as "the catalog does not recognise this".
 MODEL_KNOWN = {True: "known", False: "unrecognised", None: "not set"}
+
+
+def _said(value: Any, absent: str = "not set") -> str:
+    """Render a null as a stated absence rather than the word None.
+
+    Found by an AGED STATE ROOT, not by any test: a settings.json written
+    before provider existed comes back with provider and endpoint null, and
+    .get(key, "") does not help when the key is present and the VALUE is null.
+    Every fixture in this suite is young, and a machine with history is the one
+    a long-time user actually has.
+    """
+    if value is None or value == "":
+        return absent
+    return str(value)
 FILE_COLUMNS = ("agent file", "current hash", "default hash", "badge")
 
 ROLE_NOTES = {
@@ -117,13 +131,20 @@ class SettingsScreen(DaijinScreen):
                 drift.append(role.get("role"))
             table.add_row(
                 role.get("role", ""),
-                role.get("provider", ""),
-                role.get("model", ""),
+                _said(role.get("provider")),
+                _said(role.get("model")),
                 MODEL_KNOWN.get(role.get("modelKnown"), "not set"),
-                # null is the ONLY encoding of unsupported. A string like
-                # "none" would read as a supported setting turned off.
-                role.get("reasoningEffort") or "not supported",
-                role.get("endpoint", ""),
+                # null reasoningEffort means the MODEL has no such control,
+                # which is only sayable once a model is configured. On a role
+                # that was never set up it means nothing is set, and claiming
+                # "not supported" there is a statement about a model nobody
+                # chose.
+                (
+                    "not supported"
+                    if role.get("model")
+                    else "not set"
+                ) if not role.get("reasoningEffort") else str(role.get("reasoningEffort")),
+                _said(role.get("endpoint")),
                 str(ping.get("httpStatus", "-")),
                 f"{ping.get('ttftMs')} ms" if ping.get("ttftMs") else "-",
                 f"{ping.get('latencyMs')} ms" if ping.get("latencyMs") else "-",

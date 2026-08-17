@@ -49,32 +49,118 @@ KEY_REF_OK = "Reads as a pointer. The engine resolves it at call time."
 KEY_REF_HINT = "A pointer to the key, never the key: {forms}."
 KEY_NOT_REQUIRED = "This provider is local and needs no key."
 _SHOUTING = re.compile(r"^[A-Z][A-Z0-9_]*$")
+# After the prefix, case IS allowed: a lowercase environment variable is legal
+# and `env:` has already disambiguated. The BARE form must still shout, because
+# that is the only thing telling it apart from a path.
+_ENV_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+# The engine's own refusal sentences, mirrored and checked against
+# keyRefRefusal by tests/test_key_ref_parity.py. Displaying the engine's words
+# rather than composing my own keeps one explanation of one rule.
+#
+# NONE OF THEM QUOTE THE VALUE. The likeliest wrong input here is a pasted API
+# key, and a warning that echoes it puts it on screen, in a screenshot, and in
+# any log that captures rendered output. A field that masks while typing and
+# then quotes the value in an error has masked nothing.
+REFUSAL_RELATIVE = (
+    "The path is relative. It is read by the daemon, which does not share your "
+    "shell's working directory, so give the full path from the root, as "
+    "file:/absolute/path."
+)
+REFUSAL_ENV_FILE_RELATIVE = (
+    "The path in an env-file pointer is relative. It is read by the daemon, which "
+    "does not share your shell's working directory, so give the full path from the "
+    "root: env-file:/absolute/path#VARIABLE_NAME."
+)
+REFUSAL_ENV_FILE = (
+    "An env-file pointer needs a variable name after a #, as "
+    "env-file:/absolute/path#VARIABLE_NAME."
+)
+REFUSAL_ENV_NAME = (
+    "An env pointer needs the NAME of an environment variable after the colon, as "
+    "env:VARIABLE_NAME. A name may hold letters, digits and underscores, so "
+    "anything with dashes or dots is not one, and a key value is never accepted "
+    "here."
+)
+REFUSAL_EMPTY = "The pointer is empty."
+REFUSAL_BARE = (
+    "A pointer is the NAME of a place a key is kept, never the key. Use an "
+    "environment variable name in capitals, an absolute file path, or one of the "
+    "explicit forms: env:NAME, file:/abs/path, env-file:/abs/path#NAME."
+)
 
 
 def parse_key_ref(value: str) -> str | None:
-    """Return the form this reference takes, or None if the engine would refuse."""
+    """Return the form this reference takes, or None if the engine would refuse.
+
+    A WHITELIST OF SHAPES, not a detector of keys. Mirrored from
+    engine/src/roles/keys.js and checked against it by an executable parity
+    test, because two implementations of one rule each match what their own
+    author believed and neither can be verified by reading.
+    """
     text = (value or "").strip()
     if not text:
         return None
     if text.startswith("env:"):
-        return "env" if text[4:] else None
+        # A NAME, not any string. Dashes and dots are not legal in one, which
+        # refuses the sk-ant and sk-proj shapes outright rather than by
+        # lowercase accident.
+        return "env" if _ENV_NAME.match(text[4:]) else None
     if text.startswith("file:"):
-        # ANY non-empty path, relative included. Requiring an absolute path
-        # here would make this client stricter than the engine, which accepts
-        # file:rel, and a client that refuses what the engine allows blocks a
-        # user from something that works. Measured against parseKeyRef.
-        return "file" if text[5:] else None
+        # ABSOLUTE. A relative pointer resolves against the DAEMON's working
+        # directory, so the same setting names a different file depending on
+        # how the process was launched. The engine accepted relative paths for
+        # a while against its own contract; that was the defect this mirror
+        # found, not a rule to copy.
+        return "file" if text[5:].startswith("/") else None
     if text.startswith("env-file:"):
         rest = text[len("env-file:"):]
-        # Split on the LAST '#': the engine reads env-file:x#y#z as the file
-        # "x#y" and the name "z", so a path containing a hash still works.
+        # Split on the LAST '#': an absolute path may legitimately contain one
+        # and a variable name may not.
         path, sep, name = rest.rpartition("#")
-        return "env-file" if sep and path and name else None
+        return "env-file" if sep and path.startswith("/") and name else None
     if text.startswith("/"):
         return "file"
     if _SHOUTING.match(text):
         return "env"
     return None
+
+
+def key_ref_refusal(value: str) -> str | None:
+    """Why the engine would refuse this pointer, or None when it would not.
+
+    None reads as "no complaint", the same shape the engine's keyRefRefusal
+    uses, so the caller does not have to invert a boolean to find the message.
+    """
+    text = (value or "").strip()
+    if not text:
+        # The RULE says an empty pointer is a refusal, and this function
+        # reports the rule. Whether a user who has typed nothing yet should be
+        # shown red is a PRESENTATION question, answered at the call site,
+        # which shows the hint instead.
+        return REFUSAL_EMPTY
+    if parse_key_ref(text) is not None:
+        return None
+    if text.startswith("env-file:"):
+        rest = text[len("env-file:"):]
+        if "#" not in rest:
+            return REFUSAL_ENV_FILE
+        path, _, name = rest.rpartition("#")
+        # An EMPTY path or name is a malformed pointer, not a relative one, so
+        # it gets the shape sentence rather than the working-directory one.
+        if not path or not name:
+            return REFUSAL_ENV_FILE
+        if not path.startswith("/"):
+            # env-file has its OWN relative sentence, naming its own form. The
+            # first version of this mirror reused file:'s and told the user to
+            # write file:/absolute/path for an env-file pointer.
+            return REFUSAL_ENV_FILE_RELATIVE
+        return REFUSAL_ENV_FILE
+    if text.startswith("file:"):
+        return REFUSAL_RELATIVE
+    if text.startswith("env:"):
+        return REFUSAL_ENV_NAME
+    return REFUSAL_BARE
 
 
 class RoleConfigScreen(ModalScreen[dict[str, Any] | None]):
@@ -202,8 +288,14 @@ class RoleConfigScreen(ModalScreen[dict[str, Any] | None]):
         if not value:
             note.update(f"[dim]{KEY_REF_HINT.format(forms=', '.join(KEY_REF_FORMS))}[/dim]")
             return
-        if parse_key_ref(value) is None:
-            note.update(f"[red]{KEY_REF_REFUSED.format(forms=', '.join(KEY_REF_FORMS))}[/red]")
+        refusal = key_ref_refusal(value)
+        if refusal:
+            # The ENGINE's sentence, not one composed here. Two explanations of
+            # one rule drift apart, and the drift is invisible until someone
+            # reads both. It never quotes the value: the likeliest wrong input
+            # at this field is a pasted key, and a warning that echoes it puts
+            # it on screen and into any log that captures rendered output.
+            note.update(f"[red]{refusal}[/red]")
             return
         note.update(f"[green]{KEY_REF_OK}[/green]")
 

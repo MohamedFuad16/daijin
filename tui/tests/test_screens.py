@@ -2017,8 +2017,14 @@ async def test_a_pasted_key_is_refused_before_it_is_sent():
         screen.query_one("#role-keyref", Input).value = "sk-ant-abc123def456"
         await settle(pilot)
         note = text_of(screen.query_one("#role-key-note", Static))
-        assert "does not look like a pointer" in note
-        assert "never crosses the wire" in note
+        # The ENGINE's sentence now, so this asserts the PROPERTY rather than
+        # my wording: it explains what a pointer is, it never claims the value
+        # IS a key (a claim the shape whitelist cannot support), and above all
+        # it does not echo what was typed.
+        assert "never the key" in note, f"the refusal does not explain itself: {note!r}"
+        assert "sk-ant-abc123def456" not in note, "the warning echoed the pasted value"
+        for overclaim in ("looks like a key", "that is a key", "is a secret"):
+            assert overclaim not in note
 
         # And Save does not dismiss with it.
         await pilot.click("#role-save")
@@ -2176,3 +2182,98 @@ async def test_a_github_repo_already_on_disk_is_attached_rather_than_cloned():
         assert dismissed == [{"kind": "url", "value": "https://github.com/owner/zeta"}], (
             f"a repo not on disk was not offered for cloning: {dismissed}"
         )
+
+
+@run_async
+async def test_a_blocked_phase_is_surfaced_and_the_action_waits_for_its_code():
+    """MEASURED 2026-08-17: the blocked step event carries no actionCode.
+
+    The field lives on initBrain's report, which no method returns and which
+    is not written under the state root, so nothing reaches a client today.
+    The prose is therefore shown, because it is real, and the button stays
+    hidden until a code arrives: keying it on the prose is what the contract
+    forbids, and showing it with nothing behind it is the inert control this
+    project has fixed twice already.
+    """
+    from daijin_tui.screens.init_feed import InitFeedScreen
+
+    blocked = {
+        "ts": 400, "jobId": "job-init-0001", "phase": "goldset", "step": "blocked",
+        "detail": "Only 4 case(s) could be mined, which usually means the attached "
+                  "directory holds very little.",
+        "level": "warn",
+    }
+    async with running_app() as (app, pilot):
+        await goto(pilot, "2")
+        screen = app.screen
+        panel = screen.query_one("#init-blocked", Static)
+        button = screen.query_one("#init-attach-root", Button)
+        assert panel.display is False, "an empty block panel sits above every successful run"
+        assert button.display is False
+
+        screen._render_events([blocked])
+        await settle(pilot)
+        assert panel.display is True
+        assert "goldset blocked" in text_of(panel)
+        assert "attached directory holds very little" in text_of(panel), (
+            "the engine's own sentence is not shown"
+        )
+        assert button.display is False, (
+            "an action was offered with no code behind it, which is a dead button"
+        )
+
+        # And WITH a code, which is what arrives once the field reaches the wire.
+        screen._render_events([{**blocked, "actionCode": "too-little-material"}])
+        await settle(pilot)
+        assert button.display is True
+        assert "repository root" in str(button.label)
+
+        # The other code has no action, and must not borrow this one's button.
+        screen._render_events([{**blocked, "actionCode": "gold-set-too-thin"}])
+        await settle(pilot)
+        assert button.display is False, "a code with no action showed one anyway"
+
+
+@run_async
+async def test_a_role_from_an_aged_settings_file_never_renders_the_word_none():
+    """Found by an AGED state root, not by any test in this suite.
+
+    A settings.json written before `provider` existed comes back with provider
+    and endpoint null, and .get(key, "") does not help when the key is present
+    and the VALUE is null. Every fixture here is young; the machine with the
+    longest history is the one a user actually has.
+    """
+    from daijin_tui.screens.settings import ROLE_COLUMNS
+
+    aged = {
+        "role": "engineer", "provider": None, "model": "glm-4.6",
+        "modelKnown": None, "modelReason": None, "reasoningEffort": None,
+        "endpoint": None, "keyRef": "env:OLD_KEY", "keyMasked": None,
+        "keyResolvable": False, "keyReason": "unset", "ping": None,
+    }
+    never_set = {**aged, "role": "watcher", "model": None}
+
+    async with running_app() as (app, pilot):
+        await goto(pilot, "8")
+        screen = app.screen
+        screen.settings = {**(screen.settings or {}), "roles": [aged, never_set]}
+        screen._update_view()
+        await settle(pilot)
+
+        table = screen.query_one("#role-table", DataTable)
+        assert table.row_count == 2
+        for index in range(2):
+            cells = [str(cell) for cell in table.get_row_at(index)]
+            assert "None" not in cells, f"a null rendered as the word None: {cells}"
+
+        first = [str(c) for c in table.get_row_at(0)]
+        assert first[ROLE_COLUMNS.index("provider")] == "not set"
+        assert first[ROLE_COLUMNS.index("endpoint")] == "not set"
+        # A model IS configured here, so "no such control" is sayable.
+        assert first[ROLE_COLUMNS.index("reasoning")] == "not supported"
+
+        # With no model at all it is NOT sayable: nothing was chosen, so
+        # claiming the model lacks the control is a statement about a model
+        # nobody picked.
+        second = [str(c) for c in table.get_row_at(1)]
+        assert second[ROLE_COLUMNS.index("reasoning")] == "not set"

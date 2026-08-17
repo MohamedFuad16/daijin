@@ -48,6 +48,12 @@ class InitFeedScreen(DaijinScreen):
                 placeholder="optional, comma separated areas, used by the sub-75 path",
                 id="init-scope",
             )
+        # A block is the outcome the field test hit, and it used to be one
+        # line in a scrolling log. It gets its own panel, above the stream.
+        yield Static("", id="init-blocked", markup=True)
+        yield Button(
+            "Attach the repository root instead", id="init-attach-root"
+        )
         yield SectionTitle("Phases")
         # Semantic, not decorative: during a long init the thing a watcher is
         # tracking is how far through the pipeline the run is, so the bar moves
@@ -62,6 +68,18 @@ class InitFeedScreen(DaijinScreen):
         )
         yield SectionTitle("Step events", "the same jsonl stream the gym and gates views read")
         yield EventLog(id="init-events")
+
+    def on_mount(self) -> None:
+        # Hidden until something blocks: an empty panel and a dead button above
+        # the stream would be two rows of nothing on every run that succeeds.
+        self.call_after_refresh(self._hide_block)
+
+    def _hide_block(self) -> None:
+        try:
+            self.query_one("#init-blocked", Static).display = False
+            self.query_one("#init-attach-root", Button).display = False
+        except Exception:  # noqa: BLE001 - before compose has mounted them
+            pass
 
     async def load(self) -> None:
         self._subscribe()
@@ -128,6 +146,42 @@ class InitFeedScreen(DaijinScreen):
                     "warn",
                 )
 
+    # The closed set from the contract. Switching on the CODE is required
+    # rather than preferred: the prose is written for a person and must stay
+    # free to be reworded without unwiring a button.
+    BLOCK_ACTIONS = {
+        "too-little-material": "Attach the repository root instead",
+        "gold-set-too-thin": None,
+    }
+
+    def _render_block(self, event: dict[str, Any]) -> None:
+        """Surface a blocked phase where the user is looking.
+
+        MEASURED 2026-08-17: the blocked step event carries
+        {ts, jobId, phase, step, detail, level} and NO actionCode. The field
+        exists on initBrain's report, which no method returns and which is not
+        written under the state root, so there is no path by which a client
+        receives it today. Reported to the extractor.
+
+        So the prose is shown, because it is real and it is what the engine
+        said, and the ACTION BUTTON stays hidden until a code arrives. A button
+        wired to the prose would be the thing the contract explicitly forbids,
+        and a button shown with no code behind it would be the inert control
+        this project has already fixed twice.
+        """
+        panel = self.query_one("#init-blocked", Static)
+        button = self.query_one("#init-attach-root", Button)
+        detail = str(event.get("detail") or "").strip()
+        code = event.get("actionCode")
+        panel.display = True
+        panel.update(
+            f"[b][yellow]{event.get('phase', 'a phase')} blocked.[/yellow][/b]\n{detail}"
+        )
+        label = self.BLOCK_ACTIONS.get(str(code)) if code else None
+        button.display = bool(label)
+        if label:
+            button.label = label
+
     def _render_events(self, batch: list[dict[str, Any]]) -> None:
         """Render a batch. A burst costs one repaint, not one per event."""
         checklist = self.query_one("#init-checklist", PhaseChecklist)
@@ -136,6 +190,9 @@ class InitFeedScreen(DaijinScreen):
         for event in batch:
             log.append_event(event)
         self._update_progress(checklist)
+        blocked = next((e for e in batch if e.get("step") == "blocked"), None)
+        if blocked is not None:
+            self._render_block(blocked)
         # TERMINAL_PHASES, not a literal. The wire sends exactly one phase
         # here and this constant names it, so the value is not the point: the
         # SHARED SOURCE is. A literal at three call sites is how two of them
@@ -166,8 +223,19 @@ class InitFeedScreen(DaijinScreen):
                 {"error": "error", "warn": "warn"}.get(level, "info"),
             )
 
+    async def _attach_root(self) -> None:
+        """Hand the user back to the home screen with the root to attach.
+
+        The root comes from repoAttach's warning, which the home screen already
+        holds, so this does not re-derive a path the engine worked out.
+        """
+        self.app.switch_mode("home")
+
     async def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id == "init-start":
+        if event.button.id == "init-attach-root":
+            event.stop()
+            await self._attach_root()
+        elif event.button.id == "init-start":
             event.stop()
             self.start_init()
         elif event.button.id == "init-cancel":

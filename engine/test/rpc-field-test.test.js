@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, realpath, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -123,4 +123,43 @@ test('F5 the message never names a host other than the one tried', () => {
   // The defect this pins: the old constant hardcoded localhost:11434, so the hint
   // contradicted the endpoint on its own row the moment the endpoint became visible.
   assert.doesNotMatch(ollamaDown('http://gpu-box.local:11434'), /localhost|127\.0\.0\.1/);
+});
+
+// ---- the owner's hang: paths that are not projects --------------------------------------
+
+test('attach REFUSES the filesystem root and the home directory, by name', async () => {
+  // The owner's home screen hung forever on an attached `/`, left by an early field test
+  // before attach validated anything. Under D-0036 `/` passed every check: it exists, it is
+  // a directory, it is merely not a git repo, so it WARNED AND ATTACHED. Then analyze
+  // walked the whole disk and never answered, and the client awaited it per card.
+  //
+  // This does NOT reopen D-0036. That ruling split what cannot work from what merely
+  // surprises; these two were always on the cannot-work side and were never named. A
+  // filesystem root has no project in it, and a home directory is a container OF projects.
+  for (const target of [path.parse(process.cwd()).root, homedir()]) {
+    const { refusal, warning } = await inspectAttachTarget(target);
+    assert.equal(warning, null, `${target} must not merely warn`);
+    assert.ok(refusal, `${target} must be refused`);
+    assert.equal(refusal.summary, 'not a project');
+    // The refusal carries its action, house rule, and its reason: a user who typed this
+    // wants a project attached, and should be told which thing to attach instead.
+    assert.match(refusal.hint, /Attach the repository you want a brain for/);
+  }
+});
+
+test('a trailing slash does not smuggle the home directory past the refusal', async () => {
+  // The path is resolved before it is compared, so `~/` and `~` are one target. A check on
+  // the raw string would have been a gate beside the door.
+  const { refusal } = await inspectAttachTarget(`${homedir()}/`);
+  assert.ok(refusal);
+  assert.equal(refusal.summary, 'not a project');
+});
+
+test('the two refusals do not swallow ordinary directories under them', async () => {
+  // The positive control. A refusal keyed on "is under the home directory" would refuse
+  // every project the owner has, since that is where projects live.
+  const inside = await mkdtemp(path.join(tmpdir(), 'ft-project-'));
+  const { refusal, warning } = await inspectAttachTarget(inside);
+  assert.equal(refusal, null, 'an ordinary directory must still attach');
+  assert.equal(warning.code, 'not-a-git-repository');
 });

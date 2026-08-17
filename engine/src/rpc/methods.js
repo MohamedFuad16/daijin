@@ -11,6 +11,7 @@
 // they would do anything, so the refusal cannot regress into a call when their phases land.
 
 import { mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
 import { loadProviderCatalog } from '../roles/providers.js';
 import { cloneRepository, parseCloneUrl } from '../init/clone.js';
 import { createHash } from 'node:crypto';
@@ -519,6 +520,28 @@ export async function inspectAttachTarget(repoPath, { runGit = null, stat: statF
       warning: null,
     };
   }
+  // NEVER A PROJECT, refused before anything else touches the filesystem.
+  //
+  // The owner's home screen hung on an attached `/`, left by an early field test before
+  // attach validated anything. Under D-0036 `/` passes every existing check: it exists, it
+  // is a directory, it is simply not a git repo, so it WARNED AND ATTACHED. But a
+  // filesystem root is not works-and-produces-less: there is no project there to produce
+  // anything from, and analyzing it means walking the whole disk.
+  //
+  // This does not reopen D-0036. That ruling drew the line between what cannot work and
+  // what merely surprises; these two paths are on the cannot-work side and were simply
+  // never named. A home directory is the same case: it is a container of projects, and
+  // attaching it mines a decade of unrelated material.
+  const home = homedir();
+  if (resolved === path.parse(resolved).root || resolved === path.resolve(home)) {
+    return {
+      refusal: {
+        summary: 'not a project',
+        hint: `${resolved} is a ${resolved === home ? 'home directory' : 'filesystem root'}, not a project. Attach the repository you want a brain for; attaching a whole disk would mine everything on it and finish for nobody.`,
+      },
+      warning: null,
+    };
+  }
   if (!info.isDirectory()) {
     return {
       refusal: { summary: 'not a directory', hint: `${resolved} is a file. Attach the repository directory that contains it.` },
@@ -950,6 +973,7 @@ export function createMethods({
         gateCandidates: analysis.gateCandidates,
         hasBrainFolder: analysis.hasBrainFolder,
         warning: inspection.warning,
+        walk: analysis.walk,
       };
     },
 

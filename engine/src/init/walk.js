@@ -87,10 +87,32 @@ async function gitTrackedFiles(repoPath) {
   return stdout.split('\0').filter(Boolean);
 }
 
-async function walkDirectory(repoPath, ignored) {
+/**
+ * Breadth-first, and BOUNDED IN BOTH FILES AND TIME.
+ *
+ * It used to walk the entire tree and let the caller trim afterwards, which made the cap a
+ * post-hoc lie about a walk that had already happened: on the owner's machine an attached
+ * `/` walked the whole disk and analyze never answered, so the home screen span forever
+ * awaiting one card. A cap applied after the walk bounds the ANSWER and not the WORK.
+ *
+ * BOTH bounds are needed and they stop different things. The file cap stops a tree with
+ * too many files. The deadline stops a tree that is slow rather than large: a network
+ * mount, a fuse filesystem, a directory that blocks on stat. A count cap alone would still
+ * hang on ten slow directories, which is the case a laptop actually meets.
+ *
+ * Breadth-first matters more now that stopping early is possible. Root files are reached
+ * before anything nested, so a truncated walk still finds package.json and the manifests
+ * that decide gate candidates. The old sort-then-slice could drop them: sorted by full
+ * path, `a/deep/thing.js` precedes `package.json`, so a truncated repo could lose its own
+ * manifest to files in an early-alphabet directory.
+ */
+async function walkDirectory(repoPath, ignored, { limit = Infinity, deadline = null } = {}) {
   const found = [];
   const queue = [''];
+  let stopped = null;
   while (queue.length > 0) {
+    if (found.length >= limit) { stopped = 'file-limit'; break; }
+    if (deadline !== null && Date.now() >= deadline) { stopped = 'deadline'; break; }
     const relative = queue.shift();
     const absolute = path.join(repoPath, relative);
     let entries;
@@ -103,6 +125,11 @@ async function walkDirectory(repoPath, ignored) {
     // order is not specified and two machines would otherwise produce two file lists that
     // hash differently while naming the same files.
     for (const entry of entries.sort((left, right) => compareStrings(left.name, right.name))) {
+      // CHECKED INSIDE THE ENTRY LOOP, not only between directories. The first version of
+      // this bound tested the cap once per directory, so ONE directory holding a million
+      // files sailed past it in a single iteration and the walk was unbounded exactly
+      // where it most needed bounding. Caught by the test written for the bound itself.
+      if (found.length >= limit) { stopped = 'file-limit'; break; }
       const child = relative ? `${relative}/${entry.name}` : entry.name;
       if (entry.isDirectory()) {
         if (!ignored.has(entry.name)) queue.push(child);
@@ -110,8 +137,9 @@ async function walkDirectory(repoPath, ignored) {
         found.push(child);
       }
     }
+    if (stopped) break;
   }
-  return found;
+  return { files: found, stopped };
 }
 
 /**
@@ -121,26 +149,45 @@ async function walkDirectory(repoPath, ignored) {
  */
 export async function listRepoFiles(repoPath, {
   limit = 50_000,
+  timeBudgetMs = 10_000,
   ignoreDirectories = IGNORED_DIRECTORIES,
 } = {}) {
   const ignored = new Set(ignoreDirectories);
   let files = null;
   let source = 'walk';
+  let stopped = null;
   try {
+    // git answers about a REPOSITORY, so it is inherently bounded by what is tracked and
+    // needs no cap. This path is why a normal repo never notices any of the below.
     files = await gitTrackedFiles(repoPath);
     source = 'git-ls-files';
   } catch {
     files = null;
   }
   if (!files || files.length === 0) {
-    files = await walkDirectory(repoPath, ignored);
+    // The bounds are passed IN rather than applied after. This is the fix for the hang:
+    // the walk stops at the cap instead of finishing and being trimmed.
+    const walked = await walkDirectory(repoPath, ignored, {
+      limit,
+      deadline: timeBudgetMs === null ? null : Date.now() + timeBudgetMs,
+    });
+    files = walked.files;
+    stopped = walked.stopped;
     source = 'walk';
   }
   const sorted = files.sort((left, right) => compareStrings(left, right));
   // A cap that trims silently would make every count downstream a lie of unknown size, so
-  // the flag rides with the list and every report that uses the list prints it.
-  const truncated = sorted.length > limit;
-  return { files: truncated ? sorted.slice(0, limit) : sorted, source, truncated, limit };
+  // the flag rides with the list and every report that uses the list prints it. `stopped`
+  // says WHICH bound ended it, because "too many files" and "too slow" are different
+  // problems with different answers for the user.
+  const truncated = stopped !== null || sorted.length > limit;
+  return {
+    files: truncated && sorted.length > limit ? sorted.slice(0, limit) : sorted,
+    source,
+    truncated,
+    stopped,
+    limit,
+  };
 }
 
 /** Byte size per file, skipping anything unreadable rather than failing the whole init. */

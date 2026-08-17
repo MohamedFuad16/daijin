@@ -96,9 +96,9 @@ export function describeStructure(files, sizes) {
  *
  * @param {string} repoPath absolute path to the repo root
  */
-export async function analyze(repoPath, { fileLimit = 50_000 } = {}) {
+export async function analyze(repoPath, { fileLimit = 50_000, timeBudgetMs = 10_000 } = {}) {
   const root = path.resolve(repoPath);
-  const listing = await listRepoFiles(root, { limit: fileLimit });
+  const listing = await listRepoFiles(root, { limit: fileLimit, timeBudgetMs });
   const sizes = await fileSizes(root, listing.files);
   const git = await isGitRepository(root);
   const commits = git ? await commitCount(root) : null;
@@ -114,6 +114,17 @@ export async function analyze(repoPath, { fileLimit = 50_000 } = {}) {
     structure: describeStructure(listing.files, sizes),
     gateCandidates: probeGateCandidates({ files: listing.files, manifests, texts }),
     hasBrainFolder: detectBrainFolder(listing.files).present,
+    // ON THE WIRE, because the walk can now stop early and a client that cannot tell a
+    // complete answer from a partial one will read a capped census as the whole repo.
+    // analyze already knew it had truncated; the flag lived on `files`, which D-0035
+    // removed from the wire, so the engine held the caveat and nobody could receive it.
+    // `stopped` distinguishes too-many-files from too-slow, which need different answers.
+    walk: {
+      filesSeen: listing.files.length,
+      capped: Boolean(listing.truncated),
+      stoppedBy: listing.stopped,
+      limit: listing.limit,
+    },
     // --- additive detail ---
     brainFolder: detectBrainFolder(listing.files),
     git: {

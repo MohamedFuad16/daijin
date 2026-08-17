@@ -13,6 +13,7 @@ import { analyze, detectBrainFolder, describeStructure } from '../src/init/analy
 import { classifyCommit, parseLog, readHistory, shaIndex } from '../src/init/git.js';
 import { areaOf, languageCensus, listRepoFiles } from '../src/init/walk.js';
 
+
 const GIT_ENVIRONMENT = {
   GIT_AUTHOR_NAME: 'Fixture Author',
   GIT_AUTHOR_EMAIL: 'author@example.test',
@@ -224,6 +225,118 @@ test('the history cap is reported, and the walk stops at it', async () => {
     assert.equal(full.capped, false);
     assert.equal(full.commits.length, 4);
     assert.equal(shaIndex(full.commits).has(full.commits[0].shortSha), true);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// ---- the walk is BOUNDED, which is the owner's hang -------------------------------------
+
+/// A tree with more files than any cap under test, and a root manifest that a
+/// lexicographic slice would discard in favour of files under `aaa/`.
+function crowdedTree(fileCount) {
+  const root = mkdtempSync(path.join(tmpdir(), 'daijin-walk-'));
+  mkdirSync(path.join(root, 'aaa', 'nested'), { recursive: true });
+  writeFileSync(path.join(root, 'package.json'), '{"name":"crowded"}');
+  writeFileSync(path.join(root, 'index.js'), 'export const x = 1;\n');
+  for (let i = 0; i < fileCount; i += 1) {
+    writeFileSync(path.join(root, 'aaa', 'nested', `f${String(i).padStart(4, '0')}.js`), 'export const y = 1;\n');
+  }
+  return root;
+}
+
+test('the walk STOPS at the file cap rather than finishing and being trimmed', async () => {
+  // The owner's home screen hung on an attached `/`: the walk crossed the entire disk and
+  // the cap was applied afterwards, so it bounded the ANSWER and not the WORK. Proven
+  // without timing, which would be flaky, by what the result CONTAINS.
+  const root = crowdedTree(400);
+  try {
+    const listing = await listRepoFiles(root, { limit: 50 });
+    assert.equal(listing.files.length, 50);
+    assert.equal(listing.truncated, true);
+    assert.equal(listing.stopped, 'file-limit');
+
+    // THE PROOF THAT NO FULL WALK HAPPENED. Breadth-first stops at the root level, so the
+    // root files are present. A walk that completed and then sorted-and-sliced would have
+    // returned 50 files all under `aaa/`, because `aaa/nested/f0000.js` sorts before
+    // `package.json`, and the repo would have lost its own manifest.
+    assert.ok(listing.files.includes('package.json'), 'a truncated walk kept the root manifest');
+    assert.ok(listing.files.includes('index.js'));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('the walk also stops on TIME, which a file cap cannot bound', async () => {
+  // Two bounds because they stop different things. A cap stops a tree that is too large; a
+  // deadline stops one that is too SLOW - a network mount, a fuse filesystem, a directory
+  // that blocks. A count cap alone still hangs on ten slow directories, which is the case
+  // a laptop actually meets when a volume goes away.
+  const root = crowdedTree(400);
+  try {
+    const listing = await listRepoFiles(root, { limit: 1e9, timeBudgetMs: 0 });
+    assert.equal(listing.stopped, 'deadline');
+    assert.equal(listing.truncated, true);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('an ordinary repo is NOT capped, or the flag would mean nothing', async () => {
+  // The positive control. Every assertion above would pass against a walk that returned
+  // nothing at all, and a `capped` flag that is always true tells a client no more than a
+  // flag that is always false.
+  const root = crowdedTree(5);
+  try {
+    const listing = await listRepoFiles(root, { limit: 50_000 });
+    assert.equal(listing.truncated, false);
+    assert.equal(listing.stopped, null);
+    assert.equal(listing.files.length, 7);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('analyze carries the cap ON THE WIRE, not just in its own head', async () => {
+  // analyze already knew it had truncated: the flag lived on `files`, which D-0035 removed
+  // from the wire. So the engine held the caveat and no client could receive it, and a
+  // capped census read as the whole repository. Documented and reachable, again.
+  const root = crowdedTree(200);
+  try {
+    const capped = await analyze(root, { fileLimit: 40 });
+    assert.deepEqual(capped.walk, { filesSeen: 40, capped: true, stoppedBy: 'file-limit', limit: 40 });
+
+    const whole = await analyze(root, { fileLimit: 50_000 });
+    assert.equal(whole.walk.capped, false);
+    assert.equal(whole.walk.stoppedBy, null);
+    assert.equal(whole.walk.filesSeen, 202);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('the walk stops when the cap lands exactly on a directory boundary', async () => {
+  // BOTH bounds checks are load-bearing and this is the case that needs the outer one.
+  // The inner check fires while entries are being added; it cannot fire for a directory
+  // with NO entries. So if the cap is reached exactly as a directory's entries run out,
+  // and the queue still holds empty directories, only the check at the top of the loop
+  // stops the walk. Without it the walker keeps calling readdir over every remaining
+  // directory - unbounded work again, on a tree of empty directories.
+  //
+  // A mutation removing the outer check SURVIVED until this existed, because every other
+  // fixture here reaches the cap mid-directory where the inner check catches it.
+  const root = mkdtempSync(path.join(tmpdir(), 'daijin-walk-edge-'));
+  try {
+    mkdirSync(path.join(root, 'a'), { recursive: true });
+    for (let i = 0; i < 3; i += 1) writeFileSync(path.join(root, 'a', `f${i}.js`), 'export const x = 1;\n');
+    // Sorted after `a`, so they are still queued when the cap is reached, and empty so the
+    // inner check never runs for them.
+    for (let i = 0; i < 12; i += 1) mkdirSync(path.join(root, `b${String(i).padStart(2, '0')}`), { recursive: true });
+
+    const listing = await listRepoFiles(root, { limit: 3 });
+    assert.equal(listing.files.length, 3);
+    assert.equal(listing.stopped, 'file-limit',
+      'the walk continued through the empty directories instead of stopping at the cap');
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

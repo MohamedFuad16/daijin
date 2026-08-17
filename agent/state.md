@@ -1,5 +1,36 @@
 # Daijin build state (authoritative)
 
+## 2026-08-17 16:45 - CORRECTION: the actionCode discrimination claim was wrong
+
+DATED CORRECTION striking a claim from the record and from commit
+90d652e's message (history is not rewritten; this entry is the
+correction). The claim: nested cases get too-little-material and
+standalone cases get gold-set-too-thin, "checked, not assumed". THE
+TRUTH, re-derived by the extractor after tui-builder's measurement
+contradicted it: the discriminator is MINED CASE COUNT ALONE
+(cases < 5); the code knows nothing about nesting, and the owner's own
+nested shape can produce the code that would HIDE the
+attach-the-root-instead offer. The mechanism of the error, kept
+because it matters more than the fact: two fixtures happened to
+differ, and a rule was inferred FROM THE DIFFERENCE and reported as a
+measurement - the rule was two lines away in a file edited that hour,
+unread. The project's fifth materially wrong conclusion, the
+extractor's first, self-attributed. Cost: nothing shipped wrong,
+because tui-builder MEASURED RATHER THAN TRUSTED the verification and
+reported the contradiction instead of working around it.
+
+RULED from the correction: the button KEYS ON THE ROOT, not the code -
+"attach the parent instead" is available exactly when a parent exists
+(which the nested-in-repository warning already carries), and
+actionCode answers a different question (which advice to print about
+material). The kept lesson, tui-builder's general form: A CODE THAT
+ANSWERS ONE QUESTION IS NOT A PRECONDITION FOR AN ACTION THAT NEEDS
+ANOTHER - a correct field whose value does not carry the precondition
+the action requires, which is neither a missing field nor a dead
+control. The blocked-event-carries-root row is DEFERRED to the
+post-release list: the client already correlates analyze, and
+redundancy is not need.
+
 ## 2026-08-17 19:50 - RELEASE-READY. The final watched run is green.
 
 CI run 31991594523 at tip 1139487, watched to completion: hygiene,

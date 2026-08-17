@@ -81,7 +81,18 @@ DEFAULT_VERBS = ("working", "reading", "writing")
 # from the stream alone. Raised with the leader as a contract gap. Until it is
 # answered, a run that goes quiet is reported as INFERRED complete, never as
 # reported complete, because the two are different claims.
-TERMINAL_PHASES = frozenset({"done", "complete", "finished"})
+# The contract's terminal-event invariant (methods.md, v5, 2026-08-17): every
+# job emits EXACTLY ONE event with phase "done", and it is the last event for
+# that jobId. `finished` is a STEP name under that phase, not a phase, and
+# `complete` is not on the wire at all: this set used to carry both, which
+# documented two states the engine cannot produce. A client branch for a
+# phantom state is dead code no use can ever disprove, so the set is exactly
+# what the wire sends.
+#
+# It stays a CONSTANT rather than becoming a literal at three call sites. The
+# literal was the defect that let two banners miss the terminal event; the
+# tolerance was never the point.
+TERMINAL_PHASES = frozenset({"done"})
 
 # Generous on purpose. A false "finished" is worse than a late one: it tells
 # the user a run ended while it is still working. Measured on the P8 fixture,

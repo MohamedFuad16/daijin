@@ -10,6 +10,7 @@ from .gym import GymScreen
 from .init_feed import InitFeedScreen
 from .repo_home import RepoHomeScreen
 from .settings import SettingsScreen
+from .splash import SplashScreen
 from .upgrade import UpgradeScreen
 
 __all__ = [
@@ -27,5 +28,6 @@ __all__ = [
     "SettingsScreen",
     "SpendConfirmScreen",
     "TextPromptScreen",
+    "SplashScreen",
     "UpgradeScreen",
 ]

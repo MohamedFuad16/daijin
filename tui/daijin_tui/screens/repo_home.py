@@ -54,6 +54,20 @@ class RepoHomeScreen(DaijinScreen):
         self.query_one("#engine-status", Static).update(self._engine_markup(status))
         needs = [card.repo_path for card in self.query(RepoCard) if card.needs_brain]
         notice = self.query_one("#home-notice", Banner)
+        if not status.get("repos"):
+            # Nothing is attached, so there are no cards to look at and the
+            # only useful thing on this screen is the attach box. The splash is
+            # the moment a brand new user is oriented; landing them on empty
+            # space wastes it.
+            from textual.widgets import Input
+
+            self.query_one("#attach-input", Input).focus()
+            notice.set_notice(
+                "No repos attached yet. Give Daijin a path below and it will read the "
+                "repo, build a brain for it, and measure what it can retrieve.",
+                "info",
+            )
+            return
         if needs:
             notice.set_notice(
                 f"{len(needs)} repo without a brain: {', '.join(needs)}. Initialize brain is the only action offered.",

@@ -213,6 +213,10 @@ const GATE_REFERENCE = /gymSpendGatePath|['"`][^'"`]*(?:\/|^)GATE(?:['"`]|\$|\s|
 const SHELL_GATE_WRITE = /['"`][^'"`]*(?:>>?|tee)\s*[^'"`]*GATE[^'"`]*['"`]/;
 
 const OPEN_STATUS_LITERAL = /status\s*:\s*['"`](open|authorized)['"`]|\\?"status\\?"\s*:\s*\\?"(open|authorized)/;
+/** The one licensed opening write (D-0060). The marker is CODE, not a comment (comments are
+ *  stripped before scanning), and it is written INTO the gate file, so the file itself
+ *  records that a TUI owner action produced it. */
+const OWNER_ACTION_LITERAL = /ownerAction\s*:\s*['"`]OWNER-ACTION GATE WRITE \(D-0060\)['"`]/;
 const BLOCKED_STATUS_LITERAL = /status\s*:\s*['"`]blocked['"`]|\\?"status\\?"\s*:\s*\\?"blocked/;
 
 /** How far around a write call counts as its neighborhood. Backwards as well as forwards:
@@ -301,14 +305,24 @@ export function gateWriterOffenders(files, { ownerFile = 'spend-gate.js', allowl
     if (writes.length === 0) continue;
 
     if (isOwner) {
-      // Guilty unless provably blocked. Every write in the gate module must have the blocked
-      // literal in its own neighborhood; nothing about the target is consulted, so
-      // concatenation, template literals and variables are all equally uninteresting.
+      // Guilty unless provably blocked, with ONE licensed exception (D-0060): the single
+      // owner-action write, recognized by the ownerAction marker in its own payload, which
+      // travels into the gate file so the authorization is auditable at rest. A second
+      // marked write is flagged: one licence, not a pattern.
+      let ownerActionWrites = 0;
       for (const match of writes) {
         const window = neighborhood(text, match.index);
-        if (BLOCKED_STATUS_LITERAL.test(window)) continue;
+        if (BLOCKED_STATUS_LITERAL.test(window) && !OPEN_STATUS_LITERAL.test(window)) continue;
+        if (OWNER_ACTION_LITERAL.test(window)) {
+          ownerActionWrites += 1;
+          if (ownerActionWrites > 1) {
+            flag(file, 'the gate module carries more than one owner-action write; the D-0060 licence covers exactly one');
+            break;
+          }
+          continue;
+        }
         flag(file, OPEN_STATUS_LITERAL.test(window)
-          ? 'a write in the gate module carries an open-status payload'
+          ? 'a write in the gate module carries an open-status payload without the owner-action marker'
           : 'a write in the gate module cannot be shown to write a blocked gate');
         break;
       }
@@ -347,4 +361,32 @@ export function gateWriterOffenders(files, { ownerFile = 'spend-gate.js', allowl
     }
   }
   return offenders;
+}
+
+/** Write a BLOCKED gate. Callable from anywhere through this module: closing is always safe,
+ *  and the spend jobs re-block through this in their finally (D-0060). */
+export async function writeBlockedSpendGate(file, reason = 'Blocked.') {
+  // writeFile DIRECTLY, not writeJsonAtomic: the mutation guard's write regex
+  // must SEE this call, or the licence below guards nothing.
+  await writeFileNative(file, `${JSON.stringify({ status: 'blocked', reason }, null, 2)}\n`, 'utf8');
+  return readSpendGate({ file });
+}
+
+/**
+ * THE ONE OPENING WRITE (D-0060). Only ever reached from spendGateSet, which sits behind an
+ * explicit owner button press, a written reason, and recorded consent. The ownerAction
+ * marker below is load-bearing twice: the mutation guard licenses exactly this write by it,
+ * and it lands in the gate file so the authorization is auditable at rest.
+ */
+export async function ownerAuthorizeSpendGate(file, { scope, reason }) {
+  if (!GYM_SPEND_SCOPES.includes(scope)) throw new Error(`Unknown gym spend scope: ${scope ?? '<missing>'}`);
+  const written = String(reason || '').trim();
+  if (written.length < 20) throw new Error('Opening a spend gate needs a written reason of at least 20 characters.');
+  await writeFileNative(file, `${JSON.stringify({
+    status: 'authorized',
+    scope,
+    reason: written,
+    ownerAction: 'OWNER-ACTION GATE WRITE (D-0060)',
+  }, null, 2)}\n`, 'utf8');
+  return readSpendGate({ file });
 }

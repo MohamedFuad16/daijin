@@ -467,11 +467,27 @@ class ExamsScreen(DaijinScreen):
         if not confirmed:
             notice.set_notice("Not mined. Nothing was sent to a provider.", "info")
             return
-        try:
-            started = await self.client.call("examMine", {"repoPath": repo, "confirm": True})
-        except RpcError as error:
-            self.report_rpc_error(error)
-            notice.set_notice(error.hint, "error")
+        started = None
+        for attempt in range(2):
+            try:
+                started = await self.client.call("examMine", {"repoPath": repo, "confirm": True})
+                break
+            except RpcError as error:
+                # The gate refusal becomes a BUTTON (owner round 9): offer to
+                # open it scoped to exam-mining and retry once. Any other
+                # refusal reports as before.
+                if error.is_spend_gate and attempt == 0:
+                    opened = await self.offer_gate_open(
+                        scope="exam-mining",
+                        repo=repo,
+                        why="The spend gate is blocked, so the auditor cannot be paid to select exams.",
+                    )
+                    if opened:
+                        continue
+                self.report_rpc_error(error)
+                notice.set_notice(error.hint, "error")
+                return
+        if started is None:
             return
         self.mine_job_id = started.get("jobId")
         notice.set_notice(

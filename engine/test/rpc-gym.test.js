@@ -42,6 +42,16 @@ async function harness({ engineer = null, exams = [], gateOpen = false, runGymCy
   const stateRoot = await mkdtemp(path.join(tmpdir(), 'daijin-gym-state-'));
   const repoPath = await mkdtemp(path.join(tmpdir(), 'daijin-gym-repo-'));
   await mkdir(path.join(repoPath, '.daijin'), { recursive: true });
+  // One live gate, because gymStart now refuses a repo where no gate carries
+  // signal: the cycle's measurement IS baseline-vs-candidate gates.
+  await writeFile(path.join(repoPath, '.daijin', 'gates.yaml'), [
+    'version: 1',
+    'gates:',
+    '  - id: noop',
+    '    command: exit 0',
+    '    enabled: true',
+    '    classification: live',
+  ].join('\n'), 'utf8');
   if (gateOpen) {
     await writeFile(gymSpendGatePath(repoPath), JSON.stringify({ status: 'open', reason: 'owner authorized this cycle by hand' }), 'utf8');
   }
@@ -226,15 +236,16 @@ test('gymStart checks the gate, then consent, then the bank, then the driver', a
     await emptyBank.cleanup();
   }
 
+  // The driver is REAL now (owner round 9): an unconfigured engineer role is
+  // a parameter refusal naming settings, thrown at the call rather than as a
+  // failure inside a job the user already consented to.
   const noDriver = await harness({ exams: [exam()], gateOpen: true });
   try {
     await noDriver.attach();
     const driver = await raised(noDriver.server.methods.gymStart({ repoPath: noDriver.repoPath, config: {}, confirm: true }));
-    assert.equal(driver.code, ERR_NOT_IMPLEMENTED);
-    assert.match(driver.data.phase, /^P4/);
-    assert.match(driver.data.hint, /gate, your consent and the draw are all fine/,
-      'the refusal says what DID work, so nobody reads it as "the gym is not built"');
-    assert.match(driver.data.hint, /engineer role is configured/);
+    assert.equal(driver.code, -32602);
+    assert.match(driver.data.hint, /engineer role/i);
+    assert.match(driver.data.hint, /settings/i);
   } finally {
     await noDriver.cleanup();
   }
@@ -307,6 +318,15 @@ test('the default mode is never evaluation', async () => {
     await context.server.jobs.drain();
     assert.equal(context.cycleCalls[0].mode, 'harness-debug');
 
+    // The first run RE-BLOCKED the gate when it ended (D-0060), so a second
+    // start needs the owner's hand again: that refusal is asserted, then the
+    // gate is re-opened the way the TUI button would.
+    const reblocked = await raised(context.server.methods.gymStart({ repoPath: context.repoPath, config: { mode: 'evaluation' }, confirm: true }));
+    assert.equal(reblocked.code, -32050, 'an authorization lives exactly as long as the run it authorized');
+    await context.server.methods.spendGateSet({
+      repoPath: context.repoPath, status: 'authorized', scope: 'gym-cycle',
+      reason: 'Re-opened for the second cycle of this test.', confirm: true,
+    });
     await context.server.methods.gymStart({ repoPath: context.repoPath, config: { mode: 'evaluation' }, confirm: true });
     await context.server.jobs.drain();
     assert.equal(context.cycleCalls[1].mode, 'evaluation', 'but an explicit ask is honoured');

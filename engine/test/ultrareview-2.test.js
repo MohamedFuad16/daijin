@@ -120,6 +120,16 @@ test('F1: the gym logger wrapper takes the shape the gym actually calls', async 
   const { mkdir, writeFile } = await import('node:fs/promises');
   await mkdir(path.join(repoPath, '.daijin'), { recursive: true });
   await writeFile(path.join(repoPath, '.daijin', 'GATE'), JSON.stringify({ status: 'open', reason: 'probe authorization by hand for this test' }), 'utf8');
+  // gymStart refuses a repo with no signal-carrying gate (the cycle's whole
+  // measurement is baseline-vs-candidate gates), so the fixture carries one.
+  await writeFile(path.join(repoPath, '.daijin', 'gates.yaml'), [
+    'version: 1',
+    'gates:',
+    '  - id: noop',
+    '    command: exit 0',
+    '    enabled: true',
+    '    classification: live',
+  ].join('\n'), 'utf8');
 
   const emitted = [];
   const { GymLedger, gymDatabasePath } = await import('../src/gym/ledger.js');
@@ -225,6 +235,16 @@ test('F4: a gym cycle closes its ledger, not only its store', async () => {
   const { mkdir, writeFile } = await import('node:fs/promises');
   await mkdir(path.join(repoPath, '.daijin'), { recursive: true });
   await writeFile(path.join(repoPath, '.daijin', 'GATE'), JSON.stringify({ status: 'open', reason: 'probe authorization by hand for this test' }), 'utf8');
+  // gymStart refuses a repo with no signal-carrying gate (the cycle's whole
+  // measurement is baseline-vs-candidate gates), so the fixture carries one.
+  await writeFile(path.join(repoPath, '.daijin', 'gates.yaml'), [
+    'version: 1',
+    'gates:',
+    '  - id: noop',
+    '    command: exit 0',
+    '    enabled: true',
+    '    classification: live',
+  ].join('\n'), 'utf8');
 
   const { GymLedger, gymDatabasePath } = await import('../src/gym/ledger.js');
   const seeded = GymLedger.open(gymDatabasePath(repoPath));

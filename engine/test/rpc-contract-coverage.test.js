@@ -170,6 +170,9 @@ function recipes(repoPath) {
     documents: { params: { repoPath }, pick: (result) => result[0] },
     serveStatus: { params: {} },
     mcpSnippet: { params: { repoPath } },
+    // Covered with the always-safe write: blocked needs no confirm and returns
+    // the full readSpendGate row.
+    spendGateSet: { params: { repoPath, status: 'blocked' } },
     budgetEstimate: { params: { repoPath, mode: 'gym' } },
     gymStatus: { params: { repoPath } },
     // A BARE LIST, like documents: the contract's cell is `[{ ... }]`, so the parsed

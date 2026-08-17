@@ -43,10 +43,11 @@ import { AXES } from '../gym/grading.js';
 import { examListRow, parseExamRecord, quarantineExam, vetoExam } from '../gym/exams.js';
 import { GymLedger, gymDatabasePath } from '../gym/ledger.js';
 import { loadResultFiles } from '../gym/result-files.js';
-import { assertSpendGate, readSpendGate, gymSpendGatePath } from '../gym/spend-gate.js';
+import { GYM_SPEND_SCOPES, assertSpendGate, gymSpendGatePath, ownerAuthorizeSpendGate, readSpendGate, writeBlockedSpendGate } from '../gym/spend-gate.js';
 import { mineCommits, selectBankWithAuditor, validateChosenExam } from '../gym/mining.js';
 import { buildCommitteeAuditor } from '../gym/committee.js';
 import { createRoleGenerate } from '../roles/driver.js';
+import { createEngineerDriver } from '../gym/engineer-driver.js';
 import { createSandbox } from '../gym/sandbox.js';
 import { expandGates, runGateSet } from '../gym/gates.js';
 import { createSqliteStore } from '../store/sqlite.js';
@@ -685,10 +686,34 @@ export function createMethods({
   const runInit = deps.initBrain || runInitPipeline;
   const openLedger = deps.openLedger || ((repoPath) => GymLedger.open(gymDatabasePath(repoPath)));
   const runCycle = deps.runGymCycle || runGymCycle;
-  // THE PAID SEAM. `engineer.next()` is the only provider call in a gym cycle, and no
-  // driver exists yet: building one needs a configured role, and roles arrive with the
-  // model-setup round. Injectable so a cycle is fully testable with a fake student.
-  const createEngineer = deps.createEngineer || null;
+  // THE PAID SEAM. `engineer.next()` is the only provider call in a gym cycle. The
+  // default factory builds the live driver from the ENGINEER role the owner configured
+  // (claude-code roles run their chosen sub-agent); injectable so a cycle is fully
+  // testable with a scripted student at zero spend.
+  const createEngineer = deps.createEngineer || (async ({ settings, repoPath }) => {
+    const role = settings.roles.find((row) => row.role === 'engineer');
+    if (!role?.provider || !role?.model) {
+      throw invalidParams('engineer not configured',
+        'The student IS the engineer role, and it has no provider or model configured. Set it up in settings first.');
+    }
+    const catalog = await loadProviderCatalog();
+    const entry = catalog.providers.find((candidate) => candidate.id === role.provider);
+    let key = null;
+    if (entry?.keyRequired ?? true) {
+      if (!role.keyRef) throw invalidParams('no key pointer', `The engineer role has no key pointer and ${role.provider} needs one.`);
+      key = await resolveRoleKey(role.keyRef);
+    }
+    let agentPath = null;
+    if (role.provider === 'claude-code' && role.agentRef) {
+      const agents = await scanAgents({ repoPaths: (await state.repos()).map((row) => row.path) });
+      agentPath = agents.find((agent) => agent.id === role.agentRef)?.path ?? null;
+    }
+    return createEngineerDriver({
+      role: { ...role, endpoint: role.endpoint || entry?.endpointDefault || null },
+      key,
+      agentPath,
+    });
+  });
   // The rolePing seam: the generation, the key resolution, and the agent scan are all
   // injectable so the ping path is fully testable against a local mock HTTP server with
   // no provider, no key, and no claude CLI on the machine.
@@ -840,6 +865,23 @@ export function createMethods({
   /// This repo's paths, repo side and machine side. Read-only: a daemon method that
   /// materialised a contract file merely by being called would put a write on a read path.
   const layoutFor = (repoPath) => repoLayout(repoPath, { stateRoot: state.stateRoot });
+
+  /// Re-block a repo's spend gate. Called from the finally of every job that
+  /// spends (D-0060): an authorization lives exactly as long as the run it
+  /// authorized. Best-effort by design - a reblock failure must not turn a
+  /// finished run into a failed one, but it is worth a stderr line.
+  const reblockGate = async (repoPath) => {
+    try {
+      // Named gatePath, not file: the mutation guard's alias rule flags any
+      // write to an identifier that ever held the gate path, and methods.js
+      // writes OTHER files through a variable named file (gates.yaml).
+      const gatePath = gymSpendGatePath(repoPath);
+      await mkdir(path.dirname(gatePath), { recursive: true });
+      await writeBlockedSpendGate(gatePath, 'Re-blocked automatically when the authorized run ended.');
+    } catch (error) {
+      console.error(`could not re-block the spend gate for ${repoPath}: ${error.message}`);
+    }
+  };
 
   /// Open a repo's brain at its RELOCATED path.
   const openBrain = async (repoPath, options = {}) => {
@@ -1701,17 +1743,33 @@ export function createMethods({
         return wanted.slice(0, config.cohortSize ?? 1).map((row) => ledger.getExam(row.examId));
       });
 
-      if (!createEngineer) {
-        // THE ONE THING GENUINELY MISSING. Everything above ran: the gate authorized, the
-        // user consented, the bank produced a draw. What does not exist is the student
-        // driver, because `engineer.next()` is a provider call and no role is configured
-        // yet. Named precisely so nobody reads this as "the gym is not built".
-        throw notImplemented('gymStart', 'P4 (student driver over a configured engineer role)',
-          `The gate, your consent and the draw are all fine (${drawn.length} exam(s) ready). What is missing is the student driver: engineer.next() is a provider call and no engineer role is configured yet.`);
+      // THE GATES COME FROM THE REPO'S OWN FILE, like mining's validation: the
+      // cycle's whole measurement is baseline-vs-candidate gates, and the old
+      // `config.gates ?? []` default sent every un-configured start into
+      // expandGates' (correct) empty-list refusal INSIDE the job. A repo with
+      // no live or measured gate is refused here, before consent was spent on
+      // a job that cannot measure anything.
+      let cycleGates = config.gates;
+      if (!Array.isArray(cycleGates) || cycleGates.length === 0) {
+        try {
+          const parsed = parseGatesFile(await readFile(gatesFilePath(repoPath), 'utf8'));
+          cycleGates = (parsed.discovered?.gates || []).filter((gate) => gate.enabled && ['live', 'measured'].includes(gate.classification));
+        } catch {
+          cycleGates = [];
+        }
+      }
+      if (cycleGates.length === 0) {
+        throw invalidParams('no gates carry signal',
+          `No live or measured gate exists for ${repoPath}, and a gym run's measurement IS baseline-vs-candidate gates. Run gate discovery (and install any missing runtimes) first.`);
       }
 
+      // BUILT BEFORE THE JOB, so an unconfigured engineer role refuses at the
+      // call (where the user is looking) rather than as a failure event inside
+      // a job they already consented to. Construction is cheap: no provider is
+      // dialled until the first next().
+      const engineer = await createEngineer({ settings, repoPath });
+
       const jobId = jobs.start('gym', async ({ emit, cancelled }) => {
-        const engineer = await createEngineer({ settings, repoPath });
         const store = await openStore(repoPath);
         // Opened HERE so the finally below can close it. It used to be opened inline in the
         // options object, where nothing held a reference to close, so every cycle leaked a
@@ -1728,7 +1786,7 @@ export function createMethods({
             mode: config.mode ?? 'harness-debug',
             cohort: config.cohort ?? 'training',
             ledger,
-            gates: config.gates ?? [],
+            gates: cycleGates,
             engineer,
             rules: await studentRules(repoPath),
             documents,
@@ -1780,6 +1838,8 @@ export function createMethods({
           await store.close?.();
           ledger.close?.();
           activeGymRun = null;
+          // The gate re-blocks when the run ends (D-0060), same as mining.
+          await reblockGate(repoPath);
         }
       });
       return { jobId };
@@ -1895,6 +1955,44 @@ export function createMethods({
      * proposes, validation verifies, the owner admits to the bank. The
      * scored record never gains a row any model elected on its own.
      */
+    /**
+     * Flip the spend gate from the TUI. THE FLIP IS STILL THE OWNER'S HAND
+     * (D-0060): this method only ever runs off an explicit button press with
+     * confirm: true, the consent is recorded like every spend consent, and
+     * the invariant evolves rather than falls - the engine still never opens
+     * a gate on its own initiative, and every job that spends RE-BLOCKS the
+     * gate in its finally, so an authorization lives exactly as long as the
+     * run it authorized.
+     *
+     * `blocked` needs no confirmation: closing a gate is always safe.
+     */
+    async spendGateSet(params) {
+      const repoPath = await requireAttached(params);
+      const gatePath = gymSpendGatePath(repoPath);
+      const status = params?.status;
+      if (status === 'blocked') {
+        await mkdir(path.dirname(gatePath), { recursive: true });
+        return writeBlockedSpendGate(gatePath, 'Blocked from the TUI by the owner.');
+      }
+      if (status !== 'authorized') {
+        throw invalidParams('unknown gate status', "status must be 'authorized' (with scope and reason) or 'blocked'.");
+      }
+      if (!GYM_SPEND_SCOPES.includes(params?.scope)) {
+        throw invalidParams('unknown scope', `scope must be one of ${GYM_SPEND_SCOPES.join(', ')}.`);
+      }
+      const reason = String(params?.reason || '').trim();
+      if (reason.length < 20) {
+        throw invalidParams('reason too short',
+          'Opening a spend gate needs a written reason of at least 20 characters; six weeks later it is the only record of why.');
+      }
+      await requireConsent('spendGateSet', params,
+        `Opening the gate authorizes ${params.scope} provider spend on this machine until the run re-blocks it.`);
+      await mkdir(path.dirname(gatePath), { recursive: true });
+      // The write lives in the gate module under the D-0060 licence; this
+      // boundary holds the locks (owner button, reason, recorded consent).
+      return ownerAuthorizeSpendGate(gatePath, { scope: params.scope, reason });
+    },
+
     async examMine(params) {
       const repoPath = await requireAttached(params);
       await assertGate('exam-mining', { file: gymSpendGatePath(repoPath) });
@@ -1928,6 +2026,7 @@ export function createMethods({
       const target = Number.isInteger(params?.target) && params.target > 0 ? Math.min(params.target, 25) : 10;
 
       const jobId = jobs.start('mine', async ({ emit, cancelled }) => {
+        try {
         emit('mine', 'walk', 'walking the commit history through the deterministic filter');
         const mined = await mine(repoPath);
         emit('mine', 'filtered',
@@ -2030,6 +2129,13 @@ export function createMethods({
           `${written.length} exam(s) written: ${validated} validated, ${written.length - validated} draft(s). `
           + 'Promote the ones you accept; only promoted exams can run.',
           { counts: { written: written.length, validated } });
+        } finally {
+          // THE GATE OUTLIVES NOTHING (D-0060): whatever authorized this run
+          // is re-blocked when the job ends, success or failure, so an open
+          // gate is never left lying around for the next call to spend
+          // through.
+          await reblockGate(repoPath);
+        }
       });
       return { jobId };
     },

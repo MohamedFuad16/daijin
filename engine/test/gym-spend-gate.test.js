@@ -357,6 +357,34 @@ test('MUTATION GUARD: the widened rule leaves innocent writers alone', () => {
   assert.deepEqual(gateWriterOffenders(INNOCENT_CONTROLS), []);
 });
 
+test('the D-0060 licence covers exactly one owner-action write, and a second is flagged', () => {
+  // The real gate module now carries ONE marked opening write (spendGateSet's
+  // backend). A module with two is a pattern, not a licence.
+  const twoMarked = {
+    path: 'spend-gate.js',
+    source: [
+      'import { writeFile } from "node:fs/promises";',
+      'export async function a(file) {',
+      "  await writeFile(file, JSON.stringify({ status: 'authorized', scope: 'gym-cycle', reason: 'r'.repeat(30), ownerAction: 'OWNER-ACTION GATE WRITE (D-0060)' }));",
+      '}',
+      'export async function b(file) {',
+      "  await writeFile(file, JSON.stringify({ status: 'authorized', scope: 'exam-mining', reason: 'r'.repeat(30), ownerAction: 'OWNER-ACTION GATE WRITE (D-0060)' }));",
+      '}',
+    ].join('\n'),
+  };
+  assert.deepEqual(
+    gateWriterOffenders([twoMarked]).map((entry) => entry.reason),
+    ['the gate module carries more than one owner-action write; the D-0060 licence covers exactly one'],
+  );
+  // And an UNMARKED authorized write is still the classic offence.
+  const unmarked = {
+    path: 'spend-gate.js',
+    source: 'import { writeFile } from "node:fs/promises";\n'
+      + "export async function open(file) { await writeFile(file, JSON.stringify({ status: 'authorized', scope: 'gym-cycle', reason: 'r' })); }\n",
+  };
+  assert.equal(gateWriterOffenders([unmarked]).length, 1);
+});
+
 test('the allowlist is a list of decisions, each carrying its reason', () => {
   for (const entry of GATE_SCAN_ALLOWLIST) {
     assert.ok(entry.path, 'an allowlist entry names a file');
@@ -527,5 +555,5 @@ test('no gym source writes an open gate', async () => {
       + '  await writeFile(gymSpendGatePath(file), JSON.stringify({ status: "open", reason: "reopened" }));\n'
       + '}\n',
   };
-  assert.deepEqual(gateWriterOffenders([insideJob]).map((entry) => entry.reason), ['a write in the gate module carries an open-status payload']);
+  assert.deepEqual(gateWriterOffenders([insideJob]).map((entry) => entry.reason), ['a write in the gate module carries an open-status payload without the owner-action marker']);
 });

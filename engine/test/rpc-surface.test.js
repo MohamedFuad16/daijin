@@ -41,6 +41,7 @@ function surface(repoPath) {
     ['gymStatus', {}],
     ['examList', {}],
     ['examMine', { repoPath }],
+    ['spendGateSet', { repoPath, status: 'blocked' }],
     ['examDetail', { examId: 'exam-0001' }],
     ['examVeto', { examId: 'exam-0001', reason: 'a reason long enough to be reviewable later' }],
     ['examUpdate', { examId: 'exam-0001', patch: {} }],

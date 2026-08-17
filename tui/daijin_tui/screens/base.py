@@ -117,6 +117,42 @@ class DaijinScreen(Screen):
             else "Step details shown in full; long paths scroll rather than shorten."
         )
 
+    async def offer_gate_open(self, *, scope: str, repo: str, why: str) -> bool:
+        """The gate as a button (owner round 9), with the flip still the owner's.
+
+        Shown exactly when a spend call was refused on the gate: one dialog,
+        naming the scope, opening it only on an explicit yes. The engine
+        re-blocks the gate when the authorized run ends, so a click authorizes
+        one run, never a standing state.
+        """
+        from .dialogs import ConfirmScreen
+
+        confirmed = await self.app.push_screen_wait(ConfirmScreen(
+            title=f"Open the spend gate for {scope}?",
+            body=(
+                f"{why}\n\n"
+                f"This writes an authorization scoped to {scope} into this repo's "
+                f"gate file. The gate re-blocks itself when the run ends, so it "
+                f"cannot be left open by accident."
+            ),
+            confirm_label=f"Open the gate for {scope}",
+        ))
+        if not confirmed:
+            return False
+        try:
+            await self.client.call("spendGateSet", {
+                "repoPath": repo,
+                "status": "authorized",
+                "scope": scope,
+                "reason": f"Opened from the TUI by the owner for one {scope} run.",
+                "confirm": True,
+            })
+        except RpcError as error:
+            self.report_rpc_error(error)
+            self._say(error.hint, "error")
+            return False
+        return True
+
     def _say(self, text: str, tone: str = "info") -> None:
         """Put a line in this screen's banner, if it has one."""
         if not self.notice_id:

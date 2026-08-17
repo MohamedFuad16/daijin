@@ -139,6 +139,11 @@ test('the funnel end to end: walk, committee, validation, a validated exam in th
   const filtered = events.find((event) => event.jobId === jobId && event.step === 'filtered');
   assert.match(filtered.detail, /1 candidate\(s\) kept/);
 
+  // THE GATE RE-BLOCKED ITSELF when the job ended (D-0060): an authorization
+  // lives exactly as long as the run it authorized.
+  const gateAfter = JSON.parse(await (await import('node:fs/promises')).readFile(path.join(repo, '.daijin', 'GATE'), 'utf8'));
+  assert.equal(gateAfter.status, 'blocked');
+
   // The ledger row, read back raw: validated, correct commits, the auditor's
   // task verbatim, and provenance naming the model that authored it.
   const ledger = GymLedger.open(gymDatabasePath(repo));
@@ -173,4 +178,32 @@ test('a committee reply naming a filtered commit is refused, and the job fails l
   const done = await waitForDone(events, jobId);
   assert.equal(done.step, 'failed', 'the auditor proposing an ineligible commit must fail the job, not be reinstated');
   assert.match(String(done.detail), /not an eligible candidate/);
+});
+
+test('spendGateSet: blocked always works; authorized needs scope, reason and confirm', async () => {
+  const { methods, repo } = await fixture({ gate: null });
+  const blocked = await methods.spendGateSet({ repoPath: repo, status: 'blocked' });
+  assert.equal(blocked.status, 'blocked');
+  assert.equal(blocked.open, false);
+
+  await assert.rejects(() => methods.spendGateSet({ repoPath: repo, status: 'authorized', scope: 'nope', reason: 'x'.repeat(30), confirm: true }), (error) => {
+    assert.match(String(error.data?.hint || error.message), /scope/);
+    return true;
+  });
+  await assert.rejects(() => methods.spendGateSet({ repoPath: repo, status: 'authorized', scope: 'exam-mining', reason: 'short', confirm: true }), (error) => {
+    assert.match(String(error.data?.hint || error.message), /20 characters/);
+    return true;
+  });
+  await assert.rejects(() => methods.spendGateSet({ repoPath: repo, status: 'authorized', scope: 'exam-mining', reason: 'x'.repeat(30) }), (error) => {
+    assert.match(String(error.data?.hint || error.message), /confirm/i);
+    return true;
+  });
+
+  const opened = await methods.spendGateSet({
+    repoPath: repo, status: 'authorized', scope: 'exam-mining',
+    reason: 'Opened from the TUI by the owner for one exam-mining run.', confirm: true,
+  });
+  assert.equal(opened.status, 'authorized');
+  assert.equal(opened.scope, 'exam-mining');
+  assert.equal(opened.open, true);
 });

@@ -1053,7 +1053,10 @@ async def test_a_gym_cycle_that_broke_after_spending_is_not_called_complete():
         assert "503" in notice, "the engine's own reason is not carried"
 
 @run_async
-async def test_gym_shows_the_spend_gate_refusal_hint_verbatim():
+async def test_gym_gate_refusal_becomes_the_open_offer_and_a_click_starts_the_run():
+    """The gate is a BUTTON now (owner round 9): a blocked gate turns into an
+    offer to open it scoped to gym-cycle, and accepting retries the start.
+    Declining changes nothing and sends nothing."""
     async with running_app(gate_open=False) as (app, pilot):
         await goto(pilot, "5")
         await pick_an_exam(app, pilot)
@@ -1061,10 +1064,25 @@ async def test_gym_shows_the_spend_gate_refusal_hint_verbatim():
         await settle(pilot)
         assert isinstance(app.screen, SpendConfirmScreen), "a cycle is confirmed before it is attempted"
         await pilot.click("#spend-confirm")
+        await settle(pilot, 10)
+        # The refusal surfaced as the gate-open dialog, not a dead-end hint.
+        await pilot.click("#confirm-yes")
+        await settle(pilot, 14)
+        gate_call = next(c for c in app.client.engine.calls if c[0] == "spendGateSet")
+        assert gate_call[1]["scope"] == "gym-cycle"
+        assert gate_call[1]["confirm"] is True
+        assert app.screen.job_id is not None, "the retry after opening the gate starts the run"
+
+    async with running_app(gate_open=False) as (app, pilot):
+        await goto(pilot, "5")
+        await pick_an_exam(app, pilot)
+        await pilot.click("#gym-start")
         await settle(pilot)
-        notice = text_of(app.screen.query_one("#gym-notice", Banner))
-        assert "spend gate is blocked" in notice.lower()
-        assert "owner's hand" in notice
+        await pilot.click("#spend-confirm")
+        await settle(pilot, 10)
+        await pilot.click("#confirm-no")
+        await settle(pilot, 10)
+        assert not any(c[0] == "spendGateSet" for c in app.client.engine.calls)
         assert app.screen.job_id is None
 
 

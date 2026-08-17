@@ -417,22 +417,37 @@ class GymScreen(DaijinScreen):
             notice.set_notice("Cycle not started. Nothing was sent to a provider.", "info")
             return
 
-        try:
-            result = await self.client.call(
-                "gymStart",
-                {
-                    "repoPath": repo,
-                    "config": {"examId": exam_id, "mode": "harness-debug"},
-                    "confirm": True,
-                    # Every spend-confirmed call whose dialog showed an estimate
-                    # echoes it, so the run record holds what the user actually
-                    # saw rather than only that they said yes.
-                    "budget": estimate,
-                },
-            )
-        except RpcError as error:
-            self.report_rpc_error(error)
-            notice.set_notice(error.hint, "error")
+        result = None
+        for attempt in range(2):
+            try:
+                result = await self.client.call(
+                    "gymStart",
+                    {
+                        "repoPath": repo,
+                        "config": {"examId": exam_id, "mode": "harness-debug"},
+                        "confirm": True,
+                        # Every spend-confirmed call whose dialog showed an estimate
+                        # echoes it, so the run record holds what the user actually
+                        # saw rather than only that they said yes.
+                        "budget": estimate,
+                    },
+                )
+                break
+            except RpcError as error:
+                # The gate refusal becomes a BUTTON (owner round 9), scoped to
+                # gym-cycle and auto-re-blocked when the run ends.
+                if error.is_spend_gate and attempt == 0:
+                    opened = await self.offer_gate_open(
+                        scope="gym-cycle",
+                        repo=repo,
+                        why="The spend gate is blocked, so no student run can pay a provider.",
+                    )
+                    if opened:
+                        continue
+                self.report_rpc_error(error)
+                notice.set_notice(error.hint, "error")
+                return
+        if result is None:
             return
         self.job_id = result.get("jobId")
         self.query_one("#gym-checklist", PhaseChecklist).reset(self.job_id)

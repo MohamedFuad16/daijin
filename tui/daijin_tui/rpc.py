@@ -1313,6 +1313,27 @@ class MockEngine:
         self._require_ledger(params.get("repoPath"))
         return copy.deepcopy(mock_data.GYM_STATUS)
 
+    async def _rpc_spendGateSet(self, params: dict[str, Any]) -> dict[str, Any]:
+        """The gate as a button, mirrored: authorized needs scope, reason and
+        confirm; blocked always works. The daemon re-blocks after runs."""
+        status = params.get("status")
+        if status == "blocked":
+            self.gate_open = False
+            return {"open": False, "status": "blocked", "scope": None}
+        if status != "authorized":
+            raise RpcError(ERR_INVALID_PARAMS, "unknown gate status",
+                           {"hint": "status must be 'authorized' (with scope and reason) or 'blocked'."})
+        if params.get("scope") not in ("gym-cycle", "exam-mining", "gym-resume"):
+            raise RpcError(ERR_INVALID_PARAMS, "unknown scope",
+                           {"hint": "scope must be one of gym-cycle, exam-mining, gym-resume."})
+        if len(str(params.get("reason") or "").strip()) < 20:
+            raise RpcError(ERR_INVALID_PARAMS, "reason too short",
+                           {"hint": "Opening a spend gate needs a written reason of at least 20 characters."})
+        if params.get("confirm") is not True:
+            self._refuse_spend("spendGateSet", "Opening the gate authorizes provider spend on this machine.")
+        self.gate_open = True
+        return {"open": True, "status": "authorized", "scope": params["scope"]}
+
     async def _rpc_examMine(self, params: dict[str, Any]) -> dict[str, Any]:
         """The mining funnel, mirrored: gate, consent, then a streaming job
         that lands one validated exam and one draft in the bank."""

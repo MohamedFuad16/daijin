@@ -249,11 +249,14 @@ def build_client(args: argparse.Namespace) -> tuple[RpcClient, bool]:
     return MockRpcClient(engine), True
 
 
-def resolve_repo(requested: str, is_mock: bool) -> str | None:
+def resolve_repo(requested: str | None, is_mock: bool) -> str | None:
     """Pick the repo the app opens on.
 
-    The mock engine only knows its own fixture paths, so a real path handed to
-    the mock falls back to the first fixture rather than showing an empty home.
+    None means the user typed bare `daijin` (owner round 9): open on the home
+    screen and let the selection sync pick the first attached repo, or leave
+    the attach box front and centre when nothing is attached yet. The mock
+    engine only knows its own fixture paths, so a real path handed to the
+    mock falls back to the first fixture rather than showing an empty home.
     """
     if not is_mock:
         return requested
@@ -268,7 +271,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         prog="daijin",
         description="Daijin terminal client for the project brain engine.",
     )
-    parser.add_argument("repo", nargs="?", default=".", help="repo to open, default the working directory")
+    parser.add_argument(
+        "repo", nargs="?", default=None,
+        help="repo to select on open; omit to choose from the attached repos",
+    )
     parser.add_argument("--mock", action="store_true", help="run against the bundled mock engine, no network, no spend")
     parser.add_argument(
         "--mock-speed",

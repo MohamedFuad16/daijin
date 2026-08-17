@@ -66,9 +66,19 @@ function stepper({ jobId, onStep, clock }) {
   return {
     setPhase(next) { phase = next; },
     get phase() { return phase; },
-    async emit({ step, detail = null, counts = null, level = 'info' }) {
+    async emit({ step, detail = null, counts = null, level = 'info', ...extra }) {
       if (!onStep) return;
-      await onStep({ ts: clock(), jobId, phase, step, detail, counts, level });
+      // EXTRAS PASS THROUGH. This used to rebuild the event from four named fields, so any
+      // other key an emit call supplied was dropped HERE, before the forwarder in
+      // methods.js that has its own list. actionCode was added to the blocked emit and died
+      // at this line: two silent whitelists in series, and the field existed engine-side
+      // and was unreachable client-side.
+      //
+      // The wire boundary stays in methods.js, which is the right place to decide what a
+      // client sees. This is not that boundary; it is the pipeline talking to itself, and
+      // silently discarding what a caller deliberately attached is not filtering, it is
+      // losing data.
+      await onStep({ ts: clock(), jobId, phase, step, detail, counts, level, ...extra });
     },
   };
 }
@@ -627,6 +637,11 @@ export async function initBrain({
       step: 'blocked',
       detail: `${report.blocked.reason} Failed: ${failed.join(' | ')}. ${action}`,
       level: 'warn',
+      // ON THE EVENT, not only on the report. The report is an in-process object that no
+      // method returns and nothing writes to disk, so a client's ONLY sight of a block is
+      // this event: a field that lives on the report alone is unreachable, which is what
+      // tui-builder measured when they went to build the control it was added for.
+      actionCode,
     });
     return { ...report, units, evidence, goldsetFile, cases: gated.cases };
   }

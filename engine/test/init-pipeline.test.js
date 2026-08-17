@@ -1053,3 +1053,45 @@ test('when survival fails, the raise signal names the smallest budget that works
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('every key the pipeline EMITS is either forwarded to the wire or named internal', async () => {
+  // THE GATE FOR THE NEXT DROPPED FIELD. methods.js forwards a fixed set of keys from the
+  // pipeline's step events, which is right - the event carries in-process detail a client
+  // has no business seeing - but an unlisted key is dropped IN SILENCE. That is how
+  // actionCode came to be real engine-side and unreachable client-side: added to the emit,
+  // killed at the forwarder, and nothing said so.
+  //
+  // Driven from a REAL RUN rather than harvested from source. A regex sweep over emit
+  // calls is the technique that under-read the health states in this repo and produced a
+  // false finding; what a run actually emits cannot be under-read the same way.
+  const root = mkdtempSync(path.join(tmpdir(), 'daijin-init-keys-'));
+  mkdirSync(path.join(root, 'src'), { recursive: true });
+  writeFileSync(path.join(root, 'src/only.js'), 'export function onlyThing() {\n  return 1;\n}\n');
+  writeFileSync(path.join(root, 'package.json'), '{"name":"tiny"}');
+  const { steps, store, directory } = await runInit(root, { discoverRepoGates: false });
+  try {
+    const seen = new Set();
+    for (const event of steps) for (const key of Object.keys(event)) seen.add(key);
+
+    // What the forwarder in methods.js passes through, plus what the runner stamps itself.
+    const FORWARDED = new Set(['phase', 'step', 'detail', 'counts', 'level', 'actionCode']);
+    // Deliberately NOT on the wire, each with the reason it stays in process.
+    const INTERNAL = new Set([
+      'ts',      // the runner restamps every event so the stream has one clock
+      'jobId',   // added by the runner, not by the pipeline
+    ]);
+
+    const dropped = [...seen].filter((key) => !FORWARDED.has(key) && !INTERNAL.has(key));
+    assert.deepEqual(dropped, [],
+      'the pipeline emits a key that methods.js silently drops: forward it, or add it to INTERNAL with a reason');
+
+    // Non-vacuity: if the run emitted nothing, or the shape collapsed, every filter above
+    // passes trivially. A blocked run must have produced the interesting keys.
+    assert.ok(seen.has('step') && seen.has('detail'), 'the run emitted no recognisable events');
+    assert.ok(seen.has('actionCode'), 'the blocked event did not carry actionCode');
+  } finally {
+    await store.close();
+    rmSync(directory, { recursive: true, force: true });
+    rmSync(root, { recursive: true, force: true });
+  }
+});

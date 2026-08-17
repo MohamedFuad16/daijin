@@ -326,3 +326,71 @@ test('the clusterer carries its denominator, so an empty cluster can be read cor
   assert.equal(allPassing.cases, 25, 'and the denominator is right there to size the emptiness');
   assert.equal(allPassing.hits, 25);
 });
+
+test('actionCode reaches a CLIENT on the blocked step, not just the in-process report', async () => {
+  // Measured by tui-builder against a real daemon before this existed: the field was on
+  // report.blocked, no method returns that report, nothing writes it to disk, and the step
+  // event carried { ts, jobId, phase, step, detail, level } and no more. So a field added
+  // for a client control was unreachable by any client.
+  //
+  // It had to cross THREE boundaries and TWO dropped it silently: the pipeline's stepper
+  // rebuilt each event from four named fields, and the forwarder here has its own list.
+  // Two positive whitelists in series, each narrowing without saying so.
+  //
+  // Asserted HERE, at the notification a client actually receives, rather than on the
+  // report object. A test on the report passes while every consumer sees nothing, which is
+  // the same lesson as F1's "the action must reach the emitted step" - written down four
+  // days before this defect, and not applied to the field that needed it.
+  const repoPath = await mkdtemp(path.join(tmpdir(), 'daijin-init-blocked-'));
+  const context = await harness({
+    repoPath,
+    pipeline: async ({ onStep }) => {
+      await onStep({
+        ts: 1, jobId: 'x', phase: 'floor', step: 'blocked', level: 'warn',
+        detail: 'The gold set did not pass its own integrity gates... Only 2 case(s) could be mined...',
+        actionCode: 'too-little-material',
+      });
+      return { floor: null, blocked: { at: 'goldset-gates', actionCode: 'too-little-material' } };
+    },
+  });
+  try {
+    const { jobId } = await context.server.methods.initBrain({ repoPath, mode: 'layer1' });
+    await context.server.jobs.drain();
+    const blocked = context.steps().filter((row) => row.jobId === jobId).find((row) => row.step === 'blocked');
+
+    assert.ok(blocked, 'the blocked step reached the channel at all');
+    assert.equal(blocked.actionCode, 'too-little-material',
+      'the code a client switches on must survive the forwarder');
+    assert.equal(blocked.level, 'warn');
+    // The prose still travels, because the code is for the control and the sentence is for
+    // the person. Neither replaces the other.
+    assert.match(blocked.detail, /gold set did not pass/);
+  } finally {
+    await context.cleanup();
+    await rm(repoPath, { recursive: true, force: true });
+  }
+});
+
+test('a step WITHOUT an actionCode does not carry an empty one', async () => {
+  // Absent rather than null, matching how counts behaves on this same stream: a client can
+  // tell "no code" from "a code with no value", and a control keyed on presence cannot be
+  // switched on by a field that is merely there and empty.
+  const repoPath = await mkdtemp(path.join(tmpdir(), 'daijin-init-plain-'));
+  const context = await harness({
+    repoPath,
+    pipeline: async ({ onStep }) => {
+      await onStep({ ts: 1, jobId: 'x', phase: 'identify', step: 'analyze', detail: '3 files', counts: null, level: 'info' });
+      return { floor: null };
+    },
+  });
+  try {
+    const { jobId } = await context.server.methods.initBrain({ repoPath, mode: 'layer1' });
+    await context.server.jobs.drain();
+    const analyze = context.steps().filter((row) => row.jobId === jobId).find((row) => row.step === 'analyze');
+    assert.ok(analyze);
+    assert.equal(Object.hasOwn(analyze, 'actionCode'), false);
+  } finally {
+    await context.cleanup();
+    await rm(repoPath, { recursive: true, force: true });
+  }
+});

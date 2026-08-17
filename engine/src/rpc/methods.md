@@ -79,7 +79,23 @@ JSON-RPC notification method `step`, board findings as method `boardFinding`.
 One jsonl step-event stream, the same shape the platform emits, powering both
 the init activity feed and the gym live view:
 
-`{ ts, jobId, phase, step, detail, counts?, level }`
+`{ ts, jobId, phase, step, detail, counts?, actionCode?, level }`
+
+[Amended 2026-08-17, D-0041: `actionCode` joins the step event, OMITTED rather than null
+when there is none, exactly as `counts` behaves, so a control keyed on its presence cannot
+be switched on by an empty field. Today only the init pipeline's `blocked` step carries it.
+
+It was already documented on initBrain's blocked REPORT and was unreachable: no method
+returns that report and nothing writes it to disk, so this event is a client's only sight
+of a block. tui-builder measured it against a real daemon when they went to build the
+control it was added for, and found the field existed engine-side and arrived nowhere.
+
+A step crosses FOUR reconstructions between the pipeline and a client - the pipeline's
+stepper, initBrain's onStep forwarder, the job runner, and stepEvent - and every one was a
+positive whitelist that dropped unlisted keys in SILENCE. The field was added at the source
+and died three times without a word. Only the last of the four is a wire boundary and it is
+right to be closed; the three upstream now pass extras through, and a test drives a real
+run and fails if the pipeline emits a key the forwarder does not carry.]
 
 [Added 2026-08-17, v5, the terminal-event invariant] Every job emits EXACTLY
 ONE event with `phase: "done"`, and it is the last event for that jobId. The

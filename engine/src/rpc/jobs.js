@@ -28,9 +28,21 @@ export const BOARD_FINDING_NOTIFICATION = 'boardFinding';
 
 /// One step event. The shape is the contract's, and `counts` is omitted rather than sent
 /// empty so a client can distinguish "no counts for this step" from "zero of everything".
-export function stepEvent({ jobId, phase, step, detail, counts = null, level = 'info', now = Date.now }) {
+///
+/// `actionCode` follows the same rule and for the same reason: absent when there is none,
+/// so a control keyed on its presence cannot be switched on by an empty field.
+///
+/// THIS IS THE FOURTH RECONSTRUCTION a step crosses on its way to a client. The pipeline's
+/// stepper built one, the initBrain forwarder built another, the runner calls this, and
+/// this builds the last. Every one was a positive whitelist that dropped unlisted keys in
+/// silence, which is how actionCode came to be real engine-side and invisible to every
+/// client: it was added at the source and died three times over without a word. The list
+/// here is the WIRE CONTRACT and is right to be closed; what was wrong was that the three
+/// upstream of it were closed too, and none of them said so.
+export function stepEvent({ jobId, phase, step, detail, counts = null, actionCode = null, level = 'info', now = Date.now }) {
   const event = { ts: now(), jobId, phase, step, detail, level };
   if (counts) event.counts = counts;
+  if (actionCode) event.actionCode = actionCode;
   return event;
 }
 

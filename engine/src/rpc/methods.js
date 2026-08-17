@@ -1889,7 +1889,19 @@ export function createMethods({
             // stream comes from one clock.
             onStep: (event) => {
               if (cancelled()) return;
-              emit(event.phase, event.step, event.detail, { counts: event.counts, level: event.level });
+              // FORWARDED BY NAME, and the list is the wire contract rather than an
+              // oversight: the pipeline's event carries in-process detail that has no
+              // business on a client's stream. But an unlisted field is DROPPED IN
+              // SILENCE, which is how actionCode came to exist engine-side and be
+              // unreachable client-side - added to the emit and killed at this line.
+              // init-pipeline.test.js drives a real run and fails if the pipeline emits a
+              // key that is neither forwarded here nor named internal, so the next field
+              // cannot be lost the same way.
+              emit(event.phase, event.step, event.detail, {
+                counts: event.counts,
+                level: event.level,
+                actionCode: event.actionCode,
+              });
             },
             // Layer 2 is not reachable in this build: no narrator is passed, so the
             // pipeline's own spend boundary refuses it. The consent check above is the

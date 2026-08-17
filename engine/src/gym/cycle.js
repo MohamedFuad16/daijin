@@ -24,6 +24,9 @@ import { buildGateCommand, classifyGateResults, expandGates, runCommand, runGate
 import { applyEngineerDiff, assertOwnSandboxRemoved, assertSandboxRootEmpty, createSandbox, foreignSandboxEntries } from './sandbox.js';
 import { assertSpendGate, autoBlockSpendGate } from './spend-gate.js';
 import { assertRunMode } from './run-mode.js';
+import { isGradableRun } from './run-mode.js';
+import { buildGradingPacket } from './grading.js';
+import { gradeAttemptWithTeacher } from './teacher-driver.js';
 import { examDrawRefusal } from './exams.js';
 import { buildStudentPrompt } from './prompt.js';
 import { resolveBudgetPolicy, tokenCapForExam } from './budget.js';
@@ -370,7 +373,7 @@ function resultExam(exam) {
  * loop wrote, and the summary reports it from the files.
  */
 export async function runGymCycle({
-  exams, mode, cohort = 'training', ledger, resultDir, closeGateAfter = true, ...attemptOptions
+  exams, mode, cohort = 'training', ledger, resultDir, closeGateAfter = true, teacher = null, ...attemptOptions
 }, dependencies = {}) {
   assertRunMode(mode);
   const cycleId = ledger ? ledger.startCycle({ mode, trigger: attemptOptions.trigger || 'manual', config: { cohort } }) : null;
@@ -380,7 +383,7 @@ export async function runGymCycle({
       const result = await runExamAttempt({ ...attemptOptions, exam, mode, cohort, resultDir }, dependencies);
       attempts.push(result);
       if (ledger && result.apply.applied) {
-        ledger.recordRun({
+        const runId = ledger.recordRun({
           cycleId,
           examId: exam.examId,
           mode,
@@ -393,6 +396,28 @@ export async function runGymCycle({
           sealedState: result.student?.sealedState ?? null,
           at: result.timestamp,
         });
+        // INLINE GRADING, when a teacher rides the cycle and the mode is
+        // gradable (the ledger refuses rubrics for harness-debug, and this
+        // respects that boundary rather than testing it). A grading failure
+        // is logged and the attempt stays pending - a rubric can be written
+        // later, an attempt cannot be re-run - and it never fails the cycle.
+        if (teacher && isGradableRun(mode)) {
+          try {
+            const diff = String(result.student?.state ?? '');
+            const packet = buildGradingPacket({
+              artifact: { ...result, exam: { id: exam.examId, task: exam.task }, student: { diff } },
+              exam,
+            });
+            const rubric = await (dependencies.gradeAttempt || gradeAttemptWithTeacher)({
+              runId, packet, exam, diff, candidate: result.candidate,
+              generate: teacher.generate, grader: teacher.grader,
+            });
+            ledger.importRubricBatch({ rubrics: [rubric], mode, source: 'inline-teacher', at: result.timestamp });
+            await attemptOptions.logger?.step?.('gym-graded', { exam: exam.examId, run: runId }, { verdict: rubric.verdict });
+          } catch (error) {
+            await attemptOptions.logger?.step?.('gym-grading-refused', { exam: exam.examId, run: runId }, { error: String(error.message).slice(0, 300) });
+          }
+        }
       }
     }
     if (ledger) ledger.finishCycle(cycleId, { status: 'completed' });

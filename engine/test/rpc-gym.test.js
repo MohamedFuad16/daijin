@@ -38,7 +38,7 @@ function exam(overrides = {}) {
   };
 }
 
-async function harness({ engineer = null, exams = [], gateOpen = false, runGymCycle } = {}) {
+async function harness({ engineer = null, exams = [], gateOpen = false, runGymCycle, createTeacher = null } = {}) {
   const stateRoot = await mkdtemp(path.join(tmpdir(), 'daijin-gym-state-'));
   const repoPath = await mkdtemp(path.join(tmpdir(), 'daijin-gym-repo-'));
   await mkdir(path.join(repoPath, '.daijin'), { recursive: true });
@@ -71,6 +71,7 @@ async function harness({ engineer = null, exams = [], gateOpen = false, runGymCy
       createEmbedderClient: () => { throw new Error('embedder unavailable'); },
       openStore: async () => ({ project: 'default', async close() {}, async allDocuments() { return []; }, async indexedEmbeddingIdentity() { return null; } }),
       ...(engineer ? { createEngineer: async () => engineer } : {}),
+      ...(createTeacher ? { createTeacher } : {}),
       ...(runGymCycle ? { runGymCycle: async (options) => { cycleCalls.push(options); return runGymCycle(options); } } : {}),
     },
   });
@@ -311,6 +312,9 @@ test('the default mode is never evaluation', async () => {
     gateOpen: true,
     engineer: { async next() { return { kind: 'submit', tokens: 1 }; } },
     runGymCycle: async () => ({ cycles: 1 }),
+    // The evaluation leg is GRADABLE, so gymStart demands a teacher before
+    // consent; the fake keeps this a mode test rather than a grading test.
+    createTeacher: async () => ({ generate: async () => ({ text: '{}' }), identity: { role: 'teacher', model: 'fake-teacher' } }),
   });
   try {
     await context.attach();

@@ -532,3 +532,90 @@ test('a student instruction file missing an ADR-0167 section runs, and says so o
     assert.match(findings[0].evidence, /completion-gauge, integration-first/);
   });
 });
+
+test('an experiment cycle with a teacher grades the applied attempt inline; harness-debug never grades', async () => {
+  // The inline wiring end to end over a REAL cycle: student edits and
+  // submits, the run row lands, the teacher's rubric is validated and
+  // stored, and the attempt read-back carries the verdict. The teacher's
+  // generate is scripted; everything else is the real machinery.
+  await withGym(async (context) => {
+    await openGate(context.gateFile);
+    const ledger = GymLedger.open(':memory:');
+    const subject = exam('exam-0008', context.baseCommit, context.goldCommit);
+    ledger.putExam(subject);
+    const engineer = {
+      next: async (contextIn) => {
+        if (contextIn.round === 1) {
+          await writeFile(path.join(contextIn.sandbox, 'app.js'), 'const value = 1;\nexport const wired = true;\n', 'utf8');
+          return { kind: 'edit', tokens: 100 };
+        }
+        return { kind: 'submit', tokens: 10, explanation: 'CRITERIA AUDIT: wired flag exported. MET at app.js:2.' };
+      },
+    };
+    const teacherGenerate = async ({ prompt }) => {
+      assert.match(prompt, /wired flag/, 'the teacher reads the task');
+      assert.match(prompt, /STRICT JSON/);
+      const axes = {};
+      for (const axis of ['correctness_vs_gold', 'convention_adherence', 'decision_awareness', 'reasoning_quality', 'blast_radius_awareness']) {
+        axes[axis] = { score: 4, citations: ['app.js:2'] };
+      }
+      return { text: JSON.stringify({ verdict: 'pass', axes, gaps: [] }), tokens: 400 };
+    };
+
+    await runGymCycle({
+      exams: [subject],
+      mode: 'experiment',
+      ledger,
+      gates: GATES,
+      engineer,
+      teacher: { generate: teacherGenerate, grader: { role: 'teacher', model: 'teacher-model', endpoint: 'https://other.invalid' } },
+      rules: context.rules,
+      policy: { baseTokenCap: 1_000, tierTokenCaps: { S: 1_000, M: 1_000, L: 1_000 }, extensionStep: 500, extensionLimit: 2 },
+      repoPath: context.repoPath,
+      sourceRepo: context.repo,
+      engineRoot: context.root,
+      sandboxesRoot: context.sandboxesRoot,
+      resultDir: context.resultDir,
+    }, { gateFile: context.gateFile });
+
+    const attempts = ledger.attemptsForExam('exam-0008');
+    assert.equal(attempts.length, 1);
+    assert.ok(attempts[0].rubric, 'the rubric landed beside the run');
+    assert.equal(attempts[0].rubric.verdict, 'pass');
+    assert.match(attempts[0].rubric.author, /teacher-model/);
+
+    // harness-debug with the same teacher NEVER grades: the ledger's mode
+    // boundary is respected, not tested.
+    await openGate(context.gateFile);
+    const debugSubject = exam('exam-0009', context.baseCommit, context.goldCommit);
+    ledger.putExam(debugSubject);
+    let teacherCalls = 0;
+    await runGymCycle({
+      exams: [debugSubject],
+      mode: 'harness-debug',
+      ledger,
+      gates: GATES,
+      engineer: {
+        next: async (contextIn) => {
+          if (contextIn.round === 1) {
+            await writeFile(path.join(contextIn.sandbox, 'app.js'), 'const value = 2;\nexport const wired = true;\n', 'utf8');
+            return { kind: 'edit', tokens: 100 };
+          }
+          return { kind: 'submit', tokens: 10, explanation: 'done' };
+        },
+      },
+      teacher: { generate: async () => { teacherCalls += 1; return { text: '{}' }; }, grader: { role: 'teacher', model: 'teacher-model' } },
+      rules: context.rules,
+      policy: { baseTokenCap: 1_000, tierTokenCaps: { S: 1_000, M: 1_000, L: 1_000 }, extensionStep: 500, extensionLimit: 2 },
+      repoPath: context.repoPath,
+      sourceRepo: context.repo,
+      engineRoot: context.root,
+      sandboxesRoot: context.sandboxesRoot,
+      resultDir: context.resultDir,
+    }, { gateFile: context.gateFile });
+    assert.equal(teacherCalls, 0, 'a harness-debug cycle never dials the teacher');
+    const debugAttempts = ledger.attemptsForExam('exam-0009');
+    assert.equal(debugAttempts[0].rubric ?? null, null);
+    ledger.close();
+  });
+});

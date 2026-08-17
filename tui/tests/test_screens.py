@@ -1053,6 +1053,24 @@ async def test_a_gym_cycle_that_broke_after_spending_is_not_called_complete():
         assert "503" in notice, "the engine's own reason is not carried"
 
 @run_async
+async def test_the_gym_mode_reaches_the_wire_and_defaults_to_the_quarantined_one():
+    """The mode is part of what the user consents to: harness-debug default
+    (ungraded, never scored), and an explicit experiment selection rides the
+    config so the teacher grades the cycle."""
+    async with running_app(gate_open=True) as (app, pilot):
+        await goto(pilot, "5")
+        await pick_an_exam(app, pilot)
+        app.screen.query_one("#gym-mode", Select).value = "experiment"
+        await settle(pilot)
+        await pilot.click("#gym-start")
+        await settle(pilot)
+        await pilot.click("#spend-confirm")
+        await settle(pilot, 12)
+        call = next(c for c in app.client.engine.calls if c[0] == "gymStart")
+        assert call[1]["config"]["mode"] == "experiment"
+
+
+@run_async
 async def test_gym_gate_refusal_becomes_the_open_offer_and_a_click_starts_the_run():
     """The gate is a BUTTON now (owner round 9): a blocked gate turns into an
     offer to open it scoped to gym-cycle, and accepting retries the start.

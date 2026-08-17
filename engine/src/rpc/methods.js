@@ -48,6 +48,7 @@ import { mineCommits, selectBankWithAuditor, validateChosenExam } from '../gym/m
 import { buildCommitteeAuditor } from '../gym/committee.js';
 import { createRoleGenerate } from '../roles/driver.js';
 import { createEngineerDriver } from '../gym/engineer-driver.js';
+import { isGradableRun } from '../gym/run-mode.js';
 import { createSandbox } from '../gym/sandbox.js';
 import { expandGates, runGateSet } from '../gym/gates.js';
 import { createSqliteStore } from '../store/sqlite.js';
@@ -316,7 +317,10 @@ export function attemptForWire(attempt, { axes, ungradedCode, ungradedReason }) 
     at: attempt.at,
     mode: attempt.mode,
     status: attempt.status,
-    verdict: attempt.verdict ?? null,
+    // The rubric's verdict when one exists: the run row's verdict column
+    // predates inline grading and stays null on graded rows, which served a
+    // "VERDICT null" beside five populated axes in the first live graded run.
+    verdict: attempt.rubric?.verdict ?? attempt.verdict ?? null,
     tokens: attempt.work_tokens ?? null,
     tokenCap: attempt.token_cap ?? null,
     grades: axes,
@@ -686,6 +690,42 @@ export function createMethods({
   const runInit = deps.initBrain || runInitPipeline;
   const openLedger = deps.openLedger || ((repoPath) => GymLedger.open(gymDatabasePath(repoPath)));
   const runCycle = deps.runGymCycle || runGymCycle;
+  /// Resolve one role into a live generate function plus its identity: the
+  /// shared plumbing under the auditor committee, the live engineer, and the
+  /// inline teacher. Refuses (invalidParams) when the role is unconfigured.
+  const roleGenerate = async (roleName) => {
+    const settings = await state.settings();
+    const role = settings.roles.find((row) => row.role === roleName);
+    if (!role?.provider || !role?.model) {
+      throw invalidParams(`${roleName} not configured`,
+        `The ${roleName} role has no provider or model configured. Set it up in settings first.`);
+    }
+    const catalog = await loadProviderCatalog();
+    const entry = catalog.providers.find((candidate) => candidate.id === role.provider);
+    let key = null;
+    if (entry?.keyRequired ?? true) {
+      if (!role.keyRef) throw invalidParams('no key pointer', `The ${roleName} role has no key pointer and ${role.provider} needs one.`);
+      try {
+        key = await resolveRoleKey(role.keyRef);
+      } catch (error) {
+        throw invalidParams('key not resolvable', error.message);
+      }
+    }
+    let agentPath = null;
+    if (role.provider === 'claude-code' && role.agentRef) {
+      const agents = await scanAgents({ repoPaths: (await state.repos()).map((row) => row.path) });
+      agentPath = agents.find((agent) => agent.id === role.agentRef)?.path ?? null;
+    }
+    const endpoint = role.endpoint || entry?.endpointDefault || null;
+    return {
+      role: { ...role, endpoint },
+      key,
+      agentPath,
+      generate: makeAuditorGenerate({ ...role, endpoint }, { key, agentPath }),
+      identity: { role: roleName, model: role.model, endpoint: endpoint ?? 'default' },
+    };
+  };
+
   // THE PAID SEAM. `engineer.next()` is the only provider call in a gym cycle. The
   // default factory builds the live driver from the ENGINEER role the owner configured
   // (claude-code roles run their chosen sub-agent); injectable so a cycle is fully
@@ -1768,6 +1808,15 @@ export function createMethods({
       // a job they already consented to. Construction is cheap: no provider is
       // dialled until the first next().
       const engineer = await createEngineer({ settings, repoPath });
+      // THE TEACHER RIDES GRADABLE CYCLES (owner round 10: "everything has to
+      // be wired"). harness-debug stays ungraded because the ledger refuses
+      // rubrics for it; an unconfigured teacher on a gradable mode refuses
+      // HERE, before consent buys a cycle whose grades can never arrive.
+      let teacher = null;
+      if (isGradableRun(config.mode ?? 'harness-debug')) {
+        const resolved = deps.createTeacher ? await deps.createTeacher({ settings, repoPath }) : await roleGenerate('teacher');
+        teacher = { generate: resolved.generate, grader: resolved.identity ?? resolved.grader };
+      }
 
       const jobId = jobs.start('gym', async ({ emit, cancelled }) => {
         // EVERYTHING inside one try, including the opens: the live run caught
@@ -1794,6 +1843,7 @@ export function createMethods({
             mode: config.mode ?? 'harness-debug',
             cohort: config.cohort ?? 'training',
             ledger,
+            teacher,
             gates: cycleGates,
             engineer,
             rules: await studentRules(repoPath),

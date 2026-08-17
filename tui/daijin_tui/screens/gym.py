@@ -55,6 +55,20 @@ class GymScreen(DaijinScreen):
             # mock_data.EXAMS[0], which put a fictional exam id into the one
             # dialog whose whole job is telling the truth about a paid call.
             yield Select([], id="gym-exam", prompt="exam to certify", allow_blank=True)
+            # The mode is part of what the user consents to. harness-debug is
+            # quarantined and UNGRADED (the ledger refuses rubrics for it);
+            # experiment is graded by the teacher but never scored; evaluation
+            # is the scored record itself.
+            yield Select(
+                [
+                    ("harness-debug (ungraded)", "harness-debug"),
+                    ("experiment (graded, not scored)", "experiment"),
+                    ("evaluation (SCORED RECORD)", "evaluation"),
+                ],
+                value="harness-debug",
+                id="gym-mode",
+                allow_blank=False,
+            )
             yield Static("", id="gym-gate", markup=True)
         with TabbedContent(id="gym-tabs"):
             with TabPane("Live", id="gym-tab-live"):
@@ -403,12 +417,23 @@ class GymScreen(DaijinScreen):
             estimate = await self.client.call("budgetEstimate", {"repoPath": repo, "mode": "gym"})
         except RpcError as error:
             self.report_rpc_error(error)
+
+        mode = str(self.query_one("#gym-mode", Select).value or "harness-debug")
         confirmed = await self.confirm_spend(
             method="gymStart",
             summary=(
-                f"One certification cycle on {repo}, exam {exam_id}, in mode harness-debug. "
-                f"The student model works the exam under the ADR-0167 harness defaults and "
-                f"the teacher grades it. Nothing is written to the scored record in this mode."
+                f"One certification cycle on {repo}, exam {exam_id}, in mode {mode}. "
+                + (
+                    "The engineer works the exam and the TEACHER role grades each "
+                    "applied attempt in this mode."
+                    if mode != "harness-debug"
+                    else "The engineer works the exam; this mode is ungraded and never scored."
+                )
+                + (
+                    " Evaluation rows enter the SCORED RECORD."
+                    if mode == "evaluation"
+                    else " Nothing is written to the scored record in this mode."
+                )
             ),
             estimate_lines=list(budget_estimate_lines(estimate)),
             confirm_label="Run the cycle and spend",
@@ -424,7 +449,7 @@ class GymScreen(DaijinScreen):
                     "gymStart",
                     {
                         "repoPath": repo,
-                        "config": {"examId": exam_id, "mode": "harness-debug"},
+                        "config": {"examId": exam_id, "mode": mode},
                         "confirm": True,
                         # Every spend-confirmed call whose dialog showed an estimate
                         # echoes it, so the run record holds what the user actually
@@ -452,4 +477,4 @@ class GymScreen(DaijinScreen):
         self.job_id = result.get("jobId")
         self.query_one("#gym-checklist", PhaseChecklist).reset(self.job_id)
         self.query_one("#gym-events", EventLog).clear()
-        notice.set_notice(f"Cycle running, job {self.job_id}, mode harness-debug.", "info")
+        notice.set_notice(f"Cycle running, job {self.job_id}, mode {mode}.", "info")

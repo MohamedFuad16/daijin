@@ -1,5 +1,40 @@
 # Daijin build state (authoritative)
 
+## 2026-08-17 16:10 - ULTRAREVIEW 1 of 3 (engine-data): 7 findings, none critical
+
+External review of review-engine-data (store, rag, init; 9,336 lines):
+3 normal, 4 nit, 0 critical. Routed to the extractor as findings-not-
+fixes; the two instrument findings additionally to the verifier for
+evidence-impact assessment.
+
+NORMAL: (1) evidence.js carries three raw NUL bytes as Map-key
+separators - git treats it as binary (no diff, no blame, unreviewable
+IN THE VERY REVIEW THAT FOUND IT), and walk.js drops NUL-bearing
+files, so Daijin initing against its own repo SILENTLY OMITS
+evidence.js from its own brain. (2) assertNoContractUnits over-
+matches: any agents/ segment fires, so host repos with src/agents/
+(LangGraph/CrewAI layouts - exactly the target population) fail
+ingest; same overreach for manifest.json (extensions, PWAs). (3)
+pgvector lacks the project accessor, making the pipeline's mismatch
+guard unreachable - a latent cross-project purge in a shared DB; one
+line, mirrors sqlite.
+
+NITS: (4) pgvector standingDocuments does not escape LIKE metachars
+(parity break vs sqlite; shipped prefix safe); (5) scoreGoldset
+records parityMode from the corpus descriptor not the store - BOTH P2
+A/B arms labeled parityMode:true on exactly the axis they differ on;
+(6) permuteAnswers can emit must_return:[undefined] when a case
+covers every unique id - the D-0030 range silently reads unavailable;
+(7) brain-artifact marker serializer has unescaped delimiters, latent
+on ASCII, one JSON-encode closes the class.
+
+Fix order: 1 (self-scan corruption), 2 (target-repo blocker), then
+3-7. Findings 5-6 get verifier assessment of recorded evidence impact
+(P2 labels, D-0030 ranges) - annotate, not re-run, unless a
+conclusion leaned on the wrong field. Free runs 2-3: review-engine-rpc
+and review-tui-src; test and aux slices deferred as lowest-risk
+(mutation-verified all week).
+
 ## 2026-08-17 15:30 - Deferred by decision: hello carrying the vocabularies
 
 An option raised by tui-builder, relayed by the extractor with a cost

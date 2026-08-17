@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "note": "The provider and model catalog the settings dialog populates from. A STARTING POINT, NOT A REGISTRY: model identifiers change, are retired, and are added far faster than this file is edited, so treat a missing model as this file being out of date rather than as the model not existing. Nothing here is probed or verified. The engine never calls a provider to build this list, and cannot be made to: rolePing is the only path that verifies a model or a key, and it is spend-touching and fires only when a user asks for it by hand.",
+  "note": "The provider and model catalog the settings dialog populates from. A STARTING POINT, NOT A REGISTRY: model identifiers change, are retired, and are added far faster than this file is edited, so treat a missing model as this file being out of date rather than as the model not existing. Nothing here is probed or verified. The engine never calls a provider to build this list, and cannot be made to: rolePing is the only path that verifies a model or a key, and it is spend-touching and fires only when a user asks for it by hand. Model IDs verified against provider announcements 2026-08-17 by web search; they will drift again.",
   "maintenance": "Owned by the repository owner and corrected through ordinary commits, so a wrong or missing model identifier is a one-line edit rather than a code change. Adding a provider means adding an entry here AND to the closed enum the engine validates against; the engine derives that enum from this file, so the two cannot drift.",
   "fields": {
     "id": "The value stored in a role's `provider`. The VENDOR name, not a display name.",
@@ -18,49 +18,54 @@
       "keyRequired": true,
       "models": [
         {
+          "id": "gpt-5.6-sol",
+          "label": "GPT-5.6 Sol (flagship)",
+          "reasoningEffort": [
+            "none",
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max"
+          ]
+        },
+        {
+          "id": "gpt-5.6-terra",
+          "label": "GPT-5.6 Terra (balanced)",
+          "reasoningEffort": [
+            "none",
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max"
+          ]
+        },
+        {
+          "id": "gpt-5.6-luna",
+          "label": "GPT-5.6 Luna (efficient)",
+          "reasoningEffort": [
+            "none",
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max"
+          ]
+        },
+        {
+          "id": "gpt-5.5",
+          "label": "GPT-5.5",
+          "reasoningEffort": [
+            "low",
+            "medium",
+            "high",
+            "xhigh"
+          ]
+        },
+        {
           "id": "gpt-5.2",
           "label": "GPT-5.2",
-          "reasoningEffort": [
-            "low",
-            "medium",
-            "high"
-          ]
-        },
-        {
-          "id": "gpt-5.1",
-          "label": "GPT-5.1",
-          "reasoningEffort": [
-            "low",
-            "medium",
-            "high"
-          ]
-        },
-        {
-          "id": "gpt-5",
-          "label": "GPT-5",
-          "reasoningEffort": [
-            "low",
-            "medium",
-            "high"
-          ]
-        },
-        {
-          "id": "gpt-5-mini",
-          "label": "GPT-5 mini",
-          "reasoningEffort": [
-            "low",
-            "medium",
-            "high"
-          ]
-        },
-        {
-          "id": "gpt-4.1",
-          "label": "GPT-4.1",
-          "reasoningEffort": null
-        },
-        {
-          "id": "o3",
-          "label": "o3",
           "reasoningEffort": [
             "low",
             "medium",
@@ -76,6 +81,12 @@
       "keyRequired": true,
       "models": [
         {
+          "id": "claude-fable-5",
+          "label": "Claude Fable 5 (flagship agent)",
+          "reasoningEffort": null,
+          "note": "Fable 5 uses adaptive thinking the model manages itself; there is no effort tier to choose."
+        },
+        {
           "id": "claude-opus-5",
           "label": "Claude Opus 5",
           "reasoningEffort": [
@@ -83,7 +94,7 @@
             "medium",
             "high"
           ],
-          "note": "Anthropic's control is an extended-thinking token budget rather than a named tier. These names map onto budgets engine-side."
+          "note": "Anthropic's control is an extended-thinking token budget; these names map onto budgets engine-side."
         },
         {
           "id": "claude-sonnet-5",
@@ -96,18 +107,8 @@
           "note": "Same budget mapping as Opus."
         },
         {
-          "id": "claude-opus-4-5",
-          "label": "Claude Opus 4.5",
-          "reasoningEffort": [
-            "low",
-            "medium",
-            "high"
-          ],
-          "note": "Same budget mapping as Opus."
-        },
-        {
-          "id": "claude-sonnet-4-5",
-          "label": "Claude Sonnet 4.5",
+          "id": "claude-opus-4-8",
+          "label": "Claude Opus 4.8",
           "reasoningEffort": [
             "low",
             "medium",
@@ -129,6 +130,16 @@
       "keyRequired": true,
       "models": [
         {
+          "id": "grok-4.6",
+          "label": "Grok 4.6",
+          "reasoningEffort": [
+            "low",
+            "medium",
+            "high",
+            "xhigh"
+          ]
+        },
+        {
           "id": "grok-4.1",
           "label": "Grok 4.1",
           "reasoningEffort": [
@@ -139,14 +150,6 @@
         {
           "id": "grok-4",
           "label": "Grok 4",
-          "reasoningEffort": [
-            "low",
-            "high"
-          ]
-        },
-        {
-          "id": "grok-3",
-          "label": "Grok 3",
           "reasoningEffort": [
             "low",
             "high"
@@ -163,19 +166,29 @@
         {
           "id": "glm-5.3",
           "label": "GLM-5.3",
-          "reasoningEffort": null,
-          "note": "GLM exposes thinking as an on/off switch rather than as graded effort, so there is no tier to choose and the field is null."
+          "reasoningEffort": [
+            "on",
+            "off"
+          ],
+          "note": "GLM exposes thinking as a switch, not a tier: on enables thinking, off disables it."
+        },
+        {
+          "id": "glm-5",
+          "label": "GLM-5",
+          "reasoningEffort": [
+            "on",
+            "off"
+          ],
+          "note": "GLM exposes thinking as a switch, not a tier: on enables thinking, off disables it."
         },
         {
           "id": "glm-4.6",
           "label": "GLM-4.6",
-          "reasoningEffort": null,
-          "note": "GLM exposes thinking as an on/off switch rather than as graded effort, so there is no tier to choose and the field is null."
-        },
-        {
-          "id": "glm-4.5",
-          "label": "GLM-4.5",
-          "reasoningEffort": null
+          "reasoningEffort": [
+            "on",
+            "off"
+          ],
+          "note": "GLM exposes thinking as a switch, not a tier: on enables thinking, off disables it."
         }
       ]
     },

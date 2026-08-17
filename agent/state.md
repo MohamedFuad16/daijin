@@ -1,5 +1,59 @@
 # Daijin build state (authoritative)
 
+## 2026-08-17 19:30 - The ultrareview era, consolidated; all 21 findings closed
+
+THE CAMPAIGN: three external reviews (engine-data, engine-rpc,
+tui-src; the whole-repo and 20k slices exceeded limits, so six
+empty-base subset branches were cut and the three free runs were spent
+on the highest-stakes slices). RESULT: 21 findings - 3 normal (all
+engine-data: the evidence.js NUL bytes that made the file unreviewable
+AND silently omitted from Daijin's own self-scan; the agents/ regex
+refusing the target population's standard layouts; the latent pgvector
+cross-project purge), 18 nits, ZERO critical, nothing design-level.
+ALL 21 REPRODUCED BEFORE FIXING, ALL FIXED, ALL MERGED (8329790,
+dbb2b87, 64e94ce).
+
+VERIFIER REPORT 23: the two instrument findings touch NO recorded
+conclusion - the P2 labels were never read (values-never-labels paying
+directly) and the permute defect's precondition never existed on the
+gold set. Annotations pending, to be carried.
+
+THE ERA'S EXPORTS: (a) the recurrence diagnosis - earlier fixes were
+written as EXPRESSIONS at sites rather than things another site could
+inherit; the class fixes (shared atomic writer, cycleForWire, the
+harvested logger shape) are the inheritable answers. (b) GREP FOR THE
+SIBLING BEFORE WRITING THE FIX - five of tui's seven were this week's
+code, fixed on the path being looked at, not its twin. (c) The
+consolidated instrument question replacing three lessons: where does
+the other side of this comparison come from, can the thing under test
+move it, and if it cannot, did I write both sides from the same
+belief. (d) THE BRANCH IS NOT THE COMMITS - a push-merge race put a
+flaky test on main under a merged branch name; closed within the hour
+by per-commit ancestor checks, now the confirmation standard. (e) the
+mutate-once pyc flaw: stale bytecode OUTLIVING the invocation (the
+false-finding class in a shared tool); fixed in the tool for every
+run, bound stated.
+
+PRODUCT SINCE THE REVIEWS: README leads with the real installer (one
+daijin command on PATH; venv demoted to Development). THE SPLASH
+(9e32e50): dithered DAIJIN wordmark doubling as the honest loading
+screen, all motion modes, first-run attach affordance, failure shows
+the real error through the brand. THE HEADER MARK (6b754b4): 23-column
+three-row form, same ramp so it reads as the same object shrunk;
+degradation ruled - below the word's own width it renders NOTHING,
+because a header is not worth a broken mark. Owner's calls: no
+minimum splash hold; persistent header brand. Phantom phases removed
+from TERMINAL_PHASES; the vocabulary sweep found NO phantoms and
+labelled the one deliberate out-of-contract probe row by name. Spend
+surface: no dialog without a repo, the exam chosen by the user from
+real examList, the picker deliberately BLANK even with one exam - a
+choice the user did not make has no place on a spend path.
+
+Tip 6b754b4, all lanes merged, every commit verified in main
+individually. REMAINING BEFORE RELEASE: the verifier's two annotations
+(checkout is on main - write and carry now), one watched CI run on the
+tip, then the owner's D-0034 sequence.
+
 ## 2026-08-17 16:10 - ULTRAREVIEW 1 of 3 (engine-data): 7 findings, none critical
 
 External review of review-engine-data (store, rag, init; 9,336 lines):

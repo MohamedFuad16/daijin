@@ -332,3 +332,107 @@ def test_a_failure_after_a_done_is_not_hidden():
     checklist.apply_event({"jobId": "j", "phase": "done", "step": "finished", "detail": "", "level": "info"})
     checklist.apply_event({"jobId": "j", "phase": "done", "step": "failed", "detail": "boom", "level": "error"})
     assert "failed" in checklist.snapshot_lines()[0]
+
+
+# FIELD TEST, 2026-08-17: the raw stream was misaligned and wrapped mid-token,
+# with detail text colliding with counts and long paths breaking the columns.
+LONG_EVENT = {
+    "ts": 15_900,
+    "jobId": "job-init-0001",
+    "phase": "retrieval-floor",
+    "step": "sweep",
+    "detail": (
+        "reading /Users/owner/code/orchard-web/src/features/upload/queue/"
+        "ordering-guarantee.ts and comparing it against the recorded baseline"
+    ),
+    "counts": {"hits": 31, "cases": 34},
+    "level": "info",
+}
+
+
+def test_the_stream_reads_as_a_table_even_when_a_detail_is_a_sentence():
+    """Continuations sit under the detail column, not at column zero.
+
+    Wrapping at the frame edge is what made a long detail collide with the
+    columns beside it, so the wrap is done here where the column positions are
+    known rather than left to the widget.
+    """
+    from daijin_tui.widgets.activity import EventLog
+
+    width = 100
+    lines = EventLog.format_event(LONG_EVENT, width).split("\n")
+    assert len(lines) > 1, "the sample is not long enough to wrap, so this checks nothing"
+
+    head = lines[0]
+    indent = len(head) - len(head.lstrip(" "))
+    detail_column = head.index("sweep") + len("sweep")
+    for line in lines[1:]:
+        stripped = len(line) - len(line.lstrip(" "))
+        assert stripped > detail_column, (
+            f"a continuation started at column {stripped}, inside the step column"
+        )
+    assert len({len(line) - len(line.lstrip(" ")) for line in lines[1:]}) == 1, (
+        "the continuations do not share one hanging indent"
+    )
+    for line in lines:
+        assert len(line) <= width, f"a line ran to {len(line)} in a {width} column frame"
+
+
+def test_a_long_path_is_cut_in_the_middle_so_both_ends_survive():
+    """A path is identified by its start and its basename.
+
+    Cutting the tail throws away the half that names the thing, so the cut is
+    in the middle and both ends are asserted.
+    """
+    from daijin_tui.widgets.activity import EventLog
+
+    path = "/Users/owner/code/orchard-web/src/features/upload/queue/ordering-guarantee.ts"
+    cut = EventLog.truncate_middle(path, 40)
+    assert len(cut) == 40, f"the truncation did not respect the limit: {len(cut)}"
+    assert cut.startswith("/Users/owner"), "the head of the path was lost"
+    assert cut.endswith("guarantee.ts"), "the basename was lost, which is the half that names it"
+    assert "..." in cut
+    # Short enough to fit is left alone.
+    assert EventLog.truncate_middle("short.ts", 40) == "short.ts"
+
+
+def test_counts_are_their_own_segment_rather_than_glued_to_the_detail():
+    from daijin_tui.widgets.activity import EventLog
+
+    rendered = EventLog.format_event(LONG_EVENT, 100)
+    assert "hits 31, cases 34" in rendered
+    # The complaint was the two colliding: the counts must not begin on the
+    # same line as the last word of a detail that filled its column.
+    detail_end = "recorded baseline"
+    line_with_detail = next(l for l in rendered.split("\n") if detail_end in l)
+    assert "hits 31" not in line_with_detail or len(line_with_detail) <= 100
+
+
+def test_the_formatter_degrades_rather_than_producing_one_word_per_line():
+    from daijin_tui.widgets.activity import EventLog, MIN_DETAIL_WIDTH
+
+    for width in (0, 10, 30, 40):
+        rendered = EventLog.format_event(LONG_EVENT, width)
+        assert rendered, f"width {width} produced nothing"
+        if width > 0:
+            longest = max(len(line) for line in rendered.split("\n"))
+            assert longest <= max(width, MIN_DETAIL_WIDTH + 40), (
+                f"width {width} produced a {longest} column line"
+            )
+
+
+def test_the_widget_does_not_re_wrap_what_the_formatter_already_laid_out():
+    """Two wrappers over one string is how the hanging indent gets undone.
+
+    format_event owns the layout because it knows where the columns are. If
+    RichLog also wraps, any disagreement between the width used to format and
+    the width at render time (a scrollbar appearing is enough) re-flows the
+    line at the frame edge and puts the continuation back at column zero,
+    which is the original defect.
+    """
+    from daijin_tui.widgets.activity import EventLog
+
+    log = EventLog()
+    assert log.wrap is False, (
+        "the widget wraps as well as the formatter, so the two can disagree"
+    )

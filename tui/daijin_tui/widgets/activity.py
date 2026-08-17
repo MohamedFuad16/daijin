@@ -16,6 +16,10 @@ from textual.widgets import RichLog, Static
 
 SPINNER_FRAMES = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
 
+# Below this the detail column is too narrow to be a column at all, and the
+# layout gives up rather than producing one word per line.
+MIN_DETAIL_WIDTH = 24
+
 STATUS_GLYPH = {
     "pending": "○",
     "skipped": "-",
@@ -395,7 +399,10 @@ class EventLog(RichLog):
     """The raw step-event stream, one jsonl row per line, newest at the bottom."""
 
     def __init__(self, **kwargs: Any) -> None:
-        kwargs.setdefault("wrap", True)
+        # Wrapping is done in format_event, which knows where the columns are.
+        # RichLog's own wrap starts continuations at column zero and is what
+        # made a long detail collide with the columns beside it.
+        kwargs.setdefault("wrap", False)
         kwargs.setdefault("markup", False)
         kwargs.setdefault("max_lines", 2_000)
         super().__init__(**kwargs)
@@ -403,17 +410,80 @@ class EventLog(RichLog):
         self.add_class("event-log")
 
     @staticmethod
-    def format_event(event: dict[str, Any]) -> str:
+    def truncate_middle(text: str, limit: int) -> str:
+        """Shorten a long token from the MIDDLE, keeping both ends.
+
+        A path is identified by its start and its basename; cutting the tail
+        throws away the half that names the thing. The ellipsis is a plain
+        three dots so the column arithmetic stays in ASCII cells.
+        """
+        if limit <= 0 or len(text) <= limit:
+            return text
+        if limit <= 5:
+            return text[:limit]
+        keep = limit - 3
+        head = (keep + 1) // 2
+        return f"{text[:head]}...{text[len(text) - (keep - head):]}"
+
+    @classmethod
+    def format_detail(cls, detail: str, limit: int) -> str:
+        """Middle-truncate any token too long to sit in the detail column."""
+        if limit <= 0:
+            return detail
+        return " ".join(
+            cls.truncate_middle(token, limit) if len(token) > limit else token
+            for token in detail.split(" ")
+        )
+
+    @classmethod
+    def format_event(cls, event: dict[str, Any], width: int = 0) -> str:
+        """One event as fixed columns, with the detail wrapped under itself.
+
+        The stream has to read as a TABLE even when a detail is a sentence, so
+        the wrapping is done here rather than left to the widget: RichLog wraps
+        at the frame edge and starts the continuation at column zero, which is
+        what made long details collide with the columns beside them. Counts get
+        their own segment for the same reason.
+        """
         ts = event.get("ts")
         stamp = f"{float(ts) / 1000:7.2f}s" if isinstance(ts, (int, float)) else str(ts)
-        counts = event.get("counts") or {}
-        tail = ""
-        if counts:
-            tail = "  " + ", ".join(f"{k} {v}" for k, v in counts.items())
         step = str(event.get("step", "?"))
         marker = STEP_MARKER.get(step, "")
         prefix = f"[{marker}] " if marker else ""
-        return f"{stamp}  {event.get('phase', '?'):<16}{step:<12}{prefix}{event.get('detail', '')}{tail}"
+        head = f"{stamp}  {str(event.get('phase', '?')):<16}{step:<12}"
+
+        counts = event.get("counts") or {}
+        tail = ", ".join(f"{k} {v}" for k, v in counts.items()) if counts else ""
+        body = f"{prefix}{event.get('detail', '')}"
+
+        if width <= 0:
+            return f"{head}{body}{'  ' + tail if tail else ''}"
+        indent = len(head)
+        room = max(MIN_DETAIL_WIDTH, width - indent)
+        body = cls.format_detail(body, room)
+        words, lines, current = body.split(" "), [], ""
+        for word in words:
+            candidate = f"{current} {word}".strip()
+            if current and len(candidate) > room:
+                lines.append(current)
+                current = word
+            else:
+                current = candidate
+        lines.append(current)
+        if tail:
+            # Counts are a UNIT and never flow with the prose. Wrapping them as
+            # words split "cases 34" across two lines, which is the collision
+            # the field test reported rather than a cosmetic nicety.
+            if len(lines[-1]) + 2 + len(tail) <= room:
+                lines[-1] = f"{lines[-1]}  {tail}"
+            else:
+                lines.append(tail)
+        # Hanging indent: continuations start under the detail column, so the
+        # three columns to their left stay a column.
+        return "\n".join(
+            (head + lines[0]) if index == 0 else (" " * indent + line)
+            for index, line in enumerate(lines)
+        )
 
     @staticmethod
     def style_for(event: dict[str, Any]) -> str:
@@ -427,4 +497,7 @@ class EventLog(RichLog):
 
     def append_event(self, event: dict[str, Any]) -> None:
         self.event_count += 1
-        self.write(Text(self.format_event(event), style=self.style_for(event)))
+        # The widget's own width, so the wrap happens where the frame ends.
+        self.write(
+            Text(self.format_event(event, self.size.width or 0), style=self.style_for(event))
+        )

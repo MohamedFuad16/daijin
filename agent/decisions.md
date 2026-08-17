@@ -878,3 +878,19 @@ whether the field is the only path to something a user was COMPELLED
 to produce - a field with no reader because nobody could reach it is
 not unread, it is unreachable, and removing it converts a required
 record into a toll.
+
+## D-0036 (2026-08-17) Attach warns on non-git, refuses only what cannot work
+
+Field-test ruling, recorded here because the code's behavior departs
+from the original spec text and the departure deserves a numbered
+home, not a source comment alone. The spec said refuse a path not
+inside a git repo; the ruling ACCEPTS the extractor's overrule: attach
+REFUSES what cannot work (a path that does not exist, a file) and
+WARNS on what works-and-produces-less (a non-git directory, a
+subdirectory of a repo with the root named). The deciding measurement:
+init on a non-git directory completes eight phases and blocks at the
+gold-set integrity gate like any thin repo, now with the gate naming
+its floors and the likely cause. Refuse-versus-warn is the distinction
+the inspection exists to draw. The 60-fixture cost of refusal was
+named by the extractor as a motivated-conclusion hazard and was not
+the basis of the ruling.

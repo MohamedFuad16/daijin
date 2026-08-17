@@ -6,6 +6,7 @@ path, pilot.click for the mouse path.
 
 from __future__ import annotations
 
+import tempfile
 import asyncio
 from typing import Any
 
@@ -2060,36 +2061,51 @@ async def test_a_local_provider_is_not_asked_for_a_key():
 
 
 @run_async
-async def test_a_pasted_key_is_refused_before_it_is_sent():
-    """The engine never sees a key value, and the user learns that at the field."""
+async def test_a_pasted_key_becomes_a_private_file_and_a_pointer():
+    """The engine never sees a key value. That property is UNCHANGED; the
+    mechanism moved at the owner's direction: instead of refusing a pasted key
+    and sending the user off to make a file by hand, the dialog makes the file
+    (0600, under the state root) and stores the pointer. The assertions that
+    matter are the ones the old refusal test carried: the value is never
+    echoed on screen and never leaves in the patch."""
+    import os
+    import stat
+    from pathlib import Path
+
     from daijin_tui.screens.role_dialog import RoleConfigScreen
     from textual.widgets import Input
 
     async with running_app() as (app, pilot):
-        catalog = await app.client.call("providerCatalog", {})
-        screen = RoleConfigScreen(
-            role={"role": "engineer", "provider": "openai", "model": "gpt-5.2"},
-            catalog=catalog,
-        )
-        await app.push_screen(screen)
-        await settle(pilot)
-        screen.query_one("#role-keyref", Input).value = "sk-ant-abc123def456"
-        await settle(pilot)
-        note = text_of(screen.query_one("#role-key-note", Static))
-        # The ENGINE's sentence now, so this asserts the PROPERTY rather than
-        # my wording: it explains what a pointer is, it never claims the value
-        # IS a key (a claim the shape whitelist cannot support), and above all
-        # it does not echo what was typed.
-        assert "never the key" in note, f"the refusal does not explain itself: {note!r}"
-        assert "sk-ant-abc123def456" not in note, "the warning echoed the pasted value"
-        for overclaim in ("looks like a key", "that is a key", "is a secret"):
-            assert overclaim not in note
+        with tempfile.TemporaryDirectory() as root:
+            app.state_root = root
+            catalog = await app.client.call("providerCatalog", {})
+            screen = RoleConfigScreen(
+                role={"role": "engineer", "provider": "openai", "model": "gpt-5.2"},
+                catalog=catalog,
+            )
+            results: list = []
+            app.push_screen(screen, results.append)
+            await settle(pilot)
+            screen.query_one("#role-keyref", Input).value = "sk-ant-abc123def456"
+            await settle(pilot)
+            note = text_of(screen.query_one("#role-key-note", Static))
+            assert "sk-ant-abc123def456" not in note, "the note echoed the pasted value"
+            assert "never crosses the wire" in note, f"the note does not explain storage: {note!r}"
 
-        # And Save does not dismiss with it.
-        await pilot.click("#role-save")
-        await settle(pilot)
-        assert app.screen is screen, "a pasted key was accepted and sent"
-        app.pop_screen()
+            await pilot.click("#role-save")
+            await settle(pilot)
+            assert results, "save did not dismiss"
+            patch = results[0]
+            key_ref = patch.get("keyRef", "")
+            # The PATCH carries a pointer, never the value.
+            assert "sk-ant-abc123def456" not in str(patch), "the key value left the dialog"
+            assert key_ref.startswith("file:"), f"expected a file pointer, got {key_ref!r}"
+            key_file = Path(key_ref[len("file:"):])
+            assert key_file.is_file(), "the pointer names a file that was not written"
+            assert key_file.read_text().strip() == "sk-ant-abc123def456"
+            mode = stat.S_IMODE(os.stat(key_file).st_mode)
+            assert mode == 0o600, f"key file mode {oct(mode)}, want 0600"
+            assert str(key_file).startswith(root), "the key escaped the state root"
 
 
 @run_async

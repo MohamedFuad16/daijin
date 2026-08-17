@@ -61,14 +61,19 @@ async function scoreSet(cases, label) {
 // factor of three between runs, so it cannot support a figure in user-facing copy. This
 // uses many more draws and reports a DISPERSION rather than a range.
 const DRAWS = Number(process.env.DRAWS || 30);
-console.log(`platform corpus, ${all.length} cases, ${DRAWS} independent draws per size\n`);
+// SEED IS A PARAMETER so seed sensitivity can be CHECKED rather than assumed. The first
+// version of this measurement used a fixed seed and a range statistic, and moved by a
+// factor of three when re-run - which was invisible until someone re-ran it. A dispersion
+// that is quoted anywhere must survive a fresh seed, and this is how that is tested.
+const SEED = Number(process.env.SEED || 20000);
+console.log(`platform corpus, ${all.length} cases, ${DRAWS} independent draws per size, seed ${SEED}\n`);
 console.log('size   n   mean    sd     p10    p90    p90-p10   one case');
 console.log('----  ---  -----  -----  -----  -----  -------   --------');
 
 for (const size of [12, 15, 18, 25]) {
   const rates = [];
   for (let r = 0; r < DRAWS; r += 1) {
-    const chosen = sample(all, size, 20000 + size * 7919 + r * 104729);
+    const chosen = sample(all, size, SEED + size * 7919 + r * 104729);
     const cand = await scoreSet(chosen, `s-${size}-${r}`);
     rates.push(cand.caseRate.exact * 100);
   }

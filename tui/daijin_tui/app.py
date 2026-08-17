@@ -77,11 +77,16 @@ class DaijinApp(App):
         Binding("question_mark", "help_panel", "Keys", show=True),
     ]
 
-    def __init__(self, client: RpcClient, *, is_mock: bool = False, repo: str | None = None, **kwargs: Any) -> None:
+    def __init__(self, client: RpcClient, *, is_mock: bool = False, repo: str | None = None,
+                 state_root: str | None = None, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self.client = client
         self.is_mock = is_mock
         self.selected_repo = repo
+        # Where client-side artifacts (pasted-key files) live. Follows
+        # --state-root so tests and alternate roots never write to the real
+        # home; the engine's own state lives under the same root.
+        self.state_root = str(Path(state_root or DEFAULT_STATE_ROOT).expanduser())
         self.critical_findings: list[dict[str, Any]] = []
         # One Motion for the whole app: every animation goes through it, so
         # "off" is a single switch rather than a convention screens must keep.
@@ -311,7 +316,8 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 2
     client, is_mock = build_client(args)
-    app = DaijinApp(client, is_mock=is_mock, repo=resolve_repo(args.repo, is_mock))
+    app = DaijinApp(client, is_mock=is_mock, repo=resolve_repo(args.repo, is_mock),
+                    state_root=args.state_root)
     app.run()
     return 0
 

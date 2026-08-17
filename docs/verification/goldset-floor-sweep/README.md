@@ -61,7 +61,29 @@ were mined differing.
 | 18 | 92.0 | 4.8 | 88.9 | 100.0 | 11.1 | 5.6 pts |
 | 25 | 91.3 | 3.2 | 88.0 | 96.0 | 8.0 | 4.0 pts |
 
-Raw output in `spread-30-draws.txt`.
+Raw output in `spread-30-draws.txt` (seed 20000).
+
+### Seed sensitivity: the dispersion did NOT survive a fresh seed
+
+Re-run with `SEED=777001`, raw output in `spread-30-draws-seed777001.txt`:
+
+| size | sd (20000 to 777001) | p10-p90 band | band in CASES |
+| --- | --- | --- | --- |
+| 12 | 6.1 to 7.2 | 16.7 to 16.7 | 2 to 2 |
+| 15 | 5.5 to 6.4 | 13.3 to 13.3 | 2 to 2 |
+| 18 | 4.8 to 4.7 | 11.1 to **16.7** | 2 to **3** |
+| 25 | 3.2 to 2.8 | 8.0 to 8.0 | 2 to 2 |
+
+The standard deviation moves by up to 18 percent, and the p10-p90 band moved at one size of
+four. SO NO MEASURED SPREAD IS QUOTED IN USER-FACING COPY: the caution states the per-case
+weight alone, which is exact arithmetic and identical on every run.
+
+There is a reason the band looks stable where it is stable, and it is worth knowing before
+anyone quotes it. At N cases the case rate is QUANTIZED to steps of 1/N, so p10 and p90 snap
+to case boundaries. Expressed in cases rather than points the band is "about two cases" at
+almost every size and seed - which is a restatement of the per-case arithmetic times two,
+not an independent measurement of anything. A figure that is stable because it is coarse is
+not the same as a figure that is stable because it is well estimated.
 
 ## THERE IS NO KNEE, and an earlier version of this document said there was
 
@@ -92,7 +114,9 @@ the areas and types gates, so the count floor never had to carry that load.
 
 ## So where does 12 come from
 
-From arithmetic, and it is a product judgment rather than an empirical threshold.
+From arithmetic, and it is A PRODUCT JUDGMENT MADE BY THE LEAD rather than an empirical
+threshold found here. This directory supplies the arithmetic and rules out the criterion
+that was expected to supply the number; it does not itself pick 12.
 
 One case is `1/N` of the case rate. That is exact, needs no sampling, and does not move
 between runs: 8.3 points at 12, 5.6 at 18, 4.0 at 25. The question the floor answers is how
@@ -117,9 +141,15 @@ choice among them is not a finding.
 
 ```
 cd <repo>/engine
-node ../docs/verification/goldset-floor-sweep/spread.mjs          # DRAWS=30 by default
-node ../docs/verification/goldset-floor-sweep/headroom-sweep.mjs  # REPEATS=5 by default
+node ../docs/verification/goldset-floor-sweep/spread.mjs                 # DRAWS=30, SEED=20000
+SEED=777001 node ../docs/verification/goldset-floor-sweep/spread.mjs     # a fresh seed
+node ../docs/verification/goldset-floor-sweep/headroom-sweep.mjs         # REPEATS=5 by default
 ```
+
+SEED IS A PARAMETER on purpose. The first version of this measurement used a fixed seed and
+a range statistic and moved by a factor of three when re-run, which was invisible until
+someone re-ran it. Any figure quoted from here - especially one destined for user-facing
+copy - has to survive a fresh seed first.
 
 Both need a reachable local ollama and the platform corpus (`DAIJIN_PLATFORM_ROOT`). They
 read the corpus and write nothing.

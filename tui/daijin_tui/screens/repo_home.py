@@ -378,6 +378,11 @@ class RepoHomeScreen(DaijinScreen):
             return
         field.value = ""
         attached = (result.get("repo") or {}).get("path", path)
+        # Attaching IS selecting. The card click sets selected_repo and this
+        # path did not, so a user who attached and pressed 2 was told "no repo
+        # selected" over a repo they had just attached - the field test hit
+        # exactly that. One action, one meaning.
+        self.app.selected_repo = attached
         # repoAttach returns { repo, warning }, and the warning is not a
         # refusal: the attach SUCCEEDED. Verified shape on 2026-08-17.
         warning = result.get("warning")

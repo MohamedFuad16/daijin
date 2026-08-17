@@ -20,7 +20,9 @@ control rendered as "none" would read as a supported setting turned off.
 
 from __future__ import annotations
 
+import os
 import re
+from pathlib import Path
 from typing import Any, Iterable, Sequence
 
 from textual.app import ComposeResult
@@ -48,6 +50,12 @@ KEY_REF_REFUSED = (
 KEY_REF_OK = "Reads as a pointer. The engine resolves it at call time."
 KEY_REF_HINT = "A pointer to the key, never the key: {forms}."
 KEY_NOT_REQUIRED = "This provider is local and needs no key."
+KEY_PASTE_NOTE = (
+    "Reads as a key VALUE. On save it is stored in a private file under the "
+    "state root's keys/ directory (readable only by you) and only that "
+    "file's path is kept. "
+    "The key itself never crosses the wire."
+)
 _SHOUTING = re.compile(r"^[A-Z][A-Z0-9_]*$")
 # After the prefix, case IS allowed: a lowercase environment variable is legal
 # and `env:` has already disambiguated. The BARE form must still shout, because
@@ -163,6 +171,26 @@ def key_ref_refusal(value: str) -> str | None:
     return REFUSAL_BARE
 
 
+def looks_like_pasted_key(value: str) -> bool:
+    """A value that is not a pointer but plausibly IS the key itself.
+
+    The field's likeliest wrong input was always a pasted API key, and the
+    old answer was a refusal that sent the user off to create a file by
+    hand. The product answer is to do that for them: the dialog writes the
+    key to a private file and stores the pointer, so the pointer-only rule
+    on the wire is kept without asking a user to know it. Deliberately
+    loose (no whitespace, not tiny, not a pointer): a false positive costs
+    one unnecessary key file, a false negative costs a refusal, and both
+    are recoverable.
+    """
+    text = (value or "").strip()
+    return (
+        len(text) >= 8
+        and not any(ch.isspace() for ch in text)
+        and parse_key_ref(text) is None
+    )
+
+
 class RoleConfigScreen(ModalScreen[dict[str, Any] | None]):
     """Returns the patch for one role, or None on cancel."""
 
@@ -209,7 +237,7 @@ class RoleConfigScreen(ModalScreen[dict[str, Any] | None]):
             yield Select([], id="role-reasoning", prompt="reasoning effort", allow_blank=True)
             yield Static("", id="role-model-note", markup=True)
             yield Input(
-                placeholder="env:NAME, file:/abs/path, or env-file:/abs/path#NAME",
+                placeholder="paste your API key, or point at one: env:NAME, file:/abs/path",
                 id="role-keyref",
                 value=str(self.role.get("keyRef") or ""),
             )
@@ -298,6 +326,9 @@ class RoleConfigScreen(ModalScreen[dict[str, Any] | None]):
         if not value:
             note.update(f"[dim]{KEY_REF_HINT.format(forms=', '.join(KEY_REF_FORMS))}[/dim]")
             return
+        if looks_like_pasted_key(value):
+            note.update(f"[green]{KEY_PASTE_NOTE}[/green]")
+            return
         refusal = key_ref_refusal(value)
         if refusal:
             # The ENGINE's sentence, not one composed here. Two explanations of
@@ -339,10 +370,35 @@ class RoleConfigScreen(ModalScreen[dict[str, Any] | None]):
             self.dismiss(None)
             return
         provider = self._provider(self.query_one("#role-provider", Select).value) or {}
-        value = self.query_one("#role-keyref", Input).value.strip()
+        field = self.query_one("#role-keyref", Input)
+        value = field.value.strip()
         if provider.get("keyRequired", True) and value and parse_key_ref(value) is None:
-            # Refuse HERE rather than sending something the engine will reject:
-            # the user should learn it while looking at the field.
-            self._check_key_ref()
-            return
+            if looks_like_pasted_key(value):
+                # The value IS the key. Store it privately and keep the
+                # pointer, so the wire rule holds without the user having to
+                # know it. The input shows the pointer afterwards, which is
+                # the honest rendering of what was saved.
+                field.value = self._store_pasted_key(value)
+                self._check_key_ref()
+            else:
+                # Refuse HERE rather than sending something the engine will
+                # reject: the user should learn it while looking at the field.
+                self._check_key_ref()
+                return
         self.dismiss(self._patch())
+
+    def _store_pasted_key(self, value: str) -> str:
+        """Write a pasted key to a private per-role file; return the pointer.
+
+        0700 directory, 0600 file: readable by the owner alone. The file is
+        overwritten on re-paste so a rotated key needs no cleanup, and the
+        pointer is stable so settings never change shape.
+        """
+        root = getattr(self.app, "state_root", None)
+        keys_dir = (Path(root) if root else Path.home() / ".daijin") / "keys"
+        keys_dir.mkdir(parents=True, exist_ok=True)
+        os.chmod(keys_dir, 0o700)
+        key_file = keys_dir / f"{self.role.get('role', 'role')}.key"
+        key_file.write_text(value + "\n", encoding="utf-8")
+        os.chmod(key_file, 0o600)
+        return f"file:{key_file}"

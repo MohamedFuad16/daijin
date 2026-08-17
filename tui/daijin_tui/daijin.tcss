@@ -364,7 +364,10 @@
     color: $warning;
 }
 
-SpendConfirmScreen, TextPromptScreen, AgentFileEditScreen {
+/* EVERY modal centres. The first version of this rule enumerated three
+   screens by name, so RoleConfigScreen and GatesFileEditScreen rendered
+   top-left: the class fix is the selector that cannot miss the next one. */
+ModalScreen {
     align: center middle;
 }
 

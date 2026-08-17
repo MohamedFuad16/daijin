@@ -276,7 +276,11 @@ test('the caution names both numbers and says which way to fix it', () => {
   assert.equal(caution.cases, 14);
   assert.match(caution.note, /14 cases/);
   assert.match(caution.note, /7\.1 points/, 'the per-case weight travels in the prose, not only in the field');
-  assert.match(caution.note, /vary by about \d+ points/, 'the measured spread is stated, not implied');
+  // ARITHMETIC ONLY. A measured spread was in an earlier draft and was removed: the
+  // measurement behind it moved by a factor of three across seeds, and a figure in copy
+  // that a re-run can contradict is worse than no figure. What is quoted here cannot drift.
+  assert.doesNotMatch(caution.note, /vary by about/, 'no measured figure may be quoted unless it survives a re-seed');
+  assert.equal(Object.hasOwn(caution, 'spreadPoints'), false);
   // A caution that only says "this is imprecise" leaves the reader with nothing to do.
   assert.match(caution.note, /More material narrows the bars/);
 });

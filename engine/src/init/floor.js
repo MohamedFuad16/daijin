@@ -169,14 +169,13 @@ export async function sweepBudgets({
  * readers will not. Between the measurability floor and the low-resolution ceiling the
  * report says the bars out loud.
  *
- * Two numbers, and they are different kinds of thing:
- *   perCasePoints is EXACT ARITHMETIC. One case is 1/N of the rate. It cannot drift.
- *   spreadPoints is MEASURED, and it is the standard deviation of the floor across 30
- *     independent equally-valid minings of one corpus at this size. Evidence and method:
- *     docs/verification/goldset-floor-sweep/. It is quoted as "about" because it is an
- *     estimate from one corpus, and an earlier version of this measurement (a range over
- *     six draws) moved by a factor of three between runs, which is why this one reports a
- *     dispersion over thirty.
+ * IT QUOTES ARITHMETIC ONLY. One case is 1/N of the rate: exact, needs no sampling, and
+ * identical on every run. An earlier draft also quoted a measured spread, and that number
+ * had to earn its place rather than be assumed - the first version of the measurement
+ * behind it moved by a factor of three when re-run with different seeds, and a figure in
+ * user-facing copy that a re-run can contradict is worse than no figure at all. The
+ * evidence, including the dispersion attempt and its instability, is in
+ * docs/verification/goldset-floor-sweep/.
  */
 export function lowResolutionCaution(cases, floors) {
   if (!cases || cases >= floors.lowResolutionBelow) return null;
@@ -184,10 +183,9 @@ export function lowResolutionCaution(cases, floors) {
   return {
     cases,
     perCasePoints: Number(perCasePoints.toFixed(1)),
-    spreadPoints: 6,
     note: `This floor was measured from ${cases} cases, so one case is worth ${perCasePoints.toFixed(1)} points. `
-      + 'Floors from sets this small vary by about 6 points across equally valid minings of the same repository, '
-      + 'so read it as a wide-bar reading rather than a precise number. More material narrows the bars.',
+      + 'Read it as a wide-bar reading rather than a precise number: a single case landing either way moves it '
+      + 'by that much. More material narrows the bars.',
   };
 }
 

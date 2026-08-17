@@ -1042,39 +1042,60 @@ every repository - one number answering two questions that only coincide by
 accident.
 
 Decision: `targetCases` stays 25 and mining still aims for it. `minimumCases`
-becomes 12, the measurability floor. Between 12 and 14 the floor report
-carries an explicit low-resolution caution; at 15 and above the count form
-alone suffices. A discrimination gate (headroom over a permuted control >= 3
-cases) is added alongside, and the identifier floor scales with the set
-instead of sitting fixed at 5.
+becomes 12, the measurability floor. Below 15 the floor report carries an
+explicit low-resolution caution. A discrimination gate (headroom over a
+permuted control >= 3 cases) is added alongside, and the identifier floor
+scales with the set instead of sitting fixed at 5.
 
-The floor is a PRODUCT JUDGMENT INFORMED BY ARITHMETIC, and it is recorded
-that way because it was first proposed as an empirical threshold and was not
-one. One case is 1/N of the rate: 8.3 points at 12, 5.6 at 18, 4.0 at 25.
-That is exact and does not move. The ruling's reason is that a legitimate
-modest repository deserves a measurement with wide bars rather than a
-refusal; the same evidence supports 15 or 18 equally well and does not
-distinguish them.
+THE FLOOR IS A PRODUCT JUDGMENT, MADE BY THE LEAD, informed by arithmetic. It
+is recorded that way because it was first proposed as an empirical threshold
+and is not one. The arithmetic that survives is sufficient and does not move:
+one case is 1/N of the rate, so at 12 a single case is worth 8.3 points -
+coarse but still a measurement - while below 12 one case is a tenth of the
+scale or worse, and a number one case can move by ten points has stopped
+being a measurement the product should publish. 15 versus 12 is settled by
+the question the owner actually asked: a legitimate modest repository gets
+wide bars, not a refusal.
 
-Two claims made while arguing for this number were RETRACTED before it
-landed, and both retractions are in the evidence directory rather than only
-here. There is no knee in the data: the statistic that showed one was a range
-over six draws and moved by a factor of three between runs, while a proper
-30-draw dispersion declines smoothly (6.1, 5.5, 4.8, 3.2) with no threshold
-in it. And the caveat that subsampling a mature corpus is a best case was
-measured and found false - clustered draws, which are what a small repository
-mines, showed identical spread and better headroom.
+THE ONE EMPIRICAL FINDING THAT STANDS is that D-0030's discriminating range
+CANNOT PICK THIS FLOOR. Headroom over a permuted control never reaches zero
+at any size tested, down to six cases, across both random and clustered
+draws. The range is kept as a separate gate because it catches a set that is
+large and degenerate, which a count cannot see, and it is expected to bind
+rarely. Adding it reverses `measureResolution`'s documented "reported, never
+gated": the range stays reported either way, and what changes is that a set
+with no discriminating room no longer also gets a floor - the same reasoning
+that stops a gold set which failed its own integrity gates from scoring.
 
-D-0030's discriminating range was expected to be the principled source of
-this floor and turned out not to be: headroom never reaches zero at any size
-tested, down to six cases. It is kept as a separate gate because it catches a
-set that is large and degenerate, which a count cannot see, and it is
-expected to bind rarely. Adding it reverses `measureResolution`'s documented
-"reported, never gated": the range stays reported either way, and what
-changes is that a set with no discriminating room no longer also gets a
-floor, on the same reasoning that stops a gold set which failed its own
-integrity gates from scoring.
+TWO CLAIMS MADE WHILE ARGUING FOR THIS NUMBER WERE RETRACTED BEFORE IT
+LANDED, and both retractions are in the evidence directory rather than only
+here.
+
+THERE IS NO KNEE. The statistic that appeared to show one was a range over
+six draws; re-run with different seeds it moved by a factor of three (12
+gave 25.0 points then 8.3; 18 gave 11.1 then 16.7). A proper 30-draw
+dispersion declines smoothly with no threshold in it. This is the
+actionCode error class - a rule inferred from samples that happened to
+differ, reported as a measurement - named two days earlier by the same
+author and repeated on the very number under proposal, then caught by
+re-running before landing rather than after.
+
+AND THE OPTIMISM BOUND WAS FALSE. The argument that subsampling a mature
+corpus is a best case, because a real thin repo mines a more clustered set,
+was measured rather than left asserted: clustered draws showed identical
+spread and better headroom. Clustering degrades neither axis, and heavy
+clustering is separately caught by the areas and types gates, so the count
+floor never had to carry that load.
+
+The caution copy quotes ARITHMETIC ONLY for the same reason: a measured
+spread had to survive a re-seed to be quoted in user-facing text, since a
+figure a re-run can contradict is worse than no figure.
+
+Evidence, both instruments, both runs, the seed sensitivity and the
+clustering result: docs/verification/goldset-floor-sweep/. It lives in the
+repository rather than in scratch because a policy threshold whose basis is
+gone cannot be checked, and this basis changed twice in the hour it took to
+measure.
 
 Consequences: repositories between 12 and 24 cases now init and measure where
-they were refused. Their numbers are coarse and say so. Evidence, both
-instruments and both retractions: docs/verification/goldset-floor-sweep/.
+they were refused. Their numbers are coarse and say so.

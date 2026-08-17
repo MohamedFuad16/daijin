@@ -17,12 +17,56 @@
       "endpointDefault": "https://api.openai.com/v1",
       "keyRequired": true,
       "models": [
-        { "id": "gpt-5.2", "label": "GPT-5.2", "reasoningEffort": ["low", "medium", "high"] },
-        { "id": "gpt-5.1", "label": "GPT-5.1", "reasoningEffort": ["low", "medium", "high"] },
-        { "id": "gpt-5", "label": "GPT-5", "reasoningEffort": ["low", "medium", "high"] },
-        { "id": "gpt-5-mini", "label": "GPT-5 mini", "reasoningEffort": ["low", "medium", "high"] },
-        { "id": "gpt-4.1", "label": "GPT-4.1", "reasoningEffort": null },
-        { "id": "o3", "label": "o3", "reasoningEffort": ["low", "medium", "high"] }
+        {
+          "id": "gpt-5.2",
+          "label": "GPT-5.2",
+          "reasoningEffort": [
+            "low",
+            "medium",
+            "high"
+          ]
+        },
+        {
+          "id": "gpt-5.1",
+          "label": "GPT-5.1",
+          "reasoningEffort": [
+            "low",
+            "medium",
+            "high"
+          ]
+        },
+        {
+          "id": "gpt-5",
+          "label": "GPT-5",
+          "reasoningEffort": [
+            "low",
+            "medium",
+            "high"
+          ]
+        },
+        {
+          "id": "gpt-5-mini",
+          "label": "GPT-5 mini",
+          "reasoningEffort": [
+            "low",
+            "medium",
+            "high"
+          ]
+        },
+        {
+          "id": "gpt-4.1",
+          "label": "GPT-4.1",
+          "reasoningEffort": null
+        },
+        {
+          "id": "o3",
+          "label": "o3",
+          "reasoningEffort": [
+            "low",
+            "medium",
+            "high"
+          ]
+        }
       ]
     },
     {
@@ -32,18 +76,50 @@
       "keyRequired": true,
       "models": [
         {
+          "id": "claude-opus-5",
+          "label": "Claude Opus 5",
+          "reasoningEffort": [
+            "low",
+            "medium",
+            "high"
+          ],
+          "note": "Anthropic's control is an extended-thinking token budget rather than a named tier. These names map onto budgets engine-side."
+        },
+        {
+          "id": "claude-sonnet-5",
+          "label": "Claude Sonnet 5",
+          "reasoningEffort": [
+            "low",
+            "medium",
+            "high"
+          ],
+          "note": "Same budget mapping as Opus."
+        },
+        {
           "id": "claude-opus-4-5",
           "label": "Claude Opus 4.5",
-          "reasoningEffort": ["low", "medium", "high"],
-          "note": "Anthropic's control is an extended-thinking token budget rather than a named tier. These names map onto budgets engine-side; a provider that changes that mapping changes behaviour without changing this file."
+          "reasoningEffort": [
+            "low",
+            "medium",
+            "high"
+          ],
+          "note": "Same budget mapping as Opus."
         },
         {
           "id": "claude-sonnet-4-5",
           "label": "Claude Sonnet 4.5",
-          "reasoningEffort": ["low", "medium", "high"],
+          "reasoningEffort": [
+            "low",
+            "medium",
+            "high"
+          ],
           "note": "Same budget mapping as Opus."
         },
-        { "id": "claude-haiku-4-5", "label": "Claude Haiku 4.5", "reasoningEffort": null }
+        {
+          "id": "claude-haiku-4-5",
+          "label": "Claude Haiku 4.5",
+          "reasoningEffort": null
+        }
       ]
     },
     {
@@ -52,9 +128,30 @@
       "endpointDefault": "https://api.x.ai/v1",
       "keyRequired": true,
       "models": [
-        { "id": "grok-4", "label": "Grok 4", "reasoningEffort": ["low", "high"] },
-        { "id": "grok-3", "label": "Grok 3", "reasoningEffort": ["low", "high"] },
-        { "id": "grok-3-mini", "label": "Grok 3 mini", "reasoningEffort": ["low", "high"] }
+        {
+          "id": "grok-4.1",
+          "label": "Grok 4.1",
+          "reasoningEffort": [
+            "low",
+            "high"
+          ]
+        },
+        {
+          "id": "grok-4",
+          "label": "Grok 4",
+          "reasoningEffort": [
+            "low",
+            "high"
+          ]
+        },
+        {
+          "id": "grok-3",
+          "label": "Grok 3",
+          "reasoningEffort": [
+            "low",
+            "high"
+          ]
+        }
       ]
     },
     {
@@ -63,9 +160,23 @@
       "endpointDefault": "https://api.z.ai/api/paas/v4",
       "keyRequired": true,
       "models": [
-        { "id": "glm-4.6", "label": "GLM-4.6", "reasoningEffort": null, "note": "GLM exposes thinking as an on/off switch rather than as graded effort, so there is no tier to choose and the field is null." },
-        { "id": "glm-4.5", "label": "GLM-4.5", "reasoningEffort": null },
-        { "id": "glm-4.5-air", "label": "GLM-4.5 Air", "reasoningEffort": null }
+        {
+          "id": "glm-5.3",
+          "label": "GLM-5.3",
+          "reasoningEffort": null,
+          "note": "GLM exposes thinking as an on/off switch rather than as graded effort, so there is no tier to choose and the field is null."
+        },
+        {
+          "id": "glm-4.6",
+          "label": "GLM-4.6",
+          "reasoningEffort": null,
+          "note": "GLM exposes thinking as an on/off switch rather than as graded effort, so there is no tier to choose and the field is null."
+        },
+        {
+          "id": "glm-4.5",
+          "label": "GLM-4.5",
+          "reasoningEffort": null
+        }
       ]
     },
     {
@@ -75,9 +186,21 @@
       "keyRequired": false,
       "note": "THESE ARE SUGGESTIONS, NOT AN INVENTORY. Every other provider's list is unknowable without a paid call, so a static list is the only honest option there. Ollama is different: what is actually installed is local truth, reported by `ollama list` and by /api/tags, and this list will happily name models the owner does not have. Reading the installed set would be zero-spend and correct, and it is deliberately NOT done here because providerCatalog is specified as a static unprobeable table. If a client shows this list to pick a local model, say that it is a suggestion.",
       "models": [
-        { "id": "qwen3:8b", "label": "Qwen3 8B", "reasoningEffort": null },
-        { "id": "llama3.1:8b", "label": "Llama 3.1 8B", "reasoningEffort": null },
-        { "id": "deepseek-r1:8b", "label": "DeepSeek-R1 8B", "reasoningEffort": null }
+        {
+          "id": "qwen3:8b",
+          "label": "Qwen3 8B",
+          "reasoningEffort": null
+        },
+        {
+          "id": "llama3.1:8b",
+          "label": "Llama 3.1 8B",
+          "reasoningEffort": null
+        },
+        {
+          "id": "deepseek-r1:8b",
+          "label": "DeepSeek-R1 8B",
+          "reasoningEffort": null
+        }
       ]
     }
   ]

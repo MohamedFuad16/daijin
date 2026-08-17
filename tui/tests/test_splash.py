@@ -152,7 +152,12 @@ async def test_reduced_stages_the_information_without_the_column_entrance():
     async with running_app() as (app, pilot):
         await app.push_screen(screen)
         await settle(pilot)
-        assert screen.stage == STAGE_WORDMARK
+        # NOT an exact stage: the staging timers may or may not have advanced
+        # by now depending on how loaded the machine is, and asserting the
+        # instant would be a wall-clock race of exactly the kind this project
+        # calls a flaky gate. The properties that define `reduced` are that the
+        # information is staged AT ALL and that no frame is ever partial.
+        assert screen.stage >= STAGE_WORDMARK, "reduced rendered nothing"
         assert screen.reveal is None, "reduced drew a partial frame"
         assert screen._stage_timers, "reduced scheduled nothing, so it never stages"
 

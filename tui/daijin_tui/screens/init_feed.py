@@ -135,10 +135,10 @@ class InitFeedScreen(DaijinScreen):
         for event in batch:
             log.append_event(event)
         self._update_progress(checklist)
-        # TERMINAL_PHASES, not a literal: the engine may end with complete or
-        # finished, and a literal here would leave the running banner up AND
-        # skip the failed branch on a run that broke. gates.py already imports
-        # it; this is the same constant nobody else got round to importing.
+        # TERMINAL_PHASES, not a literal. The wire sends exactly one phase
+        # here and this constant names it, so the value is not the point: the
+        # SHARED SOURCE is. A literal at three call sites is how two of them
+        # came to miss the terminal event entirely while the third handled it.
         done = next((e for e in batch if e.get("phase") in TERMINAL_PHASES), None)
         if done is not None:
             # A run that BROKE used to reach this banner and say "Init

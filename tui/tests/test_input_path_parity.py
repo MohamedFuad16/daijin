@@ -58,22 +58,48 @@ async def test_f1_spend_dialog_uses_fixture_data():
 
 @run_async
 async def test_f2_terminal_phase_constant_ignored():
-    """complete/finished are terminal too; the banners only know 'done'."""
+    """Two banners hard-coded the phase while a constant existed for it.
+
+    The constant's VALUE is not the fix and never was: the contract's
+    terminal-event invariant (methods.md v5) says every job emits exactly one
+    event with phase "done", so there is only one value to know. The fix is
+    that three files read ONE source, which is why two of them could miss the
+    terminal event while the third handled it correctly.
+
+    This test therefore checks both halves: the constant matches the wire, and
+    no site re-states it as a literal.
+    """
+    import inspect
+
+    from daijin_tui.screens import gates, gym, init_feed
     from daijin_tui.widgets.activity import TERMINAL_PHASES
 
+    assert TERMINAL_PHASES == frozenset({"done"}), (
+        f"the constant documents phases the engine cannot send: "
+        f"{sorted(TERMINAL_PHASES - {'done'})}"
+    )
+    for module in (gates, gym, init_feed):
+        source = inspect.getsource(module)
+        assert 'get("phase") == "done"' not in source, (
+            f"{module.__name__} re-states the phase as a literal instead of "
+            f"reading the shared constant"
+        )
+        assert "TERMINAL_PHASES" in source, f"{module.__name__} does not read the constant"
+
+    # And the behaviour the shared source buys: a terminal event that BROKE is
+    # reported, in the file that used to skip it.
     async with running_app() as (app, pilot):
         await goto(pilot, "2")
         screen = app.screen
         screen.job_id = "job-init-0001"
         screen.query_one("#init-checklist", PhaseChecklist).reset("job-init-0001")
         screen._render_events([
-            {"ts": 0, "jobId": "job-init-0001", "phase": "complete", "step": "failed",
+            {"ts": 0, "jobId": "job-init-0001", "phase": "done", "step": "failed",
              "detail": "the embedder refused", "level": "error"},
         ])
         await settle(pilot)
         notice = text_of(screen.query_one("#init-notice", Banner))
-        assert "complete" in TERMINAL_PHASES
-        assert "FAILED" in notice, f"a terminal phase that is not 'done' was ignored: {notice!r}"
+        assert "FAILED" in notice, f"the terminal event was not read: {notice!r}"
 
 
 @run_async

@@ -2663,8 +2663,8 @@ def test_an_unreachable_reading_says_it_may_be_cached():
         "db": {"backend": "sqlite", "repos": 0, "stateRoot": "~/.daijin"},
         "spendGate": {"open": False, "path": ".daijin/GATE"},
     })
-    assert "cached briefly" in down, "an unreachable reading does not admit it may be stale"
-    assert "may still say unreachable" in down
+    assert "may be cached" in down, "an unreachable reading does not admit it may be stale"
+    assert "ctrl+r" in down, "the caveat does not say how to get a fresh reading"
 
     # And a REACHABLE reading does not carry the caveat: it would be noise on
     # the state where nobody is about to retry.
@@ -2674,4 +2674,77 @@ def test_an_unreachable_reading_says_it_may_be_cached():
         "db": {"backend": "sqlite", "repos": 1, "stateRoot": "~/.daijin"},
         "spendGate": {"open": False, "path": ".daijin/GATE"},
     })
-    assert "cached briefly" not in up
+    assert "may be cached" not in up
+
+
+@run_async
+async def test_only_an_explicit_refresh_bypasses_the_engines_cache():
+    """The contract row: fresh is for an explicit user action.
+
+    A client passing it on every paint defeats the cache and restores the
+    five-second-per-paint defect it exists to prevent. So the flag is read
+    once and cleared, and every automatic paint leaves it alone.
+    """
+    async with running_app() as (app, pilot):
+        await settle(pilot, 12)
+        screen = app.screen
+        seen: list[dict] = []
+        original = app.client.call
+
+        async def record(method, params=None):
+            if method == "serveStatus":
+                seen.append(dict(params or {}))
+            return await original(method, params)
+
+        app.client.call = record
+        try:
+            # An automatic reload: no flag, so no bypass.
+            screen.start_load()
+            await screen.wait_for_load()
+            await settle(pilot, 4)
+            assert seen, "serveStatus was not called"
+            assert "fresh" not in seen[-1], (
+                f"an automatic paint asked to bypass the cache: {seen[-1]}"
+            )
+
+            # ctrl+r: the one case where a cached answer is wrong.
+            seen.clear()
+            await pilot.press("ctrl+r")
+            await screen.wait_for_load()
+            await settle(pilot, 4)
+            assert seen, "the refresh did not reach serveStatus"
+            assert seen[0].get("fresh") is True, f"ctrl+r did not ask for fresh: {seen[0]}"
+            # A REAL boolean: the engine refuses anything else with -32602
+            # rather than coercing it, so a truthy string would be a refusal.
+            assert isinstance(seen[0]["fresh"], bool)
+
+            # And the flag does not leak into the NEXT automatic paint, which is
+            # how "only on ctrl+r" would become "on everything after the first".
+            seen.clear()
+            screen.start_load()
+            await screen.wait_for_load()
+            await settle(pilot, 4)
+            assert seen and "fresh" not in seen[-1], (
+                f"the flag leaked into the following automatic load: {seen[-1]}"
+            )
+        finally:
+            app.client.call = original
+
+
+@run_async
+async def test_the_cache_caveat_points_at_the_way_out():
+    """Saying a reading may be stale is only half of it.
+
+    ctrl+r now bypasses the cache, so the caveat names the key rather than
+    asking the user to wait and guess.
+    """
+    from daijin_tui.screens.repo_home import RepoHomeScreen
+
+    down = RepoHomeScreen._engine_markup({
+        "ollama": {"reachable": False, "endpoint": "http://gpu:11434", "model": "bge-m3",
+                   "dimension": 1024, "version": None, "digest": None, "hint": "not reachable"},
+        "db": {"backend": "sqlite", "repos": 0, "stateRoot": "~/.daijin"},
+        "spendGate": {"open": False, "path": ".daijin/GATE"},
+    })
+    assert "may be cached" in down
+    assert "ctrl+r" in down, "the caveat does not say how to get a fresh reading"

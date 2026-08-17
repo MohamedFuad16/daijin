@@ -101,7 +101,14 @@ class RepoHomeScreen(DaijinScreen):
         status_block = self.query_one("#engine-status", Static)
         status_block.update("[dim]reading the engine...[/dim]")
 
-        pending = asyncio.ensure_future(self.client.call("serveStatus", {}))
+        # fresh ONLY for an explicit refresh. The engine refuses a non-boolean
+        # here with -32602 rather than coercing it, so this passes a real bool
+        # and nothing else.
+        fresh = self.take_user_initiated()
+        params: dict[str, Any] = {"fresh": True} if fresh else {}
+        if fresh:
+            status_block.update("[dim]re-checking the engine, bypassing its cache...[/dim]")
+        pending = asyncio.ensure_future(self.client.call("serveStatus", params))
         try:
             status = await asyncio.wait_for(asyncio.shield(pending), STATUS_PATIENCE_SECONDS)
         except asyncio.TimeoutError:
@@ -267,8 +274,8 @@ class RepoHomeScreen(DaijinScreen):
             # unreachable. That is the cache rather than a lie, and saying so
             # stops a user concluding the button is broken when they retry.
             lines.append(
-                "[dim]this reading is cached briefly, so a check straight after "
-                "starting ollama may still say unreachable[/dim]"
+                "[dim]this reading may be cached; ctrl+r re-checks without the "
+                "cache[/dim]"
             )
         hint = ollama.get("hint")
         if hint:

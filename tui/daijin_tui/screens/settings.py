@@ -80,6 +80,7 @@ class SettingsScreen(DaijinScreen):
         with Horizontal(id="role-actions"):
             yield Button("Configure selected role", id="role-configure", variant="primary")
             yield Button("Verify selected role (spends)", id="role-verify", variant="warning")
+            yield Button("Reset endpoints to defaults", id="role-reset-endpoints")
         yield SectionTitle("Instruction files", ".daijin/agents, shipped defaults, user editable")
         yield DataTable(id="file-table", cursor_type="row")
         yield Static("", id="file-detail", markup=True)
@@ -122,7 +123,11 @@ class SettingsScreen(DaijinScreen):
         for role in roles:
             ping = role.get("ping") or {}
             verified = bool(ping)
-            ok = verified and ping.get("httpStatus") == 200
+            # `ok` is the record's own verdict (v5 stored shape). httpStatus
+            # is a fallback for a record written before ok existed, and CANNOT
+            # replace it: a claude-code ping has no HTTP at all, so status
+            # alone would render every successful CLI ping as FAILED.
+            ok = verified and bool(ping.get("ok", ping.get("httpStatus") == 200))
             if not verified:
                 never_verified.append(role.get("role"))
             elif not ok:
@@ -265,6 +270,8 @@ class SettingsScreen(DaijinScreen):
             self.configure_selected_role()
         elif event.button.id == "role-verify":
             self.verify_selected_role()
+        elif event.button.id == "role-reset-endpoints":
+            self.reset_endpoints()
         elif event.button.id == "file-edit":
             self.edit_selected_file()
 
@@ -302,19 +309,52 @@ class SettingsScreen(DaijinScreen):
             self.report_rpc_error(error)
             return
         self._update_view()
-        status = ping.get("httpStatus")
-        if status == 200:
+        if ping.get("ok", ping.get("httpStatus") == 200):
+            transport = (
+                f"HTTP {ping.get('httpStatus')}" if ping.get("httpStatus") is not None
+                else "the claude CLI"
+            )
+            ttft = f", TTFT {ping.get('ttftMs')} ms" if ping.get("ttftMs") is not None else ""
             notice.set_notice(
-                f"{role_name} answered HTTP 200, served id {ping.get('servedModelId')}, "
-                f"TTFT {ping.get('ttftMs')} ms.",
+                f"{role_name} answered via {transport}, served id "
+                f"{ping.get('servedModelId')}{ttft}.",
                 "info",
             )
         else:
+            detail = ping.get("hint") or (
+                f"HTTP {ping.get('httpStatus')}" if ping.get("httpStatus") is not None
+                else "no answer"
+            )
             notice.set_notice(
-                f"{role_name} answered HTTP {status}. The call completed and was billed; "
+                f"{role_name} failed: {detail} The call completed and was billed; "
                 f"the role is not ready. Retry without editing settings.",
                 "warn",
             )
+
+    @work
+    async def reset_endpoints(self) -> None:
+        """Every role's endpoint back to the catalog default.
+
+        Encoded as NULL, not as a copied URL: a null endpoint means "use the
+        catalog default", so it keeps tracking the catalog if the default
+        moves, where a copied URL would freeze today's default forever.
+        """
+        notice = self.query_one("#settings-notice", Banner)
+        roles = self.settings.get("roles") or []
+        patch = [{"role": r.get("role"), "endpoint": None} for r in roles if r.get("role")]
+        if not patch:
+            notice.set_notice("No roles loaded yet.", "warn")
+            return
+        try:
+            await self.client.call("settingsSet", {"patch": {"roles": patch}})
+        except RpcError as error:
+            self.report_rpc_error(error)
+            notice.set_notice(error.hint, "error")
+            return
+        self.set_pending_notice(
+            "Endpoints reset. Each role now follows its provider's catalog default."
+        )
+        self.start_load()
 
     @work
     async def configure_selected_role(self) -> None:
@@ -341,7 +381,17 @@ class SettingsScreen(DaijinScreen):
                 f"Cannot configure a role without the provider catalog: {error.hint}", "error"
             )
             return
-        patch = await self.app.push_screen_wait(RoleConfigScreen(role=role, catalog=catalog))
+        # Zero-spend, so fetched on open; without it the claude-code provider
+        # would offer an empty sub-agent list and read as broken. Its absence
+        # (an old daemon) degrades to that empty list rather than blocking the
+        # dialog, because every other provider works without it.
+        try:
+            agents = (await self.client.call("agentCatalog", {})).get("agents") or []
+        except RpcError:
+            agents = []
+        patch = await self.app.push_screen_wait(
+            RoleConfigScreen(role=role, catalog=catalog, agents=agents)
+        )
         if patch is None:
             return
         try:

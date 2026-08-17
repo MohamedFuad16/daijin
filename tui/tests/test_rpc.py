@@ -261,7 +261,11 @@ async def test_role_ping_is_refused_without_an_explicit_confirmation():
     ping = await client.call("rolePing", {"role": "engineer", "confirm": True})
     assert ping["httpStatus"] == 200
     assert ping["servedModelId"] == "glm-4.6"
-    assert set(ping) == {"httpStatus", "ttftMs", "latencyMs", "servedModelId"}
+    # The daemon returns the STORED record (contract, 2026-08-17): the four
+    # measurements plus the record's own verdict and timestamp, so a client
+    # can render the result without re-reading settings.
+    assert set(ping) == {"ok", "httpStatus", "ttftMs", "latencyMs", "servedModelId", "at"}
+    assert ping["ok"] is True
     await client.aclose()
 
 

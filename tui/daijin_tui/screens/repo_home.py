@@ -81,7 +81,7 @@ class RepoHomeScreen(DaijinScreen):
         except Exception:  # noqa: BLE001 - before compose has mounted it
             return
         width = self.size.width or 0
-        lines = header_mark(width)
+        lines = header_mark(width, rows_available=self.size.height or 0)
         mark.update("\n".join(lines))
         # A mark that could not be drawn takes no vertical space either, so a
         # narrow terminal loses the brand rather than losing a row of content.
@@ -139,6 +139,23 @@ class RepoHomeScreen(DaijinScreen):
         # blank, and the owner met exactly that with an attached path of "/".
         self.query_one("#engine-status", Static).update(self._engine_markup(status))
         notice = self.query_one("#home-notice", Banner)
+
+        # SELECTION FOLLOWS ATTACHMENT. selected_repo is seeded from the
+        # launch directory, which may not be attached at all - the owner
+        # launched in an unattached checkout while another repo was attached,
+        # saw a connected card, and Init refused with "not attached". A
+        # selection that no screen can act on is not a selection: if the
+        # current one is not among the attached repos, move it to the first
+        # attached repo and say so, or clear it when nothing is attached.
+        attached_paths = [r.get("path") for r in status.get("repos", [])]
+        if getattr(self.app, "selected_repo", None) not in attached_paths:
+            self.app.selected_repo = attached_paths[0] if attached_paths else None
+            if attached_paths:
+                notice.set_notice(
+                    f"Selected {attached_paths[0]} (the launch directory is not attached).",
+                    "info",
+                )
+
         if status.get("repos"):
             notice.set_notice(
                 f"{len(status['repos'])} repo(s) attached. Reading each one now.", "info"

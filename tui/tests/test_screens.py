@@ -106,12 +106,14 @@ async def test_repo_home_shows_the_spend_gate_before_anything_is_attempted():
 
 
 @run_async
-async def test_repo_card_shows_the_case_count_and_not_a_bare_percentage():
+async def test_repo_card_shows_the_case_count_with_its_percentage():
+    """Owner-overruled policy: the count keeps the denominator honest and the
+    percentage rides beside it for glanceability. Both, never either alone."""
     async with running_app() as (app, pilot):
         card = next(c for c in app.screen.query(RepoCard) if c.repo_path.endswith("orchard-web"))
         floor = text_of(card.query_one(".card-floor", Static))
         assert "31 of 34" in floor
-        assert "%" not in floor
+        assert "91.2%" in floor
 
 
 @run_async
@@ -459,7 +461,17 @@ async def test_init_job_can_be_cancelled():
 
 @run_async
 async def test_init_feed_refuses_to_start_without_a_repo():
-    async with running_app(repo=None) as (app, pilot):
+    # No launch repo AND nothing attached: with anything attached, the home
+    # screen now syncs the selection to the first attached repo on purpose.
+    from daijin_tui.rpc import MockEngine
+
+    engine = MockEngine(speed=0.0)
+    engine.repos.clear()
+    async with running_app(repo=None, engine=engine) as (app, pilot):
+        # The empty home focuses the attach input, which rightly eats digit
+        # keys as text; a user leaves the field before navigating, so the
+        # test does too.
+        app.screen.set_focus(None)
         await goto(pilot, "2")
         await pilot.click("#init-start")
         await settle(pilot)
@@ -476,7 +488,7 @@ async def test_brain_reports_the_floor_as_a_count_with_mrr_marked_recorded():
         await goto(pilot, "3")
         summary = text_of(app.screen.query_one("#floor-summary", Static))
         assert "31 of 34" in summary
-        assert "%" not in summary, "the floor must not be shown as a bare percentage"
+        assert "91.2%" in summary, "the count carries its percentage beside it"
         assert "recorded for movement only" in summary
         assert "never a floor" in summary
         assert "chosen budget 4000" in summary
@@ -1980,6 +1992,127 @@ async def test_the_role_dialog_renders_the_catalog_rather_than_a_table_of_its_ow
                   if isinstance(v, str)]
         assert models == [m["id"] for m in catalog["providers"][0]["models"]]
         app.pop_screen()
+
+
+@run_async
+async def test_the_claude_code_provider_swaps_the_endpoint_for_a_sub_agent_picker():
+    """A sub-agent role has nothing to dial and no key to point at.
+
+    Picking claude-code shows WHICH agent file plays the role (from
+    agentCatalog) and hides the endpoint; the patch carries agentRef and a
+    null endpoint, and the model stays what it is: which Claude model the CLI
+    is asked for.
+    """
+    from daijin_tui.screens.role_dialog import RoleConfigScreen
+    from textual.widgets import Select
+
+    async with running_app() as (app, pilot):
+        catalog = await app.client.call("providerCatalog", {})
+        agents = (await app.client.call("agentCatalog", {}))["agents"]
+        role = {"role": "engineer", "provider": None, "model": None,
+                "reasoningEffort": None, "keyRef": None}
+        screen = RoleConfigScreen(role=role, catalog=catalog, agents=agents)
+        await app.push_screen(screen)
+        await settle(pilot)
+
+        screen.query_one("#role-provider", Select).value = "claude-code"
+        await settle(pilot)
+        assert screen.query_one("#role-agent", Select).display is True
+        assert screen.query_one("#role-endpoint", Input).display is False
+
+        offered = [v for _, v in screen.query_one("#role-agent", Select)._options
+                   if isinstance(v, str)]
+        assert offered == [a["id"] for a in agents], "the picker offers what agentCatalog found"
+
+        screen.query_one("#role-model", Select).value = "claude-sonnet-5"
+        screen.query_one("#role-agent", Select).value = "daijin-engineer"
+        patch = screen._patch()
+        assert patch["provider"] == "claude-code"
+        assert patch["agentRef"] == "daijin-engineer"
+        assert patch["endpoint"] is None, "there is no endpoint in a CLI launch"
+        app.pop_screen()
+
+
+@run_async
+async def test_zai_offers_web_search_and_the_patch_carries_the_tools_list():
+    """The tools box renders from the CATALOG's tools key, not a local table.
+
+    Checked, the patch stores ["web_search"]; unchecked or on a provider with
+    no tools, it stores null, never an empty list.
+    """
+    from daijin_tui.screens.role_dialog import RoleConfigScreen
+    from textual.widgets import Checkbox, Select
+
+    async with running_app() as (app, pilot):
+        catalog = await app.client.call("providerCatalog", {})
+        role = {"role": "engineer", "provider": "zai", "model": "glm-5.3",
+                "reasoningEffort": "on", "keyRef": "env:ZAI_KEY"}
+        screen = RoleConfigScreen(role=role, catalog=catalog)
+        await app.push_screen(screen)
+        await settle(pilot)
+
+        box = screen.query_one("#role-tools-web", Checkbox)
+        assert box.display is True, "zai offers web_search in the mock catalog"
+        box.value = True
+        assert screen._patch()["tools"] == ["web_search"]
+        box.value = False
+        assert screen._patch()["tools"] is None
+
+        # A provider with no tools hides the box AND stops storing the list.
+        screen.query_one("#role-provider", Select).value = "openai"
+        await settle(pilot)
+        assert box.display is False
+        assert screen._patch()["tools"] is None
+        app.pop_screen()
+
+
+@run_async
+async def test_picking_a_provider_fills_its_default_endpoint_and_says_what_moved():
+    """The endpoint FOLLOWS the provider, out loud.
+
+    Changing provider replaces the endpoint with the new catalog default and
+    names the old value, so a URL never silently points at the wrong vendor.
+    Matching the default is stored as null, so the role keeps following the
+    catalog if the default ever moves.
+    """
+    from daijin_tui.screens.role_dialog import RoleConfigScreen
+    from textual.widgets import Select, Static
+
+    async with running_app() as (app, pilot):
+        catalog = await app.client.call("providerCatalog", {})
+        role = {"role": "engineer", "provider": "openai", "model": "gpt-5.2",
+                "reasoningEffort": "medium", "keyRef": "env:OPENAI_KEY",
+                "endpoint": "https://api.openai.com/v1"}
+        screen = RoleConfigScreen(role=role, catalog=catalog)
+        await app.push_screen(screen)
+        await settle(pilot)
+
+        screen.query_one("#role-provider", Select).value = "zai"
+        await settle(pilot)
+        field = screen.query_one("#role-endpoint", Input)
+        assert field.value == "https://api.z.ai/api/paas/v4"
+        note = str(screen.query_one("#role-endpoint-note", Static).render())
+        assert "api.openai.com" in note, "the move names where the endpoint was"
+
+        assert screen._patch()["endpoint"] is None, (
+            "matching the catalog default is stored as null so the role follows the catalog"
+        )
+        field.value = "https://proxy.example.com/v4"
+        assert screen._patch()["endpoint"] == "https://proxy.example.com/v4"
+        app.pop_screen()
+
+
+@run_async
+async def test_reset_endpoints_patches_every_role_back_to_null():
+    """The reset is an encoding, not a copy: null means follow the catalog."""
+    async with running_app() as (app, pilot):
+        await goto(pilot, "8")
+        await pilot.click("#role-reset-endpoints")
+        await settle(pilot)
+        call = next(c for c in app.client.engine.calls if c[0] == "settingsSet")
+        roles = call[1]["patch"]["roles"]
+        assert len(roles) == 4
+        assert all(r["endpoint"] is None for r in roles)
 
 
 @run_async

@@ -309,20 +309,39 @@ async def test_the_splash_uses_the_motion_tokens_and_no_literal_durations():
 # matched, the letterform properties held, and a human still could not read it.
 
 
-def test_the_header_shows_the_word_because_legibility_beats_cleverness():
-    """A drawn header mark is gone until letterforms survive three rows.
+def test_the_header_degrade_ladder_is_full_mark_then_word_then_nothing():
+    """The FULL-SIZE mark or the plain word, never a squashed intermediate.
 
-    The full-size splash mark stays, because it was read on a real terminal and
-    approved. The difference between the two is not the code, it is that one
-    was looked at by the owner and one was looked at by me.
+    The full-size splash letterforms are the one drawn form a human has read
+    on a real terminal and approved; the three-row form passed every mask test
+    and was still a blob. So the header uses the approved form when it fits
+    (owner field round 4: the big mark back at the top), the word when it does
+    not, and nothing when even the word would wrap.
     """
     from daijin_tui.widgets import wordmark
-    from daijin_tui.widgets.wordmark import header_mark, wordmark_lines
+    from daijin_tui.widgets.wordmark import (
+        header_mark,
+        mask_of,
+        wordmark_lines,
+        wordmark_width,
+    )
+
+    # Room for the mark: the header IS the approved letterforms. The mask
+    # comparison is against the same HAND-WRITTEN expectation the splash test
+    # pins (DAIJIN_MASK at the top of this file), so the header cannot drift
+    # from the approved form.
+    full = header_mark(120, rows_available=40)
+    assert len(full) == 7
+    assert tuple(mask_of(full, wordmark_width())) == DAIJIN_MASK
+    assert mask_of(full, wordmark_width()) == mask_of(wordmark_lines(), wordmark_width())
+
+    # A short terminal loses the tall mark rather than losing its content.
+    assert header_mark(120, rows_available=20) == ["DAIJIN"]
 
     assert header_mark(30) == ["DAIJIN"]
     assert header_mark(6) == ["DAIJIN"]
     assert header_mark(5) == [], "a header too narrow for the word still got something to wrap"
-    for width in range(0, 40):
+    for width in range(0, 35):
         for line in header_mark(width):
             assert len(line) <= width, f"at {width} columns the header returned {len(line)}"
 
@@ -334,11 +353,25 @@ def test_the_header_shows_the_word_because_legibility_beats_cleverness():
 
 
 @run_async
-async def test_the_home_screen_carries_the_word_and_drops_it_when_it_cannot_fit():
+async def test_the_home_screen_walks_the_mark_ladder_with_its_own_size():
+    # Roomy: the approved full letterforms are the header.
     async with running_app() as (app, pilot):
         await settle(pilot, 12)
         mark = app.screen.query_one("#home-wordmark")
         assert mark.display is True
+        assert len(text_of(mark).strip("\n").split("\n")) == 7
+
+    # Wide enough for the word only: the word.
+    async with running_app(size=(30, 40)) as (app, pilot):
+        await settle(pilot, 12)
+        mark = app.screen.query_one("#home-wordmark")
+        assert mark.display is True
+        assert text_of(mark).strip() == "DAIJIN"
+
+    # Tall mark on a short terminal would cost the content its rows: the word.
+    async with running_app(size=(170, 20)) as (app, pilot):
+        await settle(pilot, 12)
+        mark = app.screen.query_one("#home-wordmark")
         assert text_of(mark).strip() == "DAIJIN"
 
     async with running_app(size=(5, 40)) as (app, pilot):

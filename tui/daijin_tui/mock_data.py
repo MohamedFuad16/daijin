@@ -1107,7 +1107,10 @@ SETTINGS: dict[str, Any] = {
             "endpoint": "https://open.bigmodel.cn/api/paas/v4",
             "keyRef": "env:DAIJIN_ENGINEER_KEY",
             "keyMasked": "mk-mock-********9f2a",
+            "tools": None,
+            "agentRef": None,
             "ping": {
+                "ok": True,
                 "httpStatus": 200,
                 "ttftMs": 412,
                 "latencyMs": 1_884,
@@ -1125,7 +1128,10 @@ SETTINGS: dict[str, Any] = {
             "endpoint": "https://api.anthropic.com/v1",
             "keyRef": "env:DAIJIN_TEACHER_KEY",
             "keyMasked": "mk-mock-********c4d1",
+            "tools": None,
+            "agentRef": None,
             "ping": {
+                "ok": True,
                 "httpStatus": 200,
                 "ttftMs": 688,
                 "latencyMs": 3_102,
@@ -1143,7 +1149,10 @@ SETTINGS: dict[str, Any] = {
             "endpoint": "https://api.openai.com/v1",
             "keyRef": "env:DAIJIN_AUDITOR_KEY",
             "keyMasked": "mk-mock-********1b70",
+            "tools": None,
+            "agentRef": None,
             "ping": {
+                "ok": True,
                 "httpStatus": 200,
                 "ttftMs": 733,
                 "latencyMs": 2_540,
@@ -1161,6 +1170,8 @@ SETTINGS: dict[str, Any] = {
             "endpoint": "https://api.deepseek.com/v1",
             "keyRef": "env:DAIJIN_WATCHER_KEY",
             "keyMasked": "mk-mock-********0ae3",
+            "tools": None,
+            "agentRef": None,
             "ping": None,
         },
     ],
@@ -1481,6 +1492,41 @@ PROVIDER_CATALOG: dict[str, Any] = {
             ],
         },
         {
+            "id": "zai",
+            "label": "GLM",
+            "endpointDefault": "https://api.z.ai/api/paas/v4",
+            "keyRequired": True,
+            "note": None,
+            # The one provider with opt-in TOOLS, so the dialog's tools branch
+            # is exercisable offline. The note carries the shared-quota
+            # disclosure the real catalog makes.
+            "tools": [
+                {"id": "web_search", "label": "Web search",
+                 "note": "Web Search, Web Reader and Zread share one usage quota."},
+            ],
+            "models": [
+                {"id": "glm-5.3", "label": "GLM-5.3",
+                 "reasoningEffort": ["on", "off"],
+                 "note": "GLM exposes thinking as a switch, not a tier."},
+            ],
+        },
+        {
+            "id": "claude-code",
+            "label": "Claude Code sub-agent",
+            # NOTHING TO DIAL: the role runs through the local claude CLI on
+            # the owner's login auth, so there is no endpoint and no key.
+            "endpointDefault": None,
+            "keyRequired": False,
+            "note": "Runs a custom sub-agent headless through the local claude CLI on "
+                    "your own login auth: no API key and no endpoint.",
+            "models": [
+                {"id": "claude-fable-5", "label": "Fable 5", "reasoningEffort": None,
+                 "note": "Adaptive thinking; no effort tiers to set."},
+                {"id": "claude-sonnet-5", "label": "Sonnet 5",
+                 "reasoningEffort": ["low", "medium", "high"], "note": None},
+            ],
+        },
+        {
             "id": "ollama",
             "label": "Ollama",
             "endpointDefault": "http://127.0.0.1:11434",
@@ -1492,6 +1538,25 @@ PROVIDER_CATALOG: dict[str, Any] = {
                 {"id": "qwen3:8b", "label": "Qwen3 8B", "reasoningEffort": None, "note": None},
             ],
         },
+    ],
+}
+
+# The sub-agent files the mock machine "has". Shape-faithful to agentCatalog:
+# a user-scope agent with full frontmatter, and a project one without a model.
+AGENT_CATALOG: dict[str, Any] = {
+    "agents": [
+        {"id": "daijin-engineer", "name": "daijin-engineer",
+         "description": "Solves one exam task inside a sandboxed repo copy",
+         "model": "claude-sonnet-5", "path": "/Users/owner/.claude/agents/daijin-engineer.md",
+         "scope": "user"},
+        {"id": "daijin-teacher", "name": "daijin-teacher",
+         "description": "Grades one attempt against the five-axis rubric",
+         "model": "claude-opus-5", "path": "/Users/owner/.claude/agents/daijin-teacher.md",
+         "scope": "user"},
+        {"id": "repo-reviewer", "name": "repo-reviewer",
+         "description": "Project-local reviewer",
+         "model": None, "path": "/Users/owner/code/orchard-web/.claude/agents/repo-reviewer.md",
+         "scope": "project"},
     ],
 }
 

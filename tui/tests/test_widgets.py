@@ -152,11 +152,13 @@ def test_event_log_formats_a_step_event_with_its_counts():
     assert "units 18" in line
 
 
-def test_case_rate_is_rendered_as_a_count_not_a_percentage():
+def test_case_rate_is_rendered_as_count_and_percentage_together():
+    """The owner overruled count-only display: the count stays authoritative
+    (the denominator is the honesty), and the percentage rides beside it so
+    the number is readable at a glance. Neither alone."""
     case_rate = {"exact": 31 / 34, "cases": "31 of 34"}
     rendered = format_case_rate(case_rate)
-    assert rendered == "31 of 34"
-    assert "%" not in rendered
+    assert rendered == "31 of 34 (91.2%)"
 
 
 def test_case_rate_value_accepts_both_json_forms_of_exact():
@@ -172,7 +174,6 @@ def test_case_rate_value_accepts_both_json_forms_of_exact():
 def test_a_case_rate_with_no_count_form_says_so_rather_than_rounding():
     rendered = format_case_rate({"exact": 31 / 34})
     assert "denominator not reported" in rendered
-    assert "%" not in rendered
     assert format_case_rate(None) == "not measured"
 
 

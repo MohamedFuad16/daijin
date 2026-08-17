@@ -29,7 +29,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
-from textual.widgets import Button, Input, Select, Static
+from textual.widgets import Button, Checkbox, Input, Select, Static
 
 # Mirrored from engine/src/roles/keys.js, parseKeyRef. It is a WHITELIST OF
 # SHAPES, not a detector of keys, and the difference matters for the copy: a
@@ -196,11 +196,22 @@ class RoleConfigScreen(ModalScreen[dict[str, Any] | None]):
 
     BINDINGS = [Binding("escape", "cancel", "Cancel")]
 
-    def __init__(self, *, role: dict[str, Any], catalog: dict[str, Any], **kwargs: Any) -> None:
+    def __init__(
+        self,
+        *,
+        role: dict[str, Any],
+        catalog: dict[str, Any],
+        agents: list[dict[str, Any]] | None = None,
+        **kwargs: Any,
+    ) -> None:
         super().__init__(**kwargs)
         self.role = dict(role)
         self.catalog = catalog or {}
         self.providers: list[dict[str, Any]] = list(self.catalog.get("providers") or [])
+        # The machine's Claude Code sub-agents (agentCatalog). Only the
+        # claude-code provider reads them; an empty list renders as an empty
+        # picker with the note saying where agent files live.
+        self.agents: list[dict[str, Any]] = list(agents or [])
 
     # Catalog reads -------------------------------------------------------
 
@@ -236,6 +247,22 @@ class RoleConfigScreen(ModalScreen[dict[str, Any] | None]):
             yield Select([], id="role-model", prompt="model", allow_blank=True)
             yield Select([], id="role-reasoning", prompt="reasoning effort", allow_blank=True)
             yield Static("", id="role-model-note", markup=True)
+            # Which SUB-AGENT plays the role, shown only for claude-code. The
+            # model above stays what it is: which Claude model the CLI asks for.
+            yield Select(
+                [(f"{a.get('name')} ({a.get('scope')})", a.get("id")) for a in self.agents],
+                id="role-agent",
+                prompt="sub-agent",
+                allow_blank=True,
+            )
+            yield Static("", id="role-agent-note", markup=True)
+            yield Input(
+                placeholder="endpoint (empty follows the catalog default)",
+                id="role-endpoint",
+                value=str(self.role.get("endpoint") or ""),
+            )
+            yield Static("", id="role-endpoint-note", markup=True)
+            yield Checkbox("Web search (Z.ai tools)", id="role-tools-web", value=False)
             yield Input(
                 placeholder="paste your API key, or point at one: env:NAME, file:/abs/path",
                 id="role-keyref",
@@ -255,7 +282,76 @@ class RoleConfigScreen(ModalScreen[dict[str, Any] | None]):
 
     def _initialise(self) -> None:
         self._fill_models(self.role.get("provider"), self.role.get("model"))
+        self._sync_provider_extras(self.role.get("provider"), first=True)
         self._check_key_ref()
+
+    def _sync_provider_extras(self, provider_id: Any, *, first: bool = False) -> None:
+        """Endpoint auto-fill, the sub-agent picker, and the tools box.
+
+        The endpoint field FOLLOWS the provider: picking one fills in its
+        catalog default so the URL on screen is the URL that will be dialled,
+        and the move is said out loud (old to new) rather than happening
+        silently under a field the user may have read already. A hand-edited
+        endpoint is only ever replaced on an explicit provider change, never
+        on open.
+        """
+        provider = self._provider(provider_id) or {}
+        endpoint_field = self.query_one("#role-endpoint", Input)
+        endpoint_note = self.query_one("#role-endpoint-note", Static)
+        default = provider.get("endpointDefault")
+        if first:
+            if not endpoint_field.value and default:
+                endpoint_field.value = str(default)
+            endpoint_note.update(
+                "[dim]The catalog default for this provider. Edit to override; "
+                "empty follows the default.[/dim]" if default else ""
+            )
+        else:
+            old = endpoint_field.value.strip()
+            new = str(default or "")
+            endpoint_field.value = new
+            if old and old != new:
+                endpoint_note.update(
+                    f"[yellow]Endpoint moved to the {provider.get('label', provider_id)} "
+                    f"default[/yellow] [dim](was {old})[/dim]"
+                )
+            else:
+                endpoint_note.update(
+                    f"[dim]{new}[/dim]" if new else ""
+                )
+        endpoint_field.display = provider_id != "claude-code"
+        endpoint_note.display = provider_id != "claude-code"
+
+        agent_select = self.query_one("#role-agent", Select)
+        agent_note = self.query_one("#role-agent-note", Static)
+        is_agent_provider = provider_id == "claude-code"
+        agent_select.display = is_agent_provider
+        agent_note.display = is_agent_provider
+        if is_agent_provider:
+            configured = self.role.get("agentRef")
+            if configured and any(a.get("id") == configured for a in self.agents):
+                agent_select.value = configured
+            agent_note.update(
+                "[dim]Which sub-agent file plays this role, from ~/.claude/agents and "
+                "each repo's .claude/agents. The model above is which Claude model the "
+                "CLI runs it on.[/dim]"
+                if self.agents
+                else "[yellow]No sub-agent files found in ~/.claude/agents or any attached "
+                "repo's .claude/agents.[/yellow]"
+            )
+
+        tools_box = self.query_one("#role-tools-web", Checkbox)
+        offered = provider.get("tools") or []
+        has_web = any(tool.get("id") == "web_search" for tool in offered)
+        tools_box.display = has_web
+        if has_web:
+            note = next(
+                (tool.get("note") for tool in offered if tool.get("id") == "web_search"), None
+            )
+            tools_box.label = f"Web search{f' - {note}' if note else ''}"
+            tools_box.value = bool(self.role.get("tools")) and "web_search" in (
+                self.role.get("tools") or []
+            )
 
     # Cascade -------------------------------------------------------------
 
@@ -304,6 +400,7 @@ class RoleConfigScreen(ModalScreen[dict[str, Any] | None]):
         event.stop()
         if event.select.id == "role-provider":
             self._fill_models(event.value)
+            self._sync_provider_extras(event.value)
             self._check_key_ref()
         elif event.select.id == "role-model":
             provider = self.query_one("#role-provider", Select).value
@@ -359,6 +456,20 @@ class RoleConfigScreen(ModalScreen[dict[str, Any] | None]):
             else reasoning.value
         )
         patch["keyRef"] = self.query_one("#role-keyref", Input).value.strip() or None
+        # Stored as NULL when it matches the catalog default, so the role
+        # FOLLOWS the catalog if the default ever moves. Only a hand-edited
+        # URL is worth pinning.
+        endpoint = self.query_one("#role-endpoint", Input).value.strip()
+        default = str((self._provider(patch.get("provider")) or {}).get("endpointDefault") or "")
+        patch["endpoint"] = endpoint if endpoint and endpoint != default else None
+        if patch.get("provider") == "claude-code":
+            agent = self.query_one("#role-agent", Select).value
+            patch["agentRef"] = None if (agent is Select.NULL or not agent) else agent
+            patch["endpoint"] = None
+        else:
+            patch["agentRef"] = None
+        tools_box = self.query_one("#role-tools-web", Checkbox)
+        patch["tools"] = ["web_search"] if (tools_box.display and tools_box.value) else None
         return patch
 
     def action_cancel(self) -> None:

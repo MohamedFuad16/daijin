@@ -84,18 +84,21 @@ def case_rate_value(case_rate: Any) -> float | None:
 
 
 def format_case_rate(case_rate: Any) -> str:
-    """Render a caseRate as its count form, never as a bare rounded percentage.
+    """Render a caseRate as count AND percentage together: "19 of 19 (100.0%)".
 
-    A rounded percentage hides its own denominator: 91 percent of 34 cases and
-    91 percent of 340 cases carry very different error bars, and the count form
-    keeps that visible.
+    The owner ruled the accuracy must be legible at a glance, so the
+    percentage shows - and the count stays BESIDE it, never dropped, because a
+    rounded percentage alone hides its own denominator: 91 percent of 34 cases
+    and 91 percent of 340 cases carry very different error bars. Both claims,
+    one string.
     """
-    if isinstance(case_rate, dict) and case_rate.get("cases"):
-        return str(case_rate["cases"])
     value = case_rate_value(case_rate)
+    percent = f" ({value * 100:.1f}%)" if value is not None else ""
+    if isinstance(case_rate, dict) and case_rate.get("cases"):
+        return f"{case_rate['cases']}{percent}"
     if value is None:
         return "not measured"
-    return f"ratio {value:.4f}, denominator not reported"
+    return f"ratio {value:.4f}{percent}, denominator not reported"
 
 
 def format_ratio(value: float | None, *, digits: int = 4) -> str:

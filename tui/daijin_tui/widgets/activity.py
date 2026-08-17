@@ -63,6 +63,15 @@ STEP_MARKER: dict[str, str] = {
     "kept-yours": "keep",
 }
 
+# ADVISORIES ARE NOT WARNINGS. mcp-saturation fires when the score sits at the
+# gauge's ceiling: nothing went wrong, the gauge is just saying what it can and
+# cannot distinguish up there. The engine sends it at level warn so a client
+# that knows nothing still surfaces it, but a checklist that counts it as
+# "1 warn" on a fully successful init sends the owner hunting for a problem
+# that does not exist - which is exactly what happened. Same palette rule as
+# kept-yours: cyan belongs to no level, so a note never borrows alarm colour.
+ADVISORY_STEPS = {"mcp-saturation"}
+
 # Verbs cycle on the active line so the eye can tell a slow phase from a hung
 # one. They describe the phase, never a number, so they cannot mislead.
 PHASE_VERBS: dict[str, Sequence[str]] = {
@@ -148,6 +157,7 @@ class PhaseChecklist(Static):
                 "counts": {},
                 "steps": 0,
                 "warns": 0,
+                "notes": 0,
                 "started": None,
                 "ended": None,
             }
@@ -163,7 +173,16 @@ class PhaseChecklist(Static):
         self.terminal_level = "info"
         for entry in self.state.values():
             entry.update(
-                {"status": "pending", "detail": "", "counts": {}, "steps": 0, "warns": 0, "started": None, "ended": None}
+                {
+                    "status": "pending",
+                    "detail": "",
+                    "counts": {},
+                    "steps": 0,
+                    "warns": 0,
+                    "notes": 0,
+                    "started": None,
+                    "ended": None,
+                }
             )
         self.refresh_view()
 
@@ -249,7 +268,10 @@ class PhaseChecklist(Static):
                 entry["counts"][key] = value
         level = str(event.get("level") or "info")
         if level == "warn":
-            entry["warns"] += 1
+            if str(event.get("step") or "") in ADVISORY_STEPS:
+                entry["notes"] += 1
+            else:
+                entry["warns"] += 1
         elif level == "error":
             entry["status"] = "failed"
             entry["ended"] = now
@@ -380,6 +402,8 @@ class PhaseChecklist(Static):
                 text.append(f"  {elapsed:.1f}s", style="dim")
             if entry["warns"]:
                 text.append(f"  {entry['warns']} warn", style="yellow")
+            if entry.get("notes"):
+                text.append(f"  {entry['notes']} note", style="cyan")
             text.append("\n")
         return text
 

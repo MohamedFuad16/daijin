@@ -1482,8 +1482,21 @@ class MockEngine:
                 # answers with a dated build, which is a drift the TUI shows.
                 "servedModelId": "gpt-5.2-2026-05-01" if role_name == "auditor" else role.get("model"),
             }
-        role["ping"] = {"ok": ping["httpStatus"] == 200, **ping, "at": "2026-08-16T09:30:00Z"}
-        return dict(ping)
+        record = {"ok": ping["httpStatus"] == 200, **ping, "at": "2026-08-16T09:30:00Z"}
+        role["ping"] = record
+        # The daemon returns the STORED record (contract, 2026-08-17): ok and
+        # at ride along, so a client can render the result without re-reading
+        # settings first.
+        return dict(record)
+
+    async def _rpc_agentCatalog(self, params: dict[str, Any]) -> dict[str, Any]:
+        """Zero-spend sub-agent discovery, mirrored from the daemon.
+
+        A directory listing and a frontmatter read on the real engine; a
+        constant here, shape-faithful and branch-complete (user and project
+        scope, model present and absent).
+        """
+        return copy.deepcopy(mock_data.AGENT_CATALOG)
 
     async def _rpc_board(self, params: dict[str, Any]) -> dict[str, Any]:
         filters = params.get("filters") or {}

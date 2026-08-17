@@ -168,11 +168,29 @@ def reveal_steps(text: str = "DAIJIN", steps: int = 6) -> Iterable[int]:
 # human has read one.
 
 
-def header_mark(available: int, text: str = "DAIJIN") -> list[str]:
-    """The word, when it fits, and nothing when it does not.
+def header_mark(
+    available: int,
+    text: str = "DAIJIN",
+    *,
+    rows_available: int | None = None,
+    texture: Texture = NEUTRAL,
+) -> list[str]:
+    """The full block mark when there is room for it, else the word, else nothing.
 
-    Degrading to nothing stays the rule: a wrapped wordmark is not a smaller
-    wordmark, it is a broken one, and a header is not worth a broken mark.
+    The FULL-SIZE letterforms or no letterforms (owner field round 4: the big
+    dithered mark is the brand, and the owner asked for it back at the top).
+    There is deliberately no intermediate small drawn mark: the three-row form
+    passed every mask test and was still an illegible blob on a real terminal,
+    which is why the note below this function exists. So the degrade ladder is
+    full mark, plain word, nothing, and a wrapped or squashed wordmark is
+    never one of the rungs.
+
+    rows_available guards the vertical cost: on a short terminal the seven
+    rows would push the actual content off screen, and the brand is not worth
+    a screen of data.
     """
     word = text.upper()
+    tall_enough = rows_available is None or rows_available >= 24
+    if available >= wordmark_width(word) and tall_enough:
+        return wordmark_lines(word, texture=texture)
     return [word] if available >= len(word) else []

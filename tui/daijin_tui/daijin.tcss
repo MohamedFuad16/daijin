@@ -364,6 +364,18 @@
     color: $warning;
 }
 
+/* The attach dialog's tables scroll INSIDE the dialog. 24 discovered repos
+   once pushed the action buttons off the frame: the list is the thing that
+   grows, so the list is the thing that scrolls, and the buttons never move. */
+#attach-dialog {
+    max-height: 90%;
+}
+#attach-table, #attach-gh-table {
+    max-height: 14;
+    height: auto;
+    overflow-y: auto;
+}
+
 /* EVERY modal centres. The first version of this rule enumerated three
    screens by name, so RoleConfigScreen and GatesFileEditScreen rendered
    top-left: the class fix is the selector that cannot miss the next one. */

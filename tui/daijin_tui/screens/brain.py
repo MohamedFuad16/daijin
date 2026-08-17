@@ -12,13 +12,14 @@ from ..concurrency import gather_all
 from ..rpc import RpcError
 from ..widgets import (
     Banner,
+    DitherBars,
     MCP_THRESHOLD,
-    PlotextLine,
     SectionTitle,
     case_rate_value,
     format_case_rate,
     format_ratio,
 )
+from ..widgets.texture import NEUTRAL, PASS
 from .base import DaijinScreen
 
 CHUNK_COLUMNS = ("rank", "chunk", "document", "type", "area", "arm", "score", "tokens", "standing")
@@ -44,7 +45,7 @@ class BrainScreen(DaijinScreen):
     mode_name = "brain"
     notice_id = "#brain-notice"
     heading = "Brain browser, retrieval tester, diagnosis"
-    subheading = "case rate is reported as a count, never as a bare rounded percentage"
+    subheading = "measured retrieval accuracy, count and percentage together"
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
@@ -62,7 +63,9 @@ class BrainScreen(DaijinScreen):
                     "Budget sweep",
                     "one measurement across budgets, not a trend over time; the card sparkline is the trend",
                 )
-                yield PlotextLine(title="cases hit by token budget", height=12, id="budget-sweep")
+                yield DitherBars(
+                    title="cases hit by token budget", height=10, bar_width=5, id="budget-sweep"
+                )
                 yield SectionTitle("Per case", "arm, type, and area are what the diagnosis clusters on")
                 yield DataTable(id="percase-table", cursor_type="row")
                 yield SectionTitle("MCP unlock")
@@ -163,12 +166,30 @@ class BrainScreen(DaijinScreen):
             )
         sweep = score.get("budgetSweep") or []
         if sweep:
+            # The house chart vocabulary (owner field round 4): dithered bars,
+            # texture and colour as two channels, not a plotext line. The
+            # CHOSEN budget wears the pass texture and every other point the
+            # neutral one, and the ceiling is the case total so the bars stay
+            # comparable across repos instead of always looking full.
             hits = []
+            total = 0
             for point in sweep:
-                cases = point.get("caseRate", {}).get("cases", "")
-                hits.append(int(str(cases).split(" of ")[0]) if " of " in str(cases) else 0)
-            self.query_one("#budget-sweep", PlotextLine).set_data(
-                [point["budget"] for point in sweep], {"cases hit": hits}
+                cases = str(point.get("caseRate", {}).get("cases", ""))
+                if " of " in cases:
+                    hit, _, denominator = cases.partition(" of ")
+                    hits.append(int(hit))
+                    total = max(total, int(denominator))
+                else:
+                    hits.append(0)
+            chosen = score.get("chosenBudget")
+            self.query_one("#budget-sweep", DitherBars).set_data(
+                [str(point["budget"]) for point in sweep],
+                hits,
+                textures=[
+                    PASS if point["budget"] == chosen else NEUTRAL for point in sweep
+                ],
+                ceiling=total or None,
+                ceiling_label=f"ceiling {total} cases; chosen budget carries the solid texture",
             )
 
     async def _load_mcp(self, repo: str) -> None:
@@ -178,16 +199,34 @@ class BrainScreen(DaijinScreen):
         except RpcError as error:
             panel.update(f"[yellow]{error.hint}[/yellow]")
             return
+        # The engine's reason sentence comes from floor.js, the module that
+        # made the decision; show it verbatim rather than paraphrasing. The
+        # owner asked this panel to say what the unlock actually is: the
+        # threshold, why this repo is on its side of it, and once unlocked,
+        # what to do with the snippet.
+        reason = str(result.get("reason") or "").strip()
         if not result.get("unlocked"):
+            detail = reason or (
+                f"The floor sits below the {result.get('threshold', MCP_THRESHOLD)} "
+                "threshold, so no snippet is offered."
+            )
             panel.update(
-                f"[yellow]MCP locked.[/yellow] The floor sits below the "
-                f"{result.get('threshold', MCP_THRESHOLD)} threshold, so no snippet is offered. "
-                f"[dim]See the Diagnosis tab for what is missing.[/dim]"
+                f"[yellow]MCP locked.[/yellow] {detail}\n"
+                f"[dim]threshold {result.get('threshold', MCP_THRESHOLD)}. "
+                f"Re-run init after improving the brain; the Diagnosis tab says "
+                f"what is missing.[/dim]"
             )
             return
         panel.update(
-            f"[green]MCP unlocked[/green] at threshold {result.get('threshold')}. Paste ready config:\n\n"
-            f"{result.get('snippet', '')}"
+            f"[green]MCP unlocked[/green] at threshold {result.get('threshold')}."
+            + (f" {reason}" if reason else "")
+            + "\n\nPaste ready config:\n\n"
+            f"{result.get('snippet', '')}\n\n"
+            f"[dim]Paste into your MCP client config (Claude Code: .mcp.json at "
+            f"the repo root; Claude Desktop: claude_desktop_config.json). Your "
+            f"agent then gets brain.search, brain.conventions, brain.impact_of "
+            f"and brain.relevant_adrs answered from this repo's measured "
+            f"brain.[/dim]"
         )
 
     async def _load_diagnosis(self, repo: str) -> None:

@@ -95,9 +95,12 @@ class DaijinApp(App):
         # Set from the first serveStatus: nothing attached yet, so the home
         # screen opens on the attach affordance instead of empty space.
         self.first_run = False
-        # Textual's header joins title and sub_title with an em dash, which this
-        # project forbids, so the engine mode rides inside the title instead.
-        self.title = "Daijin, mock engine" if is_mock else "Daijin, engine over stdio"
+        # THE TITLE IS THE BRAND, not the transport. The owner ruled the top
+        # line carries the name and the tagline; how the engine is connected is
+        # an engine-status fact and lives in that block on the home screen.
+        # (mock mode still announces itself, because a demo must never pass as
+        # the real thing.)
+        self.title = "DAIJIN, a project brain for any repo" + (" [mock]" if is_mock else "")
 
     async def on_mount(self) -> None:
         # The splash is the loading screen. It goes up BEFORE the work starts

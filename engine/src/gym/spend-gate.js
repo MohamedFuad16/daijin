@@ -25,6 +25,8 @@
 import { readFile as readFileNative, rename, writeFile as writeFileNative } from 'node:fs/promises';
 import path from 'node:path';
 
+import { writeJsonAtomic } from '../runtime/atomic.js';
+
 /** Scopes a gate may authorize. A scope names an operation that calls a provider. */
 export const GYM_SPEND_SCOPES = Object.freeze(['gym-cycle', 'exam-mining', 'gym-resume']);
 
@@ -158,9 +160,10 @@ export async function autoBlockSpendGate({
     status: 'blocked',
     reason: reason || 'Automatic safety closure after gym spend; the owner opens a new authorization before further paid work.',
   };
-  const temporary = `${target}.${process.pid}.tmp`;
-  await writeFile(temporary, `${JSON.stringify(closure, null, 2)}\n`, 'utf8');
-  await renameFile(temporary, target);
+  // Through the shared writer, same class fix. This one matters most of the three: it is
+  // the AUTOMATIC GATE CLOSURE after paid work, so a collided temp name here fails the
+  // write that re-blocks spending.
+  await writeJsonAtomic(target, closure, { writeFile, rename: renameFile });
   const after = await readSpendGate({ file: target, readFile });
   if (after.open) throw new Error(`Gym gate auto-closure did not persist a blocked gate: ${target}`);
   return { changed: true, ...after };

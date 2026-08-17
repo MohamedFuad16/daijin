@@ -262,6 +262,40 @@ export function ungradedExplanation(attempt) {
  * that principle collecting: it came off for want of a reader and came back the day one
  * appeared.
  */
+/**
+ * One cycle in the shape the WIRE owes.
+ *
+ * gymStatus shipped `SELECT * FROM cycle` raw: snake_case column names and an unparsed JSON
+ * string sitting beside boundary-mapped fields in the same response. That is the anti-
+ * pattern this file's own examDetail comment argues against, twenty lines away, and it
+ * survived because nobody read the two together.
+ */
+export function cycleForWire(cycle) {
+  return {
+    id: cycle.id,
+    mode: cycle.mode,
+    trigger: cycle.trigger ?? null,
+    status: cycle.status,
+    startedAt: cycle.started_at,
+    finishedAt: cycle.finished_at ?? null,
+    // PARSED. A client should not have to know the ledger stores this as a JSON string, and
+    // one that did would be parsing a storage detail it cannot see the schema of.
+    config: parseJsonOr(cycle.config, {}),
+    brainVersionStart: cycle.brain_version_start ?? null,
+    brainVersionEnd: cycle.brain_version_end ?? null,
+  };
+}
+
+function parseJsonOr(text, fallback) {
+  try {
+    return typeof text === 'string' ? JSON.parse(text) : (text ?? fallback);
+  } catch {
+    // A row whose config cannot be parsed is a fact about that row, not a reason to fail a
+    // status call that is mostly about other rows.
+    return fallback;
+  }
+}
+
 export function attemptForWire(attempt, { axes, ungradedCode, ungradedReason }) {
   return {
     id: attempt.id,
@@ -439,6 +473,27 @@ export async function measureDiscriminatingRange({ run, goldsetPath, store, envi
   }
 }
 
+/**
+ * One gym step's detail, rendered for a feed that shows text.
+ *
+ * The gym passes structured subjects and details (an exam id, a list of gate verdicts) and
+ * the step stream carries a sentence. Compact rather than pretty: this is a live feed line,
+ * not a record, and the record is the result file.
+ */
+export function describeStep(subject, detail, startedAt) {
+  const parts = [];
+  if (subject && typeof subject === 'object') {
+    parts.push(Object.entries(subject).map(([key, value]) => `${key}=${value}`).join(' '));
+  } else if (subject) parts.push(String(subject));
+  if (typeof detail === 'string') parts.push(detail);
+  else if (Array.isArray(detail)) parts.push(detail.map((row) => (typeof row === 'object' ? JSON.stringify(row) : String(row))).join(', '));
+  else if (detail && typeof detail === 'object') parts.push(JSON.stringify(detail));
+  if (typeof startedAt === 'number' && Number.isFinite(startedAt)) {
+    parts.push(`${Math.max(0, Math.round(Date.now() - startedAt))}ms`);
+  }
+  return parts.filter(Boolean).join(' ') || 'step';
+}
+
 function requireRepoPath(params) {
   const repoPath = params?.repoPath;
   if (typeof repoPath !== 'string' || !repoPath.trim()) {
@@ -505,6 +560,13 @@ export function createMethods({
   // driver exists yet: building one needs a configured role, and roles arrive with the
   // model-setup round. Injectable so a cycle is fully testable with a fake student.
   const createEngineer = deps.createEngineer || null;
+
+  /// The gym run in flight, or null. `jobs.activeGymRun?.()` was called and DID NOT EXIST,
+  /// so gymStatus.activeRun was permanently absent although the contract names it. The job
+  /// runner is the wrong owner: it knows about jobs and nothing about exams, so the fact
+  /// lives here, set when a cycle starts and cleared in the same finally that closes its
+  /// handles.
+  let activeGymRun = null;
 
   /// Open a repo's brain, run `body`, and always close. A leaked sqlite handle in a
   /// long-lived daemon is a file descriptor that never comes back.
@@ -644,11 +706,14 @@ export function createMethods({
 
   /// One history, whoever measured. init and retrievalScore both write here so the repo
   /// card's trend line cannot show half the measurements that were actually taken.
-  async function appendScoreHistory(repoPath, floor, { store = null } = {}) {
+  /// `at` is accepted rather than always generated, because retrievalScore stamps its
+  /// record before writing and a second `new Date()` here would put a different moment on
+  /// the same measurement.
+  async function appendScoreHistory(repoPath, floor, { store = null, at = null } = {}) {
     const history = await readHistory(repoPath);
     const layout = await layoutFor(repoPath);
     history.unshift({
-      at: new Date(now()).toISOString(),
+      at: at ?? new Date(now()).toISOString(),
       caseRate: floor.caseRate,
       chosenBudget: floor.chosenBudget ?? null,
       embedding: floor.embedding ?? null,
@@ -945,21 +1010,19 @@ export function createMethods({
         // records do. A trend line comparing measurements taken under different embedders
         // is comparing two different instruments and calling the difference progress; every
         // absolute threshold downstream sits on one embedder's similarity distribution.
-        const history = await readHistory(repoPath);
-        history.unshift({
-          at: record.at,
+        // THE SHARED WRITER, actually called. This block used to duplicate it inline while
+        // its own comment claimed otherwise, and the copy ended in `.catch(() => {})`: a
+        // full disk dropped the measurement silently here while init's path failed loudly,
+        // so the same failure produced an error on one screen and a missing row on another.
+        //
+        // Duplicating the writer is also what let the two rows drift in the first place;
+        // the stamps had to be copied into both, and a third caller would have had to know
+        // to copy them again.
+        await appendScoreHistory(repoPath, {
           caseRate: record.caseRate,
           chosenBudget: record.chosenBudget,
           embedding: chosen.record?.embedding ?? null,
-          // The same stamps init writes. Two writers into one series must agree on the
-          // shape, or half the rows explain themselves and half do not.
-          originPath: (await layoutFor(repoPath)).repoPath,
-          index: await indexContentDigest(store).catch(() => null),
-        });
-        // Through appendScoreHistory's path so the two writers cannot land in two places.
-        await mkdir(path.dirname(await historyFile(repoPath)), { recursive: true })
-          .then(async () => writeFile(await historyFile(repoPath), `${JSON.stringify(history, null, 2)}\n`, 'utf8'))
-          .catch(() => {});
+        }, { store, at: record.at });
 
         return record;
       });
@@ -1309,6 +1372,11 @@ export function createMethods({
       const jobId = jobs.start('gym', async ({ emit, cancelled }) => {
         const engineer = await createEngineer({ settings, repoPath });
         const store = await openStore(repoPath);
+        // Opened HERE so the finally below can close it. It used to be opened inline in the
+        // options object, where nothing held a reference to close, so every cycle leaked a
+        // better-sqlite3 handle for the life of the daemon.
+        const ledger = openLedger(repoPath);
+        activeGymRun = { jobId, mode: config.mode ?? 'harness-debug', exams: drawn.map((exam) => exam.examId), startedAt: new Date(now()).toISOString() };
         try {
           const environment = await embedderEnvironment(store, { ollamaBaseUrl: settings.retrieval?.ollamaBaseUrl });
           // A brainless repo RUNS but cannot certify, so documents are optional and their
@@ -1318,7 +1386,7 @@ export function createMethods({
             exams: drawn,
             mode: config.mode ?? 'harness-debug',
             cohort: config.cohort ?? 'training',
-            ledger: openLedger(repoPath),
+            ledger,
             gates: config.gates ?? [],
             engineer,
             rules: await studentRules(repoPath),
@@ -1344,12 +1412,33 @@ export function createMethods({
             // than from ledger rows, so losing them breaks a rule this build enforces.
             sandboxesRoot: (await layoutFor(repoPath)).sandboxesRoot,
             resultDir: (await layoutFor(repoPath)).gymResultsRoot,
-            logger: { step: async (event) => emit(event.phase ?? 'gym', event.step, event.detail, { counts: event.counts, level: event.level }) },
-            emitFinding: async (finding) => jobs.notifyFinding?.(finding),
+            // POSITIONAL, because that is how every gym module calls it:
+            // `logger.step(name, subject, detail, startedAt)`. The wrapper took an EVENT
+            // OBJECT and read `event.step`, which on a string argument is undefined, so
+            // every gym step would have reached the feed nameless. Latent only because no
+            // driver has wired createEngineer yet; the first real cycle would have shown a
+            // live view of blank rows.
+            logger: {
+              step: async (name, subject, detail, startedAt) => emit('gym', name, describeStep(subject, detail, startedAt)),
+            },
+            // NO OPTIONAL CHAINING on our own interface. `jobs.notifyFinding?.()` silently
+            // discarded every finding a cycle raised, because a missing method and a method
+            // returning nothing are indistinguishable through `?.`. Persisted first so the
+            // board survives a restart, then pushed to the live channel.
+            emitFinding: async (finding) => {
+              await state.addBoardFinding(finding);
+              jobs.notifyFinding(finding);
+            },
             abortSignal: { get aborted() { return cancelled(); } },
           });
         } finally {
+          // BOTH handles. The ledger was opened inline in the options object and never
+          // closed, so every cycle leaked a better-sqlite3 handle; the finally closed only
+          // the store. withLedger exists for exactly this and could not be used here
+          // because the ledger outlives the call that opens it.
           await store.close?.();
+          ledger.close?.();
+          activeGymRun = null;
         }
       });
       return { jobId };
@@ -1360,8 +1449,10 @@ export function createMethods({
       return withLedger(repoPath, async (ledger) => {
         const files = await loadResultFiles((await layoutFor(repoPath)).gymResultsRoot).catch(() => null);
         return {
-          cycles: ledger.database.prepare('SELECT * FROM cycle ORDER BY id DESC').all(),
-          activeRun: jobs.activeGymRun?.(params?.jobId) ?? undefined,
+          cycles: ledger.cycles().map(cycleForWire),
+          // Omitted rather than null when nothing is running, because the contract marks it
+          // optional and a null would read as "a run that reports nothing".
+          ...(activeGymRun ? { activeRun: activeGymRun } : {}),
           // drawnFromResultFiles is NULL when the denominator is not derivable. A client
           // renders that as "not derivable" and never as 0: a zero meaning "four exams
           // vanished" is the exact defect the drawn-cohort rule exists to remove.

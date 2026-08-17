@@ -251,7 +251,11 @@ test('with a student driver, a cycle runs and the exclusion seam is threaded', a
     gateOpen: true,
     engineer: { async next() { return { kind: 'submit', tokens: 10 }; } },
     runGymCycle: async ({ retrieveContext, logger }) => {
-      await logger.step({ phase: 'gym', step: 'round', detail: 'round 1', counts: { round: 1 } });
+      // POSITIONAL, which is how every module in src/gym actually calls it. This fake used
+      // the OBJECT form, the same shape the wrapper wrongly expected, which is why the
+      // drift survived: the only test of the logger shared the wrapper's mistake, so the
+      // two agreed with each other and neither agreed with the gym.
+      await logger.step('round', { exam: 'exam-0001' }, 'round 1');
       await retrieveContext({ query: 'the task', excludeDocumentIds: ['gold.answer.one', 'gold.answer.two'] });
       return { cycles: 1 };
     },

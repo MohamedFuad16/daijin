@@ -19,8 +19,10 @@
 // A quietly short set under-counts the cohort and reads as a measurement, which is the exact
 // failure this metric exists to remove.
 
-import { readdir as readdirNative, readFile as readFileNative, rename, writeFile as writeFileNative } from 'node:fs/promises';
+import { mkdir as mkdirNative, readdir as readdirNative, readFile as readFileNative, rename, writeFile as writeFileNative } from 'node:fs/promises';
 import path from 'node:path';
+
+import { writeJsonAtomic } from '../runtime/atomic.js';
 
 export const RESULT_FILE_SUFFIX = '-result.json';
 
@@ -39,18 +41,22 @@ export function resultFileName(examId, timestamp) {
  * silently joining another cycle's cohort.
  */
 export async function writeResultFile(directory, result, {
-  writeFile = writeFileNative, renameFile = rename, mkdir = null,
+  // Defaults to the REAL mkdir, like every sibling default in this signature. It defaulted
+  // to null, so the directory was created only when a caller passed one, and the first
+  // cycle on a fresh repo wrote into a directory that did not exist yet: ENOENT on the
+  // first result of the first run, which is the one run a new user watches.
+  writeFile = writeFileNative, renameFile = rename, mkdir = mkdirNative,
 } = {}) {
   if (!result?.exam?.id || !result?.timestamp || !result?.mode) {
     throw new Error('A result artifact must carry exam.id, timestamp, and mode before it can be written.');
   }
-  if (mkdir) await mkdir(directory, { recursive: true });
   const name = resultFileName(result.exam.id, result.timestamp);
   const file = path.join(directory, name);
   const stamped = { ...result, schemaVersion: RESULT_SCHEMA_VERSION, resultFile: name };
-  const temporary = `${file}.${process.pid}.tmp`;
-  await writeFile(temporary, `${JSON.stringify(stamped, null, 2)}\n`, 'utf8');
-  await renameFile(temporary, file);
+  // Through the shared writer, same class fix. A gym cycle writes one of these per exam,
+  // and the drawn-cohort denominator is counted from these files, so a lost write is a
+  // lost row in a denominator that is supposed to be the reliable one.
+  await writeJsonAtomic(file, stamped, { writeFile, rename: renameFile, mkdir });
   return { file, name, result: stamped };
 }
 

@@ -11,6 +11,8 @@ import { randomUUID } from 'node:crypto';
 import { appendFile, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
+import { writeJsonAtomic as sharedWriteJsonAtomic } from '../runtime/atomic.js';
+
 import { checkKeyRef, KEY_REF_FORMS, parseKeyRef } from '../roles/keys.js';
 
 export const ROLES = Object.freeze(['engineer', 'teacher', 'auditor', 'watcher']);
@@ -81,20 +83,11 @@ let writeCounter = 0;
  * because the next caller to write state might not come through the queue.
  */
 export async function writeJsonAtomic(file, value) {
-  await mkdir(path.dirname(file), { recursive: true });
-  // Unique PER WRITE, not per process. `${file}.tmp-${process.pid}` was the same name for
-  // every concurrent write inside one daemon, so two writes clobbered each other's temp
-  // file and one rename failed with ENOENT. Measured: it failed at two concurrent writes,
-  // and nine of ten under load.
-  writeCounter += 1;
-  const temporary = `${file}.tmp-${process.pid}-${writeCounter}-${randomUUID().slice(0, 8)}`;
-  try {
-    await writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
-    await rename(temporary, file);
-  } catch (error) {
-    await rm(temporary, { force: true });
-    throw error;
-  }
+  // DELEGATED, not duplicated. The rule this function was fixed for (a temp name unique per
+  // WRITE rather than per process) survived unfixed at three other sites, because the fix
+  // lived here as an expression rather than as a thing others could use. Keeping a second
+  // copy of it here would repeat exactly that.
+  return sharedWriteJsonAtomic(file, value);
 }
 
 export class EngineState {

@@ -363,6 +363,13 @@ export class GymLedger {
 
   /** Rows for a cycle. `scoredOnly` is the default because a caller that wants every mode
    *  should have to say so, which is the inverse of how a filter gets forgotten. */
+  /// Every cycle, newest first. Exists so no caller reaches past the ledger into the
+  /// tables with its own SQL, which gymStatus was doing and which is how a schema the
+  /// daemon does not own ended up on a frozen wire.
+  cycles() {
+    return this.database.prepare('SELECT * FROM cycle ORDER BY id DESC').all();
+  }
+
   cycleRuns(cycleId, { scoredOnly = true } = {}) {
     return scoredOnly
       ? this.database.prepare("SELECT * FROM run WHERE cycle_id = ? AND mode = 'evaluation' ORDER BY id").all(cycleId)

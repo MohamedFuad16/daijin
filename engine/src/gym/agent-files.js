@@ -15,6 +15,8 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { writeFileAtomic } from '../runtime/atomic.js';
+
 export const AGENT_ROLES = Object.freeze(['student', 'teacher', 'auditor', 'watcher']);
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -75,11 +77,14 @@ export async function setAgentFile(repoPath, role, content, dependencies = {}) {
   if (!text.trim()) throw new Error(`Refusing to write an empty ${role} instruction file; an empty rules file silently removes every rule.`);
   const file = agentFilePath(repoPath, role);
   const write = dependencies.writeFile || writeFile;
-  const renameFile = dependencies.rename || rename;
-  await (dependencies.mkdir || mkdir)(path.dirname(file), { recursive: true });
-  const temporary = `${file}.${process.pid}.tmp`;
-  await write(temporary, text, 'utf8');
-  await renameFile(temporary, file);
+  // Through the shared writer: the temp name is unique per WRITE and the temp file is
+  // removed if the write fails. This site had `${file}.${process.pid}.tmp`, the same
+  // expression state.js was fixed for and the same one two sibling gym files carried.
+  await writeFileAtomic(file, text, {
+    mkdir: dependencies.mkdir || mkdir,
+    writeFile: write,
+    rename: dependencies.rename || rename,
+  });
   return getAgentFile(repoPath, role, dependencies);
 }
 

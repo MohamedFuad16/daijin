@@ -148,6 +148,22 @@ export class JobRunner {
     return { cancelled: true };
   }
 
+  /**
+   * Push one board finding onto the notification channel.
+   *
+   * THIS METHOD DID NOT EXIST and was being called as `jobs.notifyFinding?.(finding)`, so
+   * every finding a gym cycle raised was silently discarded, including the ADR-0167
+   * scaffold warning on SCORED runs. The optional chaining is what hid it: a missing method
+   * and a method that returns nothing look identical through `?.`, so the call site read as
+   * defensive when it was inert.
+   *
+   * Not job scoped, matching the server's own pushBoardFinding: the watcher raises these
+   * with nothing running.
+   */
+  notifyFinding(row) {
+    this.#notify(BOARD_FINDING_NOTIFICATION, row);
+  }
+
   /// Await every running job. Used on shutdown and by tests, so a job cannot outlive the
   /// process that owns its output stream.
   async drain() {

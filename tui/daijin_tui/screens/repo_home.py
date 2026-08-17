@@ -10,6 +10,7 @@ from textual.widgets import Button, Input, Static
 from ..concurrency import gather_all, gather_iter
 from ..rpc import RpcError
 from ..widgets import Banner, RepoCard, SectionTitle, format_count
+from ..widgets.wordmark import header_mark
 from .base import DaijinScreen
 
 
@@ -20,6 +21,11 @@ class RepoHomeScreen(DaijinScreen):
     subheading = "connected repos, health, measured floor"
 
     def content(self) -> Iterable[Any]:
+        # The mark, persistent. The splash is a moment; this is the brand
+        # staying put, and it is the same object in a size a header can hold.
+        # Sized at compose time and re-sized on resize, because a mark that
+        # wraps is not a smaller mark, it is a broken one.
+        yield Static("", id="home-wordmark", markup=False)
         yield SectionTitle("Connected repos", "click a card, or tab and press enter")
         # Scrollable, not a plain row. Four cards at 42 columns already exceed
         # a 170 column terminal, and a card past the right edge is reachable by
@@ -33,7 +39,26 @@ class RepoHomeScreen(DaijinScreen):
         yield Static("", id="engine-status", markup=True)
         yield Banner("", tone="info", id="home-notice")
 
+    def on_mount(self) -> None:
+        self._draw_wordmark()
+
+    def on_resize(self, event: Any) -> None:
+        self._draw_wordmark()
+
+    def _draw_wordmark(self) -> None:
+        try:
+            mark = self.query_one("#home-wordmark", Static)
+        except Exception:  # noqa: BLE001 - before compose has mounted it
+            return
+        width = self.size.width or 0
+        lines = header_mark(width)
+        mark.update("\n".join(lines))
+        # A mark that could not be drawn takes no vertical space either, so a
+        # narrow terminal loses the brand rather than losing a row of content.
+        mark.display = bool(lines)
+
     async def load(self) -> None:
+        self._draw_wordmark()
         container = self.query_one("#repo-cards", HorizontalScroll)
         await container.remove_children()
         try:

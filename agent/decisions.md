@@ -1225,3 +1225,23 @@ default; the coding realm 404s for non-subscribers), the catalog note names
 both realms, and the watcher flags zai + 429 + default-endpoint as the trap
 with the endpoint fix attached. Diagnosed from the platform's committed
 config at zero spend; no provider call was made to confirm.
+
+## D-0056 (2026-08-17) The zai default endpoint is the Coding Plan realm - owner override
+
+Reverses half of D-0055 by the owner's explicit ruling ("set by default the
+plan one, not the API's"). endpointDefault for zai is now
+https://api.z.ai/api/coding/paas/v4. The trade is documented rather than
+hidden: pay-as-you-go keys now hit the trap instead of coding-plan keys, so
+the watcher's realm detection became TWO-WAY (429 on either known realm
+offers the other; fixes zai-coding-endpoint and zai-payg-endpoint, both in
+the closed catalog). The catalog note carries both realms and the rule that
+a key only works where its plan lives.
+
+## D-0057 (2026-08-17) `daijin update` goes back to where the install came from
+
+The shim's update subcommand reads source.path from the VERSION stamp the
+installer wrote, pulls it --ff-only, and re-runs that checkout's installer.
+The stamp is the authority because it records where THIS install actually
+came from; a hardcoded path or a remote URL would update something else. No
+merge resolution: an updater has no business resolving conflicts in the
+owner's checkout, and a diverged checkout fails loudly instead.

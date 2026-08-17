@@ -1,5 +1,55 @@
 # Daijin build state (authoritative)
 
+## 2026-08-17 23:15 - Owner round 8: layout diet, budget control, realm default, updater
+
+Solo batch off the owner's eighth field test (six screenshots, all against a
+freshly pulled install - the loop is live end to end now).
+
+- The big home mark is GONE (owner: "not too big... we already have the
+  text"): the nav-left DAIJIN word is the brand in-app; the drawn mark keeps
+  the splash. Ladder code stays for the splash only.
+- Step stream: the step column was {step:<12} and every step past twelve
+  characters FUSED with its detail ("goldset-mined25 active cases", owner
+  screenshot). Now a real column: 22 wide, ellipsised past 20. Checklist
+  counts render only when the detail is empty - beside a detail that already
+  says "73 files, 18 languages" they repeated the same numbers in a second
+  dialect.
+- Init controls: short mode labels ("Layer 1 (free)", "Layer 1 + 2
+  (SPENDS)") with a note line that changes with the selection; the scope
+  field got the field-label treatment.
+- Brain: the Measured-floor block is gone - every number in it already lived
+  in the hero (owner read the floor twice). Its place holds the BUDGET
+  CONTROL: sweep budgets as a Select with the recommendation marked,
+  re-measure applies AND stores the choice (settings.retrieval.tokenBudget),
+  so serving actually follows it.
+- Gates: the "No repo selected" banner over a populated table was a STALE
+  TABLE, not a wrong banner - detach left the last rows under a true
+  sentence. The no-repo branch clears the table now.
+- Exams empty state teaches: where exams come from (deterministic mine, then
+  the auditor committee behind the gate), and says plainly the mining button
+  has not shipped. gymStart's empty-bank refusal already said the what; the
+  screen now says the how.
+- zai endpointDefault -> the CODING realm (owner override, D-0056); the
+  realm trap detects both directions now (429 on either realm offers the
+  other, fix pair in the closed catalog). Mock catalog and tests moved with
+  it.
+- Owner's roles configured by hand in ~/.daijin/settings.json at their
+  direction: engineer zai/glm-5.3, watcher zai/glm-4.6 (they said "4.3",
+  which does not exist; 4.6 chosen and disclosed), both on the coding realm
+  with the same key file; teacher and auditor are claude-code sub-agents
+  (daijin-teacher / daijin-auditor on claude-opus-5).
+- `daijin update`: the shim pulls the source checkout named in the VERSION
+  stamp (--ff-only) and re-runs its installer. One command, no guessing
+  where the install came from.
+
+The 100% question, answered from the owner's own run rather than re-argued:
+their init's permuted control scored 18 of 25 against the real 25 of 25, so
+the gauge can SEE a 7-case effect and the 100% is measured, not vacuous. The
+margin note fired because wrong-answers landed within one case of the 0.75
+threshold. 73 files distilled to 11 brain units and 49 chunks; on a corpus
+that size perfect recall is the expected healthy reading, and the control is
+the proof it is not a stuck gauge.
+
 ## 2026-08-17 21:45 - Owner round 7: the universal watcher, the zai realm trap, pnpm
 
 Three owner directives, all landed solo.

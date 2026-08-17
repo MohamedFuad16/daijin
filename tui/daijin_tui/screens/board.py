@@ -20,6 +20,7 @@ STATUS_OPTIONS = [("all statuses", "all"), ("open", "open"), ("triaged", "triage
 
 class BoardScreen(DaijinScreen):
     mode_name = "board"
+    notice_id = "#board-notice"
     heading = "Board"
     subheading = "watcher detects, auditor judges, the user reads"
 

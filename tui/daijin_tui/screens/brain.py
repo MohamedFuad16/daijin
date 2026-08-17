@@ -42,6 +42,7 @@ def _token_cell(chunk: dict[str, Any]) -> str:
 
 class BrainScreen(DaijinScreen):
     mode_name = "brain"
+    notice_id = "#brain-notice"
     heading = "Brain browser, retrieval tester, diagnosis"
     subheading = "case rate is reported as a count, never as a bare rounded percentage"
 

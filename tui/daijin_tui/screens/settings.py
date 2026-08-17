@@ -35,6 +35,7 @@ AGENT_ROLES = ("student", "teacher", "auditor", "watcher")
 
 class SettingsScreen(DaijinScreen):
     mode_name = "settings"
+    notice_id = "#settings-notice"
     heading = "Settings"
     subheading = "the served model id is the identity check; a catalogue endpoint is not authoritative"
 

@@ -407,6 +407,11 @@ class EventLog(RichLog):
         kwargs.setdefault("max_lines", 2_000)
         super().__init__(**kwargs)
         self.event_count = 0
+        # Truncation is the DEFAULT, not the policy. Most tokens in this
+        # stream are paths, so a reader who wants the whole one should be able
+        # to have it back rather than being told the column decided.
+        self.truncate = True
+        self._events: list[dict[str, Any]] = []
         self.add_class("event-log")
 
     @staticmethod
@@ -436,7 +441,7 @@ class EventLog(RichLog):
         )
 
     @classmethod
-    def format_event(cls, event: dict[str, Any], width: int = 0) -> str:
+    def format_event(cls, event: dict[str, Any], width: int = 0, *, truncate: bool = True) -> str:
         """One event as fixed columns, with the detail wrapped under itself.
 
         The stream has to read as a TABLE even when a detail is a sentence, so
@@ -460,7 +465,12 @@ class EventLog(RichLog):
             return f"{head}{body}{'  ' + tail if tail else ''}"
         indent = len(head)
         room = max(MIN_DETAIL_WIDTH, width - indent)
-        body = cls.format_detail(body, room)
+        # Untruncated, a long token simply overruns its column. The widget
+        # does not wrap, so the row scrolls horizontally rather than breaking
+        # the path across lines, which is the thing the truncation existed to
+        # prevent in the first place.
+        if truncate:
+            body = cls.format_detail(body, room)
         words, lines, current = body.split(" "), [], ""
         for word in words:
             candidate = f"{current} {word}".strip()
@@ -497,7 +507,36 @@ class EventLog(RichLog):
 
     def append_event(self, event: dict[str, Any]) -> None:
         self.event_count += 1
+        self._events.append(event)
         # The widget's own width, so the wrap happens where the frame ends.
         self.write(
-            Text(self.format_event(event, self.size.width or 0), style=self.style_for(event))
+            Text(
+                self.format_event(event, self.size.width or 0, truncate=self.truncate),
+                style=self.style_for(event),
+            )
         )
+
+    def set_truncate(self, truncate: bool) -> None:
+        """Redraw every row at the new setting.
+
+        The events are kept so the toggle applies to what is ALREADY on screen.
+        A setting that only affected future rows would leave the path the user
+        is looking at exactly as unreadable as it was.
+        """
+        self.truncate = truncate
+        # super().clear() empties the DISPLAY. self.clear() would also empty
+        # the events, which are the thing being redrawn.
+        super().clear()
+        width = self.size.width or 0
+        for event in self._events:
+            self.write(
+                Text(
+                    self.format_event(event, width, truncate=truncate),
+                    style=self.style_for(event),
+                )
+            )
+
+    def clear(self) -> "EventLog":
+        """Reset the log, events included: a new job starts from nothing."""
+        self._events.clear()
+        return super().clear()

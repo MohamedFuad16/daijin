@@ -1498,6 +1498,36 @@ class MockEngine:
         """
         return copy.deepcopy(mock_data.AGENT_CATALOG)
 
+    async def _rpc_systemCheck(self, params: dict[str, Any]) -> dict[str, Any]:
+        """The tool-wide watcher sweep, mirrored from the daemon.
+
+        Branch-complete: a finding with an install fix, one with the zai
+        realm-trap endpoint fix, and one with no fix at all.
+        """
+        return copy.deepcopy(mock_data.SYSTEM_CHECK)
+
+    async def _rpc_systemFix(self, params: dict[str, Any]) -> dict[str, Any]:
+        fix_id = params.get("fixId")
+        catalog = {"install-pnpm", "install-yarn", "zai-coding-endpoint"}
+        if fix_id not in catalog:
+            raise RpcError(ERR_INVALID_PARAMS, "unknown fix", {
+                "hint": f"fixId must be one of: {', '.join(sorted(catalog))}. The fix catalog is closed on purpose.",
+            })
+        if params.get("confirm") is not True:
+            raise RpcError(ERR_INVALID_PARAMS, "not confirmed", {
+                "hint": "This changes the machine or its settings, so it needs confirm: true from an explicit user action.",
+            })
+        if fix_id == "zai-coding-endpoint":
+            role = params.get("role")
+            names = [entry["role"] for entry in self.settings["roles"]]
+            if role not in names:
+                raise RpcError(ERR_INVALID_PARAMS, "unknown role", {"hint": f"role must be one of {', '.join(names)}."})
+            for entry in self.settings["roles"]:
+                if entry["role"] == role:
+                    entry["endpoint"] = "https://api.z.ai/api/coding/paas/v4"
+            return {"ok": True, "applied": fix_id, "detail": f"{role} endpoint set to https://api.z.ai/api/coding/paas/v4. Verify the role to confirm."}
+        return {"ok": True, "applied": fix_id, "detail": "Install pnpm globally (npm install -g pnpm) succeeded. added 1 package"}
+
     async def _rpc_board(self, params: dict[str, Any]) -> dict[str, Any]:
         filters = params.get("filters") or {}
         rows = copy.deepcopy(self.board_rows)

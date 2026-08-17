@@ -60,6 +60,36 @@ class SpendConfirmScreen(ModalScreen[bool]):
         self.dismiss(False)
 
 
+class ConfirmScreen(ModalScreen[bool]):
+    """Confirm one machine-changing action. Not a spend dialog: no provider is
+    called, but installs and settings edits still only happen on an explicit
+    yes, because the engine never infers consent and neither does the client.
+    """
+
+    BINDINGS = [Binding("escape", "cancel", "Cancel")]
+
+    def __init__(self, *, title: str, body: str, confirm_label: str = "Apply", **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self.title_text = title
+        self.body = body
+        self.confirm_label = confirm_label
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="confirm-dialog", classes="dialog"):
+            yield Static(f"[b]{self.title_text}[/b]", markup=True)
+            yield Static(self.body, id="confirm-body")
+            with Horizontal(classes="dialog-actions"):
+                yield Button(self.confirm_label, id="confirm-yes", variant="warning")
+                yield Button("Cancel", id="confirm-no", variant="primary")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        event.stop()
+        self.dismiss(event.button.id == "confirm-yes")
+
+    def action_cancel(self) -> None:
+        self.dismiss(False)
+
+
 class TextPromptScreen(ModalScreen[str | None]):
     """Collect one line of text, with a minimum length the caller sets."""
 

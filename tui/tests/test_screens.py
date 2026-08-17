@@ -1208,15 +1208,68 @@ async def test_exam_token_bars_and_history_come_from_exam_detail():
 
 @run_async
 async def test_board_lists_findings_and_shows_the_status_thread():
+    # 6 stored rows plus the live watcher sweep (3 in the mock): the board is
+    # the watcher's live report over the whole tool, not just an archive.
     async with running_app() as (app, pilot):
         await goto(pilot, "7")
-        assert app.screen.query_one("#board-table", DataTable).row_count == 6
+        assert app.screen.query_one("#board-table", DataTable).row_count == 9
         detail = text_of(app.screen.query_one("#board-detail", Static))
-        assert "watcher" in detail and "evidence" in detail
+        assert "watcher" in str(detail).lower() or "sweep" in str(detail).lower()
+
+
+@run_async
+async def test_the_watcher_sweep_rides_the_board_and_its_fix_needs_a_confirmation():
+    """Universal watcher (owner ruling): systemCheck rows sit in the table,
+    a finding's fix renders a button, and the fix only fires through the
+    confirm dialog with confirm: true on the wire."""
+    async with running_app() as (app, pilot):
+        await goto(pilot, "7")
+        screen = app.screen
+        # Select the pnpm finding and apply its fix through the dialog.
+        screen._show_row(next(r for r in screen.rows if r.get("id", "").startswith("gate-unavailable")))
+        await settle(pilot)
+        fix = screen.query_one("#board-fix", Button)
+        assert fix.display is True
+        await pilot.click("#board-fix")
+        await settle(pilot)
+        await pilot.click("#confirm-yes")
+        await settle(pilot, 12)
+        call = next(c for c in app.client.engine.calls if c[0] == "systemFix")
+        assert call[1] == {"fixId": "install-pnpm", "confirm": True}
+        assert "succeeded" in text_of(screen.query_one("#board-notice", Banner))
+
+    # Cancelling sends nothing.
+    async with running_app() as (app, pilot):
+        await goto(pilot, "7")
+        screen = app.screen
+        screen._show_row(next(r for r in screen.rows if r.get("id") == "role-failed:engineer"))
+        await settle(pilot)
+        await pilot.click("#board-fix")
+        await settle(pilot)
+        await pilot.click("#confirm-no")
+        await settle(pilot, 12)
+        assert not any(c[0] == "systemFix" for c in app.client.engine.calls)
+
+
+@run_async
+async def test_the_zai_realm_fix_names_the_role_on_the_wire():
+    async with running_app() as (app, pilot):
+        await goto(pilot, "7")
+        screen = app.screen
+        screen._show_row(next(r for r in screen.rows if r.get("id") == "role-failed:engineer"))
+        await settle(pilot)
+        await pilot.click("#board-fix")
+        await settle(pilot)
+        await pilot.click("#confirm-yes")
+        await settle(pilot, 12)
+        call = next(c for c in app.client.engine.calls if c[0] == "systemFix")
+        assert call[1] == {"fixId": "zai-coding-endpoint", "confirm": True, "role": "engineer"}
 
 
 @run_async
 async def test_board_filter_narrows_to_critical_findings():
+    # The filter applies to the sweep too: no mock sweep row is critical, so
+    # only the one stored critical row survives.
     async with running_app() as (app, pilot):
         await goto(pilot, "7")
         app.screen.query_one("#filter-severity", Select).value = "critical"

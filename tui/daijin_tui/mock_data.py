@@ -1560,6 +1560,59 @@ AGENT_CATALOG: dict[str, Any] = {
     ],
 }
 
+# The tool-wide watcher sweep (systemCheck), shape-verified against the
+# daemon. Branch-complete: an install fix, the zai realm-trap endpoint fix,
+# and a finding with no fix.
+SYSTEM_CHECK: dict[str, Any] = {
+    "at": "2026-08-17T12:00:00.000Z",
+    "findings": [
+        {
+            "id": "gate-unavailable:/Users/owner/code/orchard-web:build",
+            "ts": "2026-08-17T12:00:00.000Z",
+            "source": "watcher",
+            "severity": "warn",
+            "category": "gates",
+            "target": "/Users/owner/code/orchard-web (build)",
+            "evidence": "systemCheck",
+            "status": "open",
+            "summary": "The build gate cannot run here: its runtime is not installed",
+            "detail": "Install pnpm and run its install step in the repo root.",
+            "action": {"fixId": "install-pnpm", "label": "Install pnpm globally (npm install -g pnpm)"},
+        },
+        {
+            "id": "role-failed:engineer",
+            "ts": "2026-08-17T12:00:00.000Z",
+            "source": "watcher",
+            "severity": "warn",
+            "category": "roles",
+            "target": "engineer",
+            "evidence": "systemCheck",
+            "status": "open",
+            "summary": "The engineer role's last verification failed",
+            "detail": (
+                "The provider answered 429. Insufficient balance or no resource package. "
+                "Z.ai bills its two realms separately: this key may be subscribed on the "
+                "GLM Coding Plan realm (api/coding/paas/v4) rather than pay-as-you-go "
+                "(api/paas/v4)."
+            ),
+            "action": {"fixId": "zai-coding-endpoint", "label": "Point this role at the GLM Coding Plan realm (api/coding/paas/v4)"},
+        },
+        {
+            "id": "no-brain:/Users/owner/code/atlas-cli",
+            "ts": "2026-08-17T12:00:00.000Z",
+            "source": "watcher",
+            "severity": "info",
+            "category": "brain",
+            "target": "/Users/owner/code/atlas-cli",
+            "evidence": "systemCheck",
+            "status": "open",
+            "summary": "Attached with no brain yet; run init to build and measure one",
+            "detail": None,
+            "action": None,
+        },
+    ],
+}
+
 # The engine accepts a hosting URL and nothing else. Verified against the
 # daemon: file:// and a bare path are both refused with this sentence.
 CLONE_URL_HINT = (

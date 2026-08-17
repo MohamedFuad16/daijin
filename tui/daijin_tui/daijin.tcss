@@ -344,6 +344,13 @@
     border: round $panel;
 }
 
+/* The auditor-fix button exists only when the selected finding carries a
+   fix; hidden by default so an empty board never offers an action. */
+#board-fix {
+    display: none;
+    margin: 1 0 0 0;
+}
+
 /* The brain hero: status and rate first, big and unmissable. */
 #brain-hero {
     height: auto;

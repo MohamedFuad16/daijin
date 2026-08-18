@@ -1,5 +1,56 @@
 # Daijin build state (authoritative)
 
+## 2026-08-18 13:10 - Owner round 11: the goal loop, and the gym unblocked
+
+Three directives: the gate as a real control everywhere, the gym must start
+on a picked exam, and the watcher must run until the tool is clean with the
+auditor acting on what it finds.
+
+THE GYM BLOCKER, three defects in one screenshot. The owner's mined exam was
+marked heldOut by the committee, so every training draw refused - and the
+refusal fired INSIDE the job, after the spend dialog, as a failed run whose
+only content was a rule the daemon could have applied at the click. Fixed at
+all three levels: examDrawRefusal now runs in gymStart BEFORE consent with a
+hint carrying the fix; the HELD-OUT SPLIT IS MECHANICAL (a sampling decision,
+not a judgment - the committee's flag is advisory and is ignored below five
+exams, because holding out the only exam leaves the gym nothing to run); and
+the picker labels draft and held-out exams while the client sends
+cohort: "held-out" when the owner explicitly picks one, which is exactly the
+explicit act the rule asks for.
+
+THE GOAL LOOP (D-0063), the owner's /goal. One sweep is: the mechanical
+systemCheck surface, the repo's gates ACTUALLY RUN (a failing live gate is
+critical - a current break, not a claim about a file), and the exam bank read
+for what stands between the owner and a runnable gym. Findings are persisted
+and pushed to the board, deduplicated by id across sweeps. ZERO SPEND by
+default, which is what lets it run indefinitely; triage: true adds the
+auditor and takes both locks before the loop starts. It stops on consecutive
+clean sweeps, on maxSweeps, or on cancel; the stop rule is a pure function
+with its boundaries pinned. In the TUI: a Board button, a triage checkbox,
+and `g` / the palette as the owner's /goal.
+
+PROVEN LIVE, twice, and the live runs found four defects the suites did not:
+1. Every triage failed with "The claude CLI failed: Command failed: claude -p
+   <the entire prompt>" - burying the truth, which was one line in the CLI's
+   own JSON body: "You've reached your Fable 5 limit." The CLI's sentence now
+   wins over the exec wrapper's, in both drivers.
+2. The CLI waited three seconds for stdin on EVERY call and warned about it;
+   stdin is now ignored rather than inherited.
+3. The loop kept calling a provider that had already refused, once per
+   finding. Two consecutive failures now stop triage for the loop and say so;
+   the free sweep carries on.
+4. The board grew a row per sweep and per verdict (nine rows for five
+   findings). It upserts by id now: one finding, one row, latest state wins.
+
+The second live run (auditor on Opus, since Fable is at its limit) triaged
+four findings with real reasoning on the board, and the gate re-blocked
+itself after.
+
+HONEST BOUNDARY, unchanged: the auditor applies fixes only from the closed
+catalog and its judgment decides WHETHER a known remedy runs, never WHAT
+runs. Everything else is a written recommendation. An LLM editing this repo
+unattended is a different product.
+
 ## 2026-08-18 03:55 - THE TEACHER IS WIRED, and a live cycle came back GRADED
 
 Owner round 10 ("everything has to be wired"). The last unwired module is

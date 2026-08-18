@@ -1313,3 +1313,29 @@ and an unconfigured teacher refuses before consent, because a cycle whose
 grades can never arrive is a cycle sold under a wrong description. The
 attempt wire verdict prefers the rubric over the run row's null column,
 caught live in the first graded run.
+
+## D-0063 (2026-08-18) The goal loop watches for free and acts only through the catalog
+
+The owner asked for a watcher that runs "until the entire project, gates,
+exams are bug free" and an auditor that fixes what it finds. Ruled: the
+sweep is mechanical and free (systemCheck, the repo's gates actually run,
+the exam bank), which is the only way a loop can honestly run indefinitely;
+auditor triage is opt-in, takes the gate and consent BEFORE the loop starts,
+and stops itself after two consecutive provider failures rather than
+spending a quota to re-learn one refusal. The auditor's power is bounded the
+same way it was in D-0054: it may decide WHETHER a fix from the closed
+catalog runs; it may not decide WHAT runs, and anything outside the catalog
+is a recommendation written to the finding's thread. The loop ends on
+consecutive clean sweeps so "bug free" is a state it can actually report,
+not a promise it makes.
+
+## D-0064 (2026-08-18) The held-out split is mechanical, and draw rules are checked at the call
+
+A held-out split is a sampling decision, so the engine owns it: the exam
+committee's heldOut flag is advisory and ignored below five exams, because
+reserving the only exam in a bank leaves the gym with nothing to draw (the
+owner met exactly that). Draw rules are checked in gymStart BEFORE consent -
+a refusal a daemon can make at the click must never arrive as a failed job
+the owner already paid for - and the client sends cohort "held-out" when the
+owner explicitly picks a held-out exam, which is the explicit act the rule
+was written to require.

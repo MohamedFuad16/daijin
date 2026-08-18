@@ -13,7 +13,7 @@ from typing import Any
 import pytest
 from conftest import DEFAULT_REPO, SUB_75_REPO, goto, run_async, running_app, screen_text, scroll_to, settle
 
-from textual.widgets import Button, DataTable, Input, Select, Static, TabbedContent, TextArea
+from textual.widgets import Button, Checkbox, DataTable, Input, Select, Static, TabbedContent, TextArea
 
 from daijin_tui import mock_data
 from daijin_tui.rpc import SUPPORTED_CONTRACT_VERSION
@@ -1307,6 +1307,46 @@ async def test_board_lists_findings_and_shows_the_status_thread():
         assert app.screen.query_one("#board-table", DataTable).row_count == 9
         detail = text_of(app.screen.query_one("#board-detail", Static))
         assert "watcher" in str(detail).lower() or "sweep" in str(detail).lower()
+
+
+@run_async
+async def test_the_goal_loop_starts_free_and_stops_itself_when_clean():
+    """The owner's /goal: zero spend with triage off, so no dialog at all,
+    and the stream's own done event ends it."""
+    async with running_app() as (app, pilot):
+        await goto(pilot, "7")
+        await pilot.click("#board-goal")
+        await settle(pilot, 30)
+        call = next(c for c in app.client.engine.calls if c[0] == "goalStart")
+        assert call[1]["triage"] is False
+        assert "confirm" not in call[1], "a zero-spend loop asks for no spend consent"
+        for _ in range(40):
+            await settle(pilot, 4)
+            if app.screen.goal_job_id is None:
+                break
+        assert app.screen.goal_job_id is None, "the done event ended the loop"
+        assert "Clean" in text_of(app.screen.query_one("#board-notice", Banner))
+
+
+@run_async
+async def test_goal_triage_needs_the_gate_and_the_spend_confirmation():
+    """Triage on is a paid loop: the spend dialog, then the gate offer when
+    the gate reads blocked, and only then does it start."""
+    async with running_app(gate_open=False) as (app, pilot):
+        await goto(pilot, "7")
+        app.screen.query_one("#board-goal-triage", Checkbox).value = True
+        await settle(pilot)
+        await pilot.click("#board-goal")
+        await settle(pilot)
+        await pilot.click("#spend-confirm")
+        await settle(pilot, 10)
+        # Gate refusal became the open offer; accepting retries the start.
+        await pilot.click("#confirm-yes")
+        await settle(pilot, 20)
+        gate = next(c for c in app.client.engine.calls if c[0] == "spendGateSet")
+        assert gate[1]["scope"] == "exam-mining"
+        start = next(c for c in app.client.engine.calls if c[0] == "goalStart")
+        assert start[1]["triage"] is True and start[1]["confirm"] is True
 
 
 @run_async

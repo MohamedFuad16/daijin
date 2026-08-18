@@ -42,6 +42,8 @@ function surface(repoPath) {
     ['examList', {}],
     ['examMine', { repoPath }],
     ['spendGateSet', { repoPath, status: 'blocked' }],
+    // maxSweeps 1 so the surface sweep starts a job that ends immediately.
+    ['goalStart', { repoPath, maxSweeps: 1, cleanSweepsToStop: 1 }],
     ['examDetail', { examId: 'exam-0001' }],
     ['examVeto', { examId: 'exam-0001', reason: 'a reason long enough to be reviewable later' }],
     ['examUpdate', { examId: 'exam-0001', patch: {} }],
@@ -261,8 +263,16 @@ test('gates are data: set writes the file, get reads it back', async () => {
 test('scoreHistory and board answer empty rather than erroring when nothing exists', async () => {
   assert.deepEqual(resultOf(await daemon.request('scoreHistory', { repoPath })), [],
     'a repo whose floor was never measured has no trend, which is not an error');
-  const board = resultOf(await daemon.request('board', {}));
-  assert.deepEqual(board, { rows: [], total: 0 });
+  // ITS OWN DAEMON. The board is no longer inert: the goal loop writes real
+  // findings to it, and the surface sweep in this file starts one. Asserting
+  // "empty" against a daemon another test has swept measures the order the
+  // tests happened to run in, which is not a property of the engine.
+  const fresh = await startDaemon();
+  try {
+    assert.deepEqual(resultOf(await fresh.request('board', {})), { rows: [], total: 0 });
+  } finally {
+    await fresh.stop();
+  }
 });
 
 test('mcpSnippet stays locked below the threshold', async () => {

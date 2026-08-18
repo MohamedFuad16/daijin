@@ -707,6 +707,33 @@ MINED_EXAMS: list[dict[str, Any]] = [
 ]
 
 
+def goal_script(job_id: str, *, triage: bool = False) -> list[dict[str, Any]]:
+    """The goal loop's stream: two sweeps, the second clean, so the mock
+    exercises the stop-when-clean ending rather than only the running state."""
+    def ev(offset_ms, phase, step, detail, counts=None, level="info"):
+        row = {"ts": offset_ms, "jobId": job_id, "phase": phase, "step": step, "detail": detail, "level": level}
+        if counts:
+            row["counts"] = counts
+        return row
+    rows = [
+        ev(200, "watch", "sweep", "sweep 1: reading the tool, the gates and the exam bank"),
+        ev(1_200, "watch", "gates-run", "test=pass, build=fail", {"gates": 2, "failing": 1}),
+        ev(1_400, "watch", "swept", "2 finding(s), 2 new", {"findings": 2, "fresh": 2}, "warn"),
+    ]
+    if triage:
+        rows += [
+            ev(2_000, "audit", "triaged", "gate-failing:build: the build gate fails on a missing dependency."),
+            ev(3_000, "audit", "fixed", "gate-unavailable:lint: Install pnpm globally (npm install -g pnpm) succeeded."),
+        ]
+    rows += [
+        ev(4_000, "watch", "sweep", "sweep 2: reading the tool, the gates and the exam bank"),
+        ev(5_000, "watch", "swept", "0 finding(s), 0 new", {"findings": 0, "fresh": 0}),
+        ev(5_200, "done", "goal", "Clean: 1 consecutive sweep(s) found nothing open after 2 sweep(s).",
+           {"sweeps": 2, "open": 0, "fixed": 1 if triage else 0}),
+    ]
+    return rows
+
+
 def mine_script(job_id: str) -> list[dict[str, Any]]:
     """The examMine step stream, shape-faithful to the daemon's mine job."""
     def ev(offset_ms, phase, step, detail, counts=None, level="info"):

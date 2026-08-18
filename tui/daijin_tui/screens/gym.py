@@ -294,9 +294,21 @@ class GymScreen(DaijinScreen):
             self.report_rpc_error(error)
             return
         exams = rows if isinstance(rows, list) else (rows or {}).get("exams", [])
-        select.set_options(
-            [(f"{e.get('examId')}  {e.get('title', '')}".strip(), e.get("examId")) for e in exams]
-        )
+        self.exam_rows = {e.get("examId"): e for e in exams}
+        # The LABEL carries what decides whether a pick can run: a draft exam
+        # cannot produce a scored row, and a held-out exam is drawn only by an
+        # explicit held-out cohort. The owner picked one blind and met the
+        # refusal after consenting to spend.
+        def label(row: dict) -> str:
+            marks = []
+            if row.get("status") and row["status"] != "promoted":
+                marks.append(str(row["status"]))
+            if row.get("heldOut"):
+                marks.append("held out")
+            suffix = f"  [{', '.join(marks)}]" if marks else ""
+            return f"{row.get('examId')}  {row.get('title', '')}{suffix}".strip()
+
+        select.set_options([(label(e), e.get("examId")) for e in exams])
 
     def _render_events(self, batch: list[dict[str, Any]]) -> None:
         """Render a batch. A burst costs one repaint, not one per event."""
@@ -419,10 +431,18 @@ class GymScreen(DaijinScreen):
             self.report_rpc_error(error)
 
         mode = str(self.query_one("#gym-mode", Select).value or "harness-debug")
+        # PICKING A HELD-OUT EXAM BY NAME IS THE EXPLICIT ACT the rule asks
+        # for, so the client says so on the wire rather than sending a
+        # training cohort the engine must refuse. The reserved split stays
+        # honest: nothing is auto-drawn into it, and the dialog says which
+        # cohort the run is.
+        chosen = getattr(self, "exam_rows", {}).get(exam_id) or {}
+        cohort = "held-out" if chosen.get("heldOut") else "training"
         confirmed = await self.confirm_spend(
             method="gymStart",
             summary=(
-                f"One certification cycle on {repo}, exam {exam_id}, in mode {mode}. "
+                f"One certification cycle on {repo}, exam {exam_id}, in mode {mode}, "
+                f"cohort {cohort}. "
                 + (
                     "The engineer works the exam and the TEACHER role grades each "
                     "applied attempt in this mode."
@@ -449,7 +469,7 @@ class GymScreen(DaijinScreen):
                     "gymStart",
                     {
                         "repoPath": repo,
-                        "config": {"examId": exam_id, "mode": mode},
+                        "config": {"examId": exam_id, "mode": mode, "cohort": cohort},
                         "confirm": True,
                         # Every spend-confirmed call whose dialog showed an estimate
                         # echoes it, so the run record holds what the user actually

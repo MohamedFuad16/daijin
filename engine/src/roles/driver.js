@@ -42,20 +42,52 @@ async function cliGenerate({ role, system, prompt, execFileImpl, timeoutMs }) {
   const args = ['-p', prompt, '--model', role.model, '--output-format', 'json', '--max-turns', '1'];
   if (system) args.push('--append-system-prompt', system);
   return new Promise((resolve, reject) => {
-    execFileImpl('claude', args, { timeout: timeoutMs, maxBuffer: 32 * 1024 * 1024 }, (error, stdout) => {
+    // stdin IGNORED, not inherited and not left open: the CLI waits three
+    // seconds for stdin data before proceeding, so every call paid a silent
+    // three-second tax and printed a warning that read like a defect. The
+    // daemon's own stdin is the RPC pipe and must never be handed to a child.
+    execFileImpl('claude', args, {
+      timeout: timeoutMs,
+      maxBuffer: 32 * 1024 * 1024,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    }, (error, stdout) => {
+      // THE CLI'S OWN SENTENCE WINS over the exec wrapper's. A non-zero exit
+      // still carries a JSON body, and that body is where the reason lives:
+      // the live goal loop reported "Command failed: claude -p <the entire
+      // prompt>" five times when the truth was one line, "You've reached your
+      // Fable 5 limit". The wrapper's message also echoes the whole prompt
+      // into the step stream, which is noise at best.
+      let reported = null;
+      try {
+        const body = JSON.parse(stdout || '{}');
+        if (body.is_error && body.result) reported = String(body.result).trim();
+      } catch {
+        reported = null;
+      }
       if (error) {
         reject(new Error(error.code === 'ENOENT'
           ? 'The claude CLI is not on PATH. Install Claude Code to use sub-agent roles.'
-          : `The claude CLI failed: ${String(error.message || '').slice(0, 300)}`));
+          : reported
+            ? `The claude CLI refused: ${reported.slice(0, 300)}`
+            : `The claude CLI failed: ${String(error.message || '').split('\n')[0].slice(0, 200)}`));
         return;
       }
       try {
         const parsed = JSON.parse(stdout);
         if (parsed.is_error) {
-          reject(new Error(`The claude CLI reported an error: ${String(parsed.result || '').slice(0, 300)}`));
+          reject(new Error(`The claude CLI refused: ${String(parsed.result || '').slice(0, 300)}`));
           return;
         }
-        resolve({ text: String(parsed.result ?? ''), servedModelId: role.model });
+        // Tokens summed across modelUsage: the work-token accounting upstream
+        // needs one number per call, and the helper model's tokens are real
+        // spend on the owner's plan too.
+        let tokens = 0;
+        for (const tally of Object.values(parsed.modelUsage || {})) {
+          for (const value of Object.values(tally || {})) {
+            if (typeof value === 'number') tokens += value;
+          }
+        }
+        resolve({ text: String(parsed.result ?? ''), servedModelId: role.model, tokens: tokens || null });
       } catch {
         reject(new Error('The claude CLI answered with a body that is not JSON.'));
       }
@@ -77,7 +109,11 @@ async function httpGenerate({ url, headers, body, fetchImpl, timeoutMs, textFrom
     throw new Error(`The provider answered ${response.status}. ${detail}`.trim());
   }
   const parsed = JSON.parse(text);
-  return { text: textFrom(parsed) ?? '', servedModelId: servedFrom(parsed) ?? null };
+  // Both usage dialects: OpenAI-shape total_tokens, Anthropic input+output.
+  const usage = parsed?.usage || {};
+  const tokens = usage.total_tokens
+    ?? ((usage.input_tokens ?? 0) + (usage.output_tokens ?? 0) || null);
+  return { text: textFrom(parsed) ?? '', servedModelId: servedFrom(parsed) ?? null, tokens };
 }
 
 /**

@@ -16,7 +16,7 @@ import { homedir } from 'node:os';
 import { loadProviderCatalog } from '../roles/providers.js';
 import { resolveKey } from '../roles/keys.js';
 import { pingProvider } from '../roles/ping.js';
-import { FIX_CATALOG, ZAI_PAYG_URL, gateFindings, roleFindings, statusFindings } from './watch.js';
+import { FIX_CATALOG, ZAI_PAYG_URL, auditTriage, examBankFindings, gateFindings, gateRunFindings, goalStopDecision, roleFindings, statusFindings } from './watch.js';
 import { scanAgentCatalog } from '../roles/agents.js';
 import { cloneRepository, parseCloneUrl } from '../init/clone.js';
 import { createHash } from 'node:crypto';
@@ -40,7 +40,7 @@ import { retrieve as retrieveImpl } from '../rag/retrieve.js';
 import { getAgentFile as readAgentFile, setAgentFile as writeAgentFile, studentRules } from '../gym/agent-files.js';
 import { runGymCycle } from '../gym/cycle.js';
 import { AXES } from '../gym/grading.js';
-import { examListRow, parseExamRecord, quarantineExam, vetoExam } from '../gym/exams.js';
+import { examDrawRefusal, examListRow, parseExamRecord, quarantineExam, vetoExam } from '../gym/exams.js';
 import { GymLedger, gymDatabasePath } from '../gym/ledger.js';
 import { loadResultFiles } from '../gym/result-files.js';
 import { GYM_SPEND_SCOPES, assertSpendGate, gymSpendGatePath, ownerAuthorizeSpendGate, readSpendGate, writeBlockedSpendGate } from '../gym/spend-gate.js';
@@ -1783,6 +1783,21 @@ export function createMethods({
         return wanted.slice(0, config.cohortSize ?? 1).map((row) => ledger.getExam(row.examId));
       });
 
+      // THE DRAW RULES ARE CHECKED HERE, before consent buys a cycle the runner
+      // will refuse. The owner met exactly that: a held-out exam picked from
+      // the list produced a spend dialog, a job, and a failed run whose only
+      // content was a refusal the daemon could have made at the click. The
+      // hint carries the fix rather than only the rule.
+      const cohort = config.cohort ?? 'training';
+      for (const exam of drawn) {
+        const refusal = examDrawRefusal(exam, { mode: config.mode ?? 'harness-debug', cohort });
+        if (refusal) {
+          throw invalidParams('exam cannot be drawn', exam.heldOut && cohort !== 'held-out'
+            ? `${refusal} Run it as a held-out cohort (the client sends cohort: "held-out" when you pick a held-out exam), or clear heldOut on the exam first.`
+            : refusal);
+        }
+      }
+
       // THE GATES COME FROM THE REPO'S OWN FILE, like mining's validation: the
       // cycle's whole measurement is baseline-vs-candidate gates, and the old
       // `config.gates ?? []` default sent every un-configured start into
@@ -1841,7 +1856,7 @@ export function createMethods({
           await runCycle({
             exams: drawn,
             mode: config.mode ?? 'harness-debug',
-            cohort: config.cohort ?? 'training',
+            cohort,
             ledger,
             teacher,
             gates: cycleGates,
@@ -2051,6 +2066,187 @@ export function createMethods({
       return ownerAuthorizeSpendGate(gatePath, { scope: params.scope, reason });
     },
 
+    /**
+     * THE GOAL LOOP (owner round 11): the watcher runs until the tool is
+     * clean, and the auditor acts on what it finds.
+     *
+     * One sweep is: the mechanical systemCheck surface, the repo's gates
+     * ACTUALLY RUN (a gate that fails here is a current break, not a claim
+     * about a gate file), and the exam bank read for what stands between the
+     * owner and a runnable gym. Every finding is persisted and pushed to the
+     * board, so the loop's output is the board rather than a private log.
+     *
+     * ZERO SPEND BY DEFAULT, and that is what makes it able to run forever.
+     * `triage: true` additionally hands each NEW finding to the auditor role
+     * (spend, so it needs the gate and consent) which may apply a fix from
+     * the CLOSED catalog and always writes its reasoning to the finding's
+     * thread. Everything outside that catalog is a recommendation the owner
+     * reads - an LLM editing this repo unattended is a different product and
+     * is not this one.
+     *
+     * IT STOPS WHEN THE WORK IS DONE, not on a timer: `cleanSweepsToStop`
+     * consecutive sweeps with no open finding ends the loop and says so.
+     * jobCancel ends it at any point, and `maxSweeps` is a backstop.
+     */
+    async goalStart(params) {
+      const repoPath = await requireAttached(params);
+      const triage = params?.triage === true;
+      const intervalMs = Math.max(5_000, Math.min(Number(params?.intervalMs) || 60_000, 3_600_000));
+      const cleanSweepsToStop = Math.max(1, Math.min(Number(params?.cleanSweepsToStop) || 2, 10));
+      const maxSweeps = Math.max(1, Math.min(Number(params?.maxSweeps) || 1_000, 10_000));
+
+      let auditor = null;
+      if (triage) {
+        // The auditor SPEAKS here, so both locks apply, and they are taken
+        // before the loop starts rather than at the first finding: a loop
+        // that runs for an hour and then refuses has wasted the hour.
+        await assertGate('exam-mining', { file: gymSpendGatePath(repoPath) });
+        await requireConsent('goalStart', params,
+          'Auditor triage sends each new finding to the auditor role, which is a real provider generation per finding.');
+        auditor = await roleGenerate('auditor');
+      }
+
+      const jobId = jobs.start('goal', async ({ emit, cancelled }) => {
+        const seen = new Map();
+        let clean = 0;
+        let sweep = 0;
+        let fixed = 0;
+        let triageFailures = 0;
+        let triageStopped = false;
+        try {
+          while (!cancelled() && sweep < maxSweeps && clean < cleanSweepsToStop) {
+            sweep += 1;
+            emit('watch', 'sweep', `sweep ${sweep}: reading the tool, the gates and the exam bank`);
+            const at = new Date(now()).toISOString();
+            const findings = [];
+
+            // SEPARATE TRIES, because these read different things and one
+            // shared catch let a slow embedder probe swallow the role sweep
+            // with it: a partial sweep must lose only its own half.
+            try {
+              findings.push(...statusFindings(await api.serveStatus({}), { at }));
+            } catch (error) {
+              emit('watch', 'sweep-partial', `the engine status sweep failed this round: ${error.message}`, { level: 'warn' });
+            }
+            try {
+              const settings = await state.settings();
+              const catalog = await loadProviderCatalog();
+              findings.push(...roleFindings(settings.roles, {
+                at,
+                zaiDefault: catalog.providers.find((row) => row.id === 'zai')?.endpointDefault || ZAI_PAYG_URL,
+              }));
+            } catch (error) {
+              emit('watch', 'sweep-partial', `the role sweep failed this round: ${error.message}`, { level: 'warn' });
+            }
+
+            // The gates, RUN. This is the expensive half of a sweep and the
+            // only one that can catch a break the owner has not met yet.
+            let gateList = [];
+            try {
+              const parsed = parseGatesFile(await readFile(gatesFilePath(repoPath), 'utf8'));
+              gateList = (parsed.discovered?.gates || []).filter((gate) => gate.enabled);
+              findings.push(...gateFindings(repoPath, parsed, { at }));
+            } catch {
+              gateList = [];
+            }
+            if (gateList.length > 0 && !cancelled()) {
+              try {
+                const expanded = expandGates(gateList, {
+                  engineRoot: path.resolve(path.dirname(new URL(import.meta.url).pathname), '..', '..'),
+                  sandbox: repoPath,
+                });
+                const results = await runGateSet(expanded, { cwd: repoPath, timeoutMs: 900_000 });
+                emit('watch', 'gates-run',
+                  results.map((gate) => `${gate.id}=${gate.status}`).join(', '),
+                  { counts: { gates: results.length, failing: results.filter((gate) => gate.status === 'fail').length } });
+                findings.push(...gateRunFindings(repoPath, results, { at }));
+              } catch (error) {
+                emit('watch', 'gates-unrunnable', error.message, { level: 'warn' });
+              }
+            }
+
+            try {
+              const exams = await withLedger(repoPath, async (ledger) => ledger.listExams({}));
+              findings.push(...examBankFindings(repoPath, exams, { at }));
+            } catch {
+              // No ledger yet is not a finding: nothing has been mined.
+            }
+
+            const fresh = findings.filter((row) => !seen.has(row.id));
+            for (const row of findings) seen.set(row.id, row);
+            for (const row of fresh) {
+              await state.addBoardFinding(row);
+              jobs.notifyFinding(row);
+            }
+            emit('watch', 'swept',
+              `${findings.length} finding(s), ${fresh.length} new`,
+              { counts: { findings: findings.length, fresh: fresh.length }, level: findings.length ? 'warn' : 'info' });
+
+            if (triage && fresh.length && !cancelled()) {
+              for (const row of fresh) {
+                if (cancelled()) break;
+                if (triageStopped) break;
+                try {
+                  const verdict = await auditTriage(auditor, row);
+                  triageFailures = 0;
+                  const thread = { at: new Date(now()).toISOString(), by: 'auditor', text: verdict.reasoning };
+                  await state.addBoardFinding({ ...row, status: 'triaged', thread: [thread] });
+                  emit('audit', 'triaged', `${row.id}: ${String(verdict.reasoning).slice(0, 120)}`);
+                  if (verdict.applyFixId && row.action?.fixId === verdict.applyFixId) {
+                    const applied = await api.systemFix({
+                      fixId: verdict.applyFixId,
+                      role: row.category === 'roles' ? row.target : undefined,
+                      confirm: true,
+                    });
+                    fixed += applied.ok ? 1 : 0;
+                    emit('audit', applied.ok ? 'fixed' : 'fix-failed', `${row.id}: ${applied.detail}`,
+                      { level: applied.ok ? 'info' : 'warn' });
+                    if (applied.ok) seen.delete(row.id);
+                  }
+                } catch (error) {
+                  triageFailures += 1;
+                  emit('audit', 'triage-failed', `${row.id}: ${String(error.message).slice(0, 200)}`, { level: 'warn' });
+                  // TWO CONSECUTIVE FAILURES STOP TRIAGE FOR THE LOOP. The
+                  // live run burned one futile call per finding against a
+                  // provider that had already said "you've reached your
+                  // limit"; a loop that keeps asking after that is spending
+                  // the owner's quota to re-learn one fact. The sweep itself
+                  // is free and carries on.
+                  if (triageFailures >= 2) {
+                    triageStopped = true;
+                    emit('audit', 'triage-stopped',
+                      `The auditor failed twice in a row (${String(error.message).slice(0, 140)}). Triage is off for the rest of this loop; the watcher keeps sweeping for free.`,
+                      { level: 'warn' });
+                  }
+                }
+              }
+            }
+
+            const decision = goalStopDecision({
+              findingCount: findings.length, clean, cleanSweepsToStop, sweep, maxSweeps, cancelled: cancelled(),
+            });
+            clean = decision.clean;
+            if (decision.stop) break;
+            // Sleep in slices so a cancel lands in seconds, not at the end of
+            // the interval: a loop that ignores a stop for a minute reads as
+            // a loop that ignores the owner.
+            for (let waited = 0; waited < intervalMs && !cancelled(); waited += 1_000) {
+              await new Promise((resolve) => setTimeout(resolve, Math.min(1_000, intervalMs - waited)));
+            }
+          }
+          const open = [...seen.values()];
+          emit('done', 'goal',
+            clean >= cleanSweepsToStop
+              ? `Clean: ${cleanSweepsToStop} consecutive sweep(s) found nothing open after ${sweep} sweep(s)${fixed ? `, ${fixed} fix(es) applied` : ''}.`
+              : `Stopped after ${sweep} sweep(s) with ${open.length} finding(s) still open${fixed ? `, ${fixed} fix(es) applied` : ''}. The board carries them.`,
+            { counts: { sweeps: sweep, open: open.length, fixed }, level: clean >= cleanSweepsToStop ? 'info' : 'warn' });
+        } finally {
+          if (triage) await reblockGate(repoPath);
+        }
+      });
+      return { jobId };
+    },
+
     async examMine(params) {
       const repoPath = await requireAttached(params);
       await assertGate('exam-mining', { file: gymSpendGatePath(repoPath) });
@@ -2132,6 +2328,14 @@ export function createMethods({
             return match ? Math.max(highest, Number(match[1])) : highest;
           }, 0);
           const engineRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..', '..');
+          // A HELD-OUT SPLIT IS A SAMPLING DECISION, NOT A JUDGMENT, so the
+          // engine owns it and the committee's flag is advisory. Below five
+          // exams there is no split worth reserving, and holding out the only
+          // exam in a bank leaves the gym with nothing runnable - which is
+          // exactly what the owner met: one mined exam, marked held out, and
+          // every training draw refused.
+          const bankAfter = existing.length + selection.chosen.length;
+          const splitWorthReserving = bankAfter >= 5;
           const layout = await layoutFor(repoPath);
           for (const candidate of selection.chosen) {
             if (cancelled()) break;
@@ -2155,7 +2359,7 @@ export function createMethods({
               title: candidate.auditorTitle || candidate.subject,
               status: verdict.ok ? 'validated' : 'draft',
               benchmarkStatus: 'active',
-              heldOut: Boolean(candidate.heldOut),
+              heldOut: splitWorthReserving && Boolean(candidate.heldOut),
               scopeTier: verdict.scope.tier ?? 'S',
               scopeFiles: Math.max(1, verdict.scope.files),
               scopeInsertions: verdict.scope.insertions,

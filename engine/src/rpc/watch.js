@@ -211,3 +211,152 @@ export function statusFindings(status, { at } = {}) {
   }
   return rows;
 }
+
+/**
+ * Findings from actually RUNNING the repo's gates (the goal loop's sharpest
+ * instrument). A gate that fails here is a real, current break in the repo -
+ * not a claim about a gate file - which is why the loop runs them rather than
+ * reading their last classification.
+ */
+export function gateRunFindings(repoPath, results, { at } = {}) {
+  const rows = [];
+  for (const gate of results || []) {
+    if (gate.status === 'pass') continue;
+    const unavailable = gate.status === 'unavailable';
+    rows.push(finding({
+      id: `gate-${unavailable ? 'unavailable' : 'failing'}:${repoPath}:${gate.id}`,
+      at,
+      severity: unavailable ? 'warn' : 'critical',
+      category: 'gates',
+      target: `${repoPath} (${gate.id})`,
+      summary: unavailable
+        ? `The ${gate.id} gate cannot run here: its runtime is not installed`
+        : `The ${gate.id} gate FAILS on the repo as it stands`,
+      detail: unavailable
+        ? (gate.unavailableReason || null)
+        : `exit ${gate.exitCode ?? 'none'}. ${String(gate.stderr || gate.stdout || '').trim().slice(-400)}`,
+      fixId: unavailable ? runtimeFix({ availabilityCommand: gate.command, unavailableHint: gate.unavailableReason }) : null,
+    }));
+  }
+  return rows;
+}
+
+/**
+ * Findings from the exam bank: what stands between this repo and a runnable
+ * gym. Draft exams and an all-held-out bank are the two states that leave the
+ * owner picking an exam that cannot run, which is what round 11 reported.
+ */
+export function examBankFindings(repoPath, exams, { at } = {}) {
+  const rows = [];
+  const bank = exams || [];
+  const promoted = bank.filter((exam) => exam.status === 'promoted' && exam.benchmarkStatus !== 'quarantined');
+  const drawable = promoted.filter((exam) => !exam.heldOut);
+  if (bank.length === 0) {
+    rows.push(finding({
+      id: `exams-empty:${repoPath}`,
+      at,
+      severity: 'info',
+      category: 'exams',
+      target: repoPath,
+      summary: 'No exams have been mined for this repo yet, so the gym has nothing to run',
+    }));
+    return rows;
+  }
+  for (const exam of bank.filter((row) => row.status === 'validated' || row.status === 'draft')) {
+    rows.push(finding({
+      id: `exam-unpromoted:${repoPath}:${exam.examId}`,
+      at,
+      severity: 'info',
+      category: 'exams',
+      target: exam.examId,
+      summary: `${exam.examId} is ${exam.status}; only a promoted exam can be drawn into a cycle`,
+      detail: exam.status === 'draft'
+        ? 'It did not pass validation, so read its notes before promoting it.'
+        : 'It passed validation and is waiting for your promote.',
+    }));
+  }
+  if (promoted.length > 0 && drawable.length === 0) {
+    rows.push(finding({
+      id: `exams-all-held-out:${repoPath}`,
+      at,
+      severity: 'warn',
+      category: 'exams',
+      target: repoPath,
+      summary: 'Every promoted exam is held out, so a training cycle has nothing to draw',
+      detail: 'A held-out exam runs only under an explicit held-out cohort. Mine more exams, or clear heldOut on one.',
+    }));
+  }
+  return rows;
+}
+
+/**
+ * THE AUDITOR'S TRIAGE of one finding.
+ *
+ * The auditor reads the finding and answers two things: what it thinks is
+ * going on, and whether the offered catalog fix should be applied. It cannot
+ * invent a fix - `applyFixId` is checked against the finding's own offer at
+ * the call site, so an auditor naming a different fix is ignored rather than
+ * obeyed. That asymmetry is the point: the auditor's judgment decides WHETHER
+ * a known remedy runs, never WHAT runs.
+ */
+export function triagePrompt(row) {
+  return [
+    'You are the auditor for a developer tool called daijin. The watcher raised this finding:',
+    '',
+    `id: ${row.id}`,
+    `severity: ${row.severity}`,
+    `category: ${row.category}`,
+    `target: ${row.target}`,
+    `summary: ${row.summary}`,
+    row.detail ? `detail: ${row.detail}` : '',
+    '',
+    row.action
+      ? `A fix is available and its id is ${row.action.fixId}: ${row.action.label}. You may apply it or decline it.`
+      : 'No automatic fix is available for this finding; say what the owner should do.',
+    '',
+    'Reply with STRICT JSON only, no prose, no fences:',
+    '{"reasoning": "<two sentences: what this means, and what should happen>",',
+    ' "applyFixId": <the fix id string to apply, or null>}',
+  ].filter(Boolean).join('\n');
+}
+
+export function parseTriageReply(text) {
+  const stripped = String(text || '').trim().replace(/^```[a-z]*\n?|\n?```$/g, '').trim();
+  let parsed;
+  try {
+    parsed = JSON.parse(stripped);
+  } catch {
+    const start = stripped.indexOf('{');
+    const end = stripped.lastIndexOf('}');
+    if (start === -1 || end <= start) throw new Error('The auditor reply is not JSON and contains no object literal.');
+    parsed = JSON.parse(stripped.slice(start, end + 1));
+  }
+  const reasoning = String(parsed?.reasoning || '').trim();
+  if (!reasoning) throw new Error('The auditor reply carries no reasoning; a verdict with no statement teaches nothing.');
+  const applyFixId = typeof parsed?.applyFixId === 'string' && Object.hasOwn(FIX_CATALOG, parsed.applyFixId)
+    ? parsed.applyFixId
+    : null;
+  return { reasoning, applyFixId };
+}
+
+/** Triage one finding with a resolved auditor role (see roleGenerate). */
+export async function auditTriage(auditor, row) {
+  const { text } = await auditor.generate({ prompt: triagePrompt(row), maxTokens: 2_048 });
+  return parseTriageReply(text);
+}
+
+/**
+ * When the goal loop stops, as a pure decision so it can be argued with.
+ *
+ * Inline in the job it was three conditions in a while header and a break,
+ * which is exactly the shape that gets a boundary wrong and nobody notices:
+ * the loop either stops early (reporting clean while findings stand) or never
+ * (a "goal" that never reports done).
+ */
+export function goalStopDecision({ findingCount, clean, cleanSweepsToStop, sweep, maxSweeps, cancelled = false }) {
+  const nextClean = findingCount === 0 ? clean + 1 : 0;
+  if (cancelled) return { clean: nextClean, stop: true, reason: 'cancelled' };
+  if (nextClean >= cleanSweepsToStop) return { clean: nextClean, stop: true, reason: 'clean' };
+  if (sweep >= maxSweeps) return { clean: nextClean, stop: true, reason: 'max-sweeps' };
+  return { clean: nextClean, stop: false, reason: null };
+}

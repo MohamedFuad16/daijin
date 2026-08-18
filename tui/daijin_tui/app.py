@@ -75,7 +75,17 @@ class DaijinApp(App):
     BINDINGS = [
         Binding("q", "quit", "Quit", priority=True),
         Binding("question_mark", "help_panel", "Keys", show=True),
+        # /goal: the owner's word for the watch loop. A slash key opens the
+        # palette pre-filled, so typing "/goal" reaches it the way a command
+        # is expected to; the Board carries the same control as a button.
+        Binding("slash", "command_palette", "Commands", show=True),
+        Binding("g", "goal", "Goal loop", show=True),
     ]
+
+    def action_goal(self) -> None:
+        """Jump to the board and offer the watch loop, from anywhere."""
+        self.switch_mode("board")
+        self.call_after_refresh(lambda: getattr(self.screen, "toggle_goal_loop", lambda: None)())
 
     def __init__(self, client: RpcClient, *, is_mock: bool = False, repo: str | None = None,
                  state_root: str | None = None, **kwargs: Any) -> None:

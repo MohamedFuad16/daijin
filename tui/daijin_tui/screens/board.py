@@ -14,7 +14,7 @@ from typing import Any, Iterable
 
 from textual import work
 from textual.containers import Horizontal
-from textual.widgets import Button, DataTable, Select, Static
+from textual.widgets import Button, Checkbox, DataTable, Select, Static
 
 from ..rpc import RpcError
 from ..widgets import Banner, SectionTitle
@@ -50,7 +50,13 @@ class BoardScreen(DaijinScreen):
         yield DataTable(id="board-table", cursor_type="row")
         yield SectionTitle("Status thread", "corrections are dated in place, withdrawn claims are marked, never deleted")
         yield Static("[dim]no finding selected[/dim]", id="board-detail", markup=True)
-        yield Button("Apply auditor fix", id="board-fix", variant="warning")
+        with Horizontal(id="board-actions"):
+            yield Button("Apply auditor fix", id="board-fix", variant="warning")
+            # THE GOAL LOOP (owner round 11): the watcher runs until the tool
+            # is clean. Zero spend on its own; the auditor triage checkbox is
+            # what makes it a paid loop, so it is a separate, explicit choice.
+            yield Button("Start goal loop", id="board-goal", variant="primary")
+            yield Checkbox("auditor triages and fixes (spends)", id="board-goal-triage", value=False)
 
     async def load(self) -> None:
         # boardFinding notifications are not job scoped and arrive with no job
@@ -58,12 +64,14 @@ class BoardScreen(DaijinScreen):
         # the duration of some job.
         if not self._subscribed:
             self.client.on_board_finding(self._on_board_finding)
+            self.client.on_event(self._on_goal_event)
             self._subscribed = True
         await self.apply_filters()
 
     def on_unmount(self) -> None:
         if self._subscribed:
             self.client.off_board_finding(self._on_board_finding)
+            self.client.off_event(self._on_goal_event)
             self._subscribed = False
 
     def _on_board_finding(self, finding: dict[str, Any]) -> None:
@@ -187,6 +195,95 @@ class BoardScreen(DaijinScreen):
         elif event.button.id == "board-fix":
             event.stop()
             self.apply_selected_fix()
+        elif event.button.id == "board-goal":
+            event.stop()
+            self.toggle_goal_loop()
+
+    @work
+    async def toggle_goal_loop(self) -> None:
+        """Start the watch loop, or stop the one already running.
+
+        The loop's own output is the board, so this screen needs no second
+        rendering of it: findings arrive on the same channel a pushed finding
+        does and land in the same table.
+        """
+        notice = self.query_one("#board-notice", Banner)
+        repo = getattr(self.app, "selected_repo", None)
+        if getattr(self, "goal_job_id", None):
+            try:
+                await self.client.call("jobCancel", {"jobId": self.goal_job_id})
+            except RpcError as error:
+                self.report_rpc_error(error)
+            notice.set_notice("Goal loop stopping. Findings already raised stay on the board.", "info")
+            self.goal_job_id = None
+            self.query_one("#board-goal", Button).label = "Start goal loop"
+            return
+        if not repo:
+            notice.set_notice("No repo selected. Press 1 for the repo home and pick one.", "warn")
+            return
+        triage = self.query_one("#board-goal-triage", Checkbox).value
+        if triage:
+            confirmed = await self.confirm_spend(
+                method="goalStart",
+                summary=(
+                    "The watcher sweeps the whole tool on a loop until nothing is open. "
+                    "With triage on, the AUDITOR role reads every new finding, which is "
+                    "one real provider generation per finding, and may apply a fix from "
+                    "daijin's closed catalog. It needs the owner gate too."
+                ),
+                estimate_lines=["one auditor generation per NEW finding, not per sweep",
+                                "the sweep itself, and every fix, cost nothing"],
+                confirm_label="Run the loop with auditor triage",
+            )
+            if not confirmed:
+                notice.set_notice("Not started. Nothing was sent to a provider.", "info")
+                return
+        params: dict[str, Any] = {"repoPath": repo, "triage": triage}
+        if triage:
+            params["confirm"] = True
+        for attempt in range(2):
+            try:
+                started = await self.client.call("goalStart", params)
+                break
+            except RpcError as error:
+                if error.is_spend_gate and attempt == 0:
+                    if await self.offer_gate_open(
+                        scope="exam-mining",
+                        repo=repo,
+                        why="Auditor triage is a paid generation per finding, so the loop needs the gate.",
+                    ):
+                        continue
+                self.report_rpc_error(error)
+                notice.set_notice(error.hint, "error")
+                return
+        else:
+            return
+        self.goal_job_id = started.get("jobId")
+        self.query_one("#board-goal", Button).label = "Stop goal loop"
+        notice.set_notice(
+            f"Goal loop running, job {self.goal_job_id}. It sweeps the tool, runs this "
+            f"repo's gates and reads the exam bank, and stops itself when two sweeps in "
+            f"a row find nothing." + (" The auditor triages each new finding." if triage else ""),
+            "info",
+        )
+
+    def _on_goal_event(self, event: dict[str, Any]) -> None:
+        if event.get("jobId") != getattr(self, "goal_job_id", None) or not self.is_mounted:
+            return
+        notice = self.query_one("#board-notice", Banner)
+        if event.get("phase") == "done":
+            self.goal_job_id = None
+            self.query_one("#board-goal", Button).label = "Start goal loop"
+            # PENDING, not set: start_load repaints this banner with its own
+            # count line, and the loop's ending is the sentence that must
+            # survive the reload. The same ordering caught the fix flow.
+            self.set_pending_notice(
+                f"Goal loop finished: {event.get('detail', '')}",
+                {"warn": "warn", "error": "error"}.get(str(event.get("level") or "info"), "info"),
+            )
+            self.start_load()
+        else:
+            notice.set_notice(f"Goal loop: {event.get('detail', '')}", "info")
 
     @work
     async def apply_selected_fix(self) -> None:

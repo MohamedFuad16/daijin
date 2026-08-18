@@ -88,3 +88,30 @@ test('a provider error surfaces the provider sentence, never silence', async () 
   );
   await assert.rejects(() => generate({ prompt: 'x' }), /429.*Insufficient balance/s);
 });
+
+test('a CLI refusal surfaces the CLI\'s own sentence, not the exec wrapper\'s command line', async () => {
+  // The live goal loop reported "Command failed: claude -p <the entire
+  // prompt>" five times when the truth was one line: the account had hit its
+  // model limit. The body carries the reason even on a non-zero exit.
+  const limitBody = JSON.stringify({
+    is_error: true,
+    stop_reason: 'stop_sequence',
+    result: "You've reached your Fable 5 limit. Switch to another model, or manage usage credits.",
+  });
+  const generate = createRoleGenerate(
+    { provider: 'claude-code', model: 'claude-fable-5' },
+    {
+      execFileImpl: (command, args, options, callback) => {
+        // stdin must be IGNORED: the CLI otherwise waits three seconds for it
+        // on every single call and warns in a way that reads like a defect.
+        assert.deepEqual(options.stdio, ['ignore', 'pipe', 'pipe']);
+        callback(Object.assign(new Error('Command failed: claude -p <a very long prompt>'), { code: 1 }), limitBody, '');
+      },
+    },
+  );
+  await assert.rejects(() => generate({ prompt: 'x' }), (error) => {
+    assert.match(error.message, /reached your Fable 5 limit/);
+    assert.doesNotMatch(error.message, /Command failed/, 'the wrapper message is noise beside the real reason');
+    return true;
+  });
+});

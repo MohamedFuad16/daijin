@@ -159,16 +159,33 @@ export function createCliEngineer({ role, agentPath }, {
     ];
     if (system) args.push('--append-system-prompt', system);
     return new Promise((resolve, reject) => {
-      execFileImpl('claude', args, { cwd: context.sandbox, timeout: timeoutMs, maxBuffer: 64 * 1024 * 1024 }, (error, stdout) => {
+      // Same two rules as roles/driver.js: stdin is ignored (the CLI waits
+      // three seconds for it otherwise) and the CLI's own sentence wins over
+      // the exec wrapper's "Command failed: <the entire prompt>".
+      execFileImpl('claude', args, {
+        cwd: context.sandbox,
+        timeout: timeoutMs,
+        maxBuffer: 64 * 1024 * 1024,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      }, (error, stdout) => {
+        let reported = null;
+        try {
+          const body = JSON.parse(stdout || '{}');
+          if (body.is_error && body.result) reported = String(body.result).trim();
+        } catch {
+          reported = null;
+        }
         if (error) {
           reject(new Error(error.code === 'ENOENT'
             ? 'The claude CLI is not on PATH. Install Claude Code to use a sub-agent engineer.'
-            : `The claude CLI failed: ${String(error.message || '').slice(0, 300)}`));
+            : reported
+              ? `The claude CLI refused: ${reported.slice(0, 300)}`
+              : `The claude CLI failed: ${String(error.message || '').split('\n')[0].slice(0, 200)}`));
           return;
         }
         let parsed;
         try { parsed = JSON.parse(stdout); } catch { reject(new Error('The claude CLI answered with a body that is not JSON.')); return; }
-        if (parsed.is_error) { reject(new Error(`The claude CLI reported an error: ${String(parsed.result || '').slice(0, 300)}`)); return; }
+        if (parsed.is_error) { reject(new Error(`The claude CLI refused: ${String(parsed.result || '').slice(0, 300)}`)); return; }
         let tokens = 0;
         for (const tally of Object.values(parsed.modelUsage || {})) {
           for (const value of Object.values(tally || {})) if (typeof value === 'number') tokens += value;

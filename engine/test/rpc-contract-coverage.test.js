@@ -84,6 +84,7 @@ const PROSE = Object.freeze({
   // deterministically in system-watch.test.js instead.
   systemCheck: 'claims verified 2026-08-17: board-shaped rows and the sweep pinned in system-watch.test.js',
   systemFix: 'claims verified 2026-08-17: closed catalog, confirm lock, endpoint patch pinned in system-watch.test.js',
+  goalStart: 'claims verified 2026-08-18: the sweep, the board writes, the stop rule and the triage boundary pinned in system-watch.test.js',
   settingsSet: 'claims verified 2026-08-17: the full settings object, same key set as settingsGet, reflecting the patch',
   agentFileSet: 'claims verified 2026-08-17: currentHash recomputed, defaultHash stable, modified flipped, key set matches agentFileGet',
 });

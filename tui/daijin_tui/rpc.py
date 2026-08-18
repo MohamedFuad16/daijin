@@ -83,7 +83,7 @@ ERR_NOT_IMPLEMENTED = -32001
 # Exhaustive per the error convention. Adding to this set is a contract change,
 # not an implementation detail. Since v5 EVERY member requires confirm: true in
 # its params; the engine never infers consent, not even from an open gate.
-SPEND_TOUCHING = frozenset({"gymStart", "examMine", "rolePing", "initBrain:layer1+layer2", "diagnoseNarrate"})
+SPEND_TOUCHING = frozenset({"gymStart", "examMine", "goalStart:triage", "rolePing", "initBrain:layer1+layer2", "diagnoseNarrate"})
 
 # documents filter keys, fixed by v5.
 DOCUMENT_FILTER_KEYS = frozenset({"q", "type", "area"})
@@ -95,6 +95,11 @@ def is_spend_touching(method: str, params: dict[str, Any] | None = None) -> bool
     """True when this exact call spends. initBrain only spends on layer1+layer2."""
     if method == "initBrain":
         return f"initBrain:{(params or {}).get('mode')}" in SPEND_TOUCHING
+    # The goal loop is FREE unless the auditor triages: the sweep is
+    # mechanical, and a loop that asked for spend consent to read gates would
+    # teach the owner to click through consent dialogs.
+    if method == "goalStart":
+        return bool((params or {}).get("triage")) and "goalStart:triage" in SPEND_TOUCHING
     return method in SPEND_TOUCHING
 
 
@@ -1565,6 +1570,32 @@ class MockEngine:
         realm-trap endpoint fix, and one with no fix at all.
         """
         return copy.deepcopy(mock_data.SYSTEM_CHECK)
+
+    async def _rpc_goalStart(self, params: dict[str, Any]) -> dict[str, Any]:
+        """The goal loop, mirrored: zero-spend by default, gate plus consent
+        when the auditor triages, and a stream that ends on its own."""
+        if params.get("triage"):
+            if not self.gate_open:
+                raise RpcError(
+                    ERR_SPEND_GATE,
+                    "spend gate is blocked",
+                    {
+                        "gate": mock_data.SPEND_GATE["path"],
+                        "hint": (
+                            "The spend gate is blocked. Auditor triage is a real generation "
+                            "per finding, so the loop needs the owner's gate."
+                        ),
+                    },
+                )
+            if not params.get("confirm"):
+                self._refuse_spend(
+                    "goalStart",
+                    "Auditor triage sends each new finding to the auditor role, which is a "
+                    "real provider generation per finding.",
+                )
+        job_id = self._new_job_id("goal")
+        self._start_stream(job_id, mock_data.goal_script(job_id, triage=bool(params.get("triage"))))
+        return {"jobId": job_id}
 
     async def _rpc_systemFix(self, params: dict[str, Any]) -> dict[str, Any]:
         fix_id = params.get("fixId")

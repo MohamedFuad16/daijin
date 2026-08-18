@@ -387,7 +387,14 @@ export class EngineState {
 
   async #addBoardFinding(row) {
     const rows = await this.board();
-    rows.unshift(row);
+    // UPSERT BY ID. A finding is identified by its id, and the watcher raises
+    // the same id every sweep until it is fixed; appending gave the owner a
+    // board that grew a duplicate row per sweep and per triage verdict (nine
+    // rows for five findings in the live loop). A row with no id is a
+    // one-shot event from the gym and is simply prepended.
+    const index = row?.id ? rows.findIndex((existing) => existing.id === row.id) : -1;
+    if (index === -1) rows.unshift(row);
+    else rows[index] = { ...rows[index], ...row };
     await writeJsonAtomic(this.boardFile, rows);
     return row;
   }

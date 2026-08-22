@@ -1,5 +1,169 @@
 # Daijin build state (authoritative)
 
+## 2026-08-23 01:10 - The fresh-install walkthrough: reset, relaunched, driven as a user
+
+The owner asked for a clean-machine pass: every attached repo detached, all
+testing data removed (backed up first to the session scratchpad), the tool
+reinstalled and driven through a real terminal (tmux, keystrokes and mouse
+clicks) from `cd ~/Documents; daijin`, screen by screen.
+
+THE JOURNEY, all live on the fresh state: attach TokaiHub by typing the
+path -> Initialize brain -> init completed in 33.2s with GOLDSET GATES PASS
+(the exact phase that blocked this repo before D-0069) and Floor 24 of 25,
+0 violations, MCP unlocked -> Brain hero, budget row, labelled sweep and
+gold-case table all correct -> Checks screen plain and true -> Gym with
+plain modes and the Lessons tab -> Exams and Board with their intros ->
+Settings with all four roles verified -> a free goal-loop sweep that found
+exactly the one honest finding a fresh repo has (no exams yet).
+
+FIVE MORE DEFECTS FOUND BY DRIVING IT, all fixed and pinned:
+1. CRASH: clicking "Get the connection code" killed the whole app -
+   MarkupError, because the MCP snippet is JSON and JSON's brackets parse
+   as Textual markup tags. Fixed with Content.from_markup $variable
+   substitution (rich.markup.escape does NOT protect Textual's parser -
+   proven by reproduction), and the same fix applied to every other site
+   interpolating raw engine content: gates.yaml raw text, chunk text,
+   auditor narration twice. Regression test pins the bracketed snippet.
+2. The repo card offered "Open brain" on a repo with NO brain: analyze's
+   hasBrainFolder ("is there a knowledge folder to adopt") was overriding
+   health ("does a daijin brain exist") - true for any repo with an agent/
+   folder. Health is the wire's authority now; the analyze override is gone.
+3. An empty sparkline said "no series", which read as a broken widget; it
+   now shows its caption.
+4. "2 of 2 gate(s) carry signal (0 pre-broken, 0 unavailable, both
+   excluded and labeled)" - the exclusion clause now appears only when
+   something was excluded.
+5. The first Brain visit after init re-ran the sweep init had just
+   finished: initBrain now writes the same measurement into
+   records/last-score.json so recall serves it (arm and rank unattributed
+   until the first explicit re-measure, and said so).
+
+Also swept: the last jargon the walkthrough surfaced ("measured floor",
+"sub-75 path", "MCP locked until the floor is measured") replaced with
+plain words. README updated to the shipped product (learning loop, four
+roles, board goal loop, current test counts). Suites at close: engine 802,
+TUI full suite green.
+
+## 2026-08-23 00:45 - Owner round 12: the loop learns, the tool speaks plainly, and five live chains
+
+Three sittings of directives ("the gym must enhance, like an active RAG
+loop", "no more frozen RPC - build everything", and a screen-by-screen UX
+audit), landed across engine, TUI, and five live end-to-end chains on four
+repos. Suites at close: ENGINE 802 pass, TUI 453 pass, zero fail both
+sides. Verified by: `cd engine && npm test` / `cd tui && .venv/bin/python
+-m pytest -q`.
+
+THE LEARNING LOOP IS WIRED (D-0065). gymHarvest asks the teacher one
+question per graded gap under the same two locks as a cycle, records a
+PROPOSAL-ONLY batch (ledger migration 004-harvest); gymHarvestApply is the
+owner's separate act that writes accepted evaluation lessons into
+.daijin/brain/lessons/ (wx, provenance in body) and reindexes through the
+same derivation init uses. Batches ride gymStatus so an unapplied batch is
+visibly unapplied - the platform's seven-silent-cycles lesson as a wire
+fact. The TUI gym screen grew a Lessons tab with both acts.
+
+THE WATCHER SPEAKS (D-0066), proven live: with triage on, the GLM watcher
+verifies each finding in one cheap generation; its note rides the
+finding's thread ahead of the auditor's and rides the auditor's prompt.
+Live on the repo3 fixture: watcher confirmed a finding with its own
+sentence, the Fable auditor's triage visibly built on it, and the
+non-JSON degradation path fired once and was handled as designed.
+
+FIVE LIVE CHAINS, all exit 0, on the mine -> promote -> gym -> grade ->
+harvest -> apply drive: repo1 (old fixture, 2 cycles), repo4 (rebuilt
+fixture, 4 cycles - 3 of 3 exams VALIDATED once the gate fixes landed,
+baseline and candidate gates fully green on cycle 1), repo2 (Python,
+unittest gate), plus free journeys on repo3 (the daijin clone itself) and
+the earlier repo1/repo2 runs. The student is live GLM-5.3 (JSON action
+protocol, real edits, real tokens); the teacher is the live Opus
+daijin-teacher; grading came back with five cited axes citing BOTH diff
+lines and shown brain document ids - the new shownDocumentIds seam
+recorded from the retrieval call, where before the packet's shown list was
+permanently empty.
+
+HONEST BOUND ON THE LOOP: every graded live cycle attributed its gaps to
+measured-only tags (harness-defect, model-limit, stale-gold) - including
+the teacher catching exam-0003's premise already solved at base, and
+GLM's marker-comment habit. The teacher refused to invent a knowledge gap
+five times, so NO live batch carried an accepted lesson and apply
+correctly found nothing to write. The write half (applyProposals, wx
+lesson files, reindex, applied-once) is pinned by gym-harvest-rpc.test.js
+against a real brain; the live transition "teacher proposes an accepted
+lesson" awaits a run with a genuine knowledge gap. That is the design
+refusing to teach a lie, not a gap in the wiring.
+
+FIVE ENGINE DEFECTS FOUND BY THE LIVE RUNS, all fixed and pinned:
+1. The gate availability probe demanded node_modules for dependency-free
+   packages, so every gym-sandbox baseline gate sat unavailable and every
+   mined exam stayed a draft (gate-discovery.js; the exact place gates
+   matter most is a worktree at a base commit, where node_modules never
+   exists).
+2. runGateSet resolved a repo-relative gate cwd against the daemon's own
+   process cwd; the same gate read live at discovery and unavailable in
+   the goal sweep, both honest about two different directories (gates.js).
+3. A rubric could grade partial/fail with gaps: [] - cycle 32's "teaching
+   nothing while looking complete", named in the acceptance preamble and
+   guarded by no clause. validateRubric now refuses a sub-passing verdict
+   with no gap; attribution never forces invention because model-limit and
+   harness-defect write nothing (D-0068). Found because the FIRST live
+   partial did exactly this.
+4. The teacher prompt showed "gaps": [] and never the gap object's shape;
+   the first teacher that needed one wrote tag: null and was refused,
+   leaving the attempt pending. The template now shows the exact shape.
+5. The goldset leakage gate blocked TokaiHub's entire floor on one
+   package-name "quotation" (D-0069): the span measure now counts a
+   whitespace-delimited identifier as one token, and a quality-gate block
+   names the re-mine remedy instead of "mine more material".
+
+NO MORE DEFERRALS. diagnoseNarrate is BUILT (the auditor narrates over the
+mechanical diagnosis, one generation per explicit consent, unconfigured
+auditor refused before the free sweep runs); initBrain mode ingest is
+UNBLOCKED (the adopt pipeline existed complete behind a stale
+not-implemented wall - validateCitations is the drift check, the source
+folder is never written, a repo with nothing to adopt refuses -32602
+before the job). notImplemented has zero call sites left.
+
+THE SCREENS SPEAK PLAINLY (owner audit, D-0067 extended): repo cards say
+"MCP retrieval rate NN%" with a fill bar; engine status says "Engine
+ready" and keeps digests, store paths and gate files off the front door;
+the Brain hero states the rate once with MRR at three decimals and defined
+where shown; MCP unlock is a real button, gray below the bar, green above,
+code on click; the budget sweep is labelled lines instead of bars; gates
+are "checks" with working/already-failing/cannot-run-here states and
+run-succeeded-in-N-seconds evidence; the gym picker is one line per exam
+with an "All ready exams" draw (engine open-draw now skips reserved exams
+by asking examDrawRefusal itself); modes read Practice/Graded practice/
+Official; exams gained an intro and lost the scoring-state filter; the
+board thread renders both voices by name; Settings explains each role in
+one plain sentence. Init's block panel got its own bordered box, an
+"Ask the auditor what to do" button (diagnoseNarrate), and the
+attach-the-root offer stays.
+
+SCREENS OPEN INSTANTLY (recall). Opening Brain used to run TWO full
+embedding sweeps and the repo home one per card. retrievalScore and
+diagnose now take recall: true and serve the STORED last measurement
+(records/last-score.json, written at measure time) stamped recalled: true;
+measuring is the explicit Re-measure button. Byte-identical re-derivation
+of the owner's TokaiHub screen from raw artifacts: 24 of 25, MRR
+0.7773809523809524, violations 0, miss g001/architecture/src. Verified by:
+`node <scratchpad>/mrr-rederive.mjs`.
+
+THE STANDING SPEND INSTRUCTION (D-0070): one Settings checkbox writes
+spend.autoUnlockReason; runs the owner starts then open the gate with the
+stored reason instead of the extra dialog. Consent per paid run and the
+auto-re-block are unchanged.
+
+MCP SERVED LIVE: serve-repo.js against TokaiHub's real brain answered
+initialize, tools/list (5 tools) and a brain.search call with real
+retrieved chunks. The installed ~/.local/share/daijin was four days stale
+(f28cde7, pre-round-11) - which explained every "not working" symptom on
+the owner's screen (their TokaiHub gym cycles died on the round-11
+held-out blocker; the board was empty because the installed build had no
+goal loop). Reinstalled from this tree, byte-verified by shasum; the
+owner must restart `daijin` after each reinstall.
+
+Uncommitted, as always: commits are the owner's call.
+
 ## 2026-08-18 13:10 - Owner round 11: the goal loop, and the gym unblocked
 
 Three directives: the gate as a real control everywhere, the gym must start

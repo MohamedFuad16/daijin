@@ -1339,3 +1339,98 @@ a refusal a daemon can make at the click must never arrive as a failed job
 the owner already paid for - and the client sends cohort "held-out" when the
 owner explicitly picks a held-out exam, which is the explicit act the rule
 was written to require.
+
+## D-0065 (2026-08-22) The gym teaches: harvest is wired, proposal-only, and apply is the owner's separate act
+
+The owner asked for the loop to "enhance, like an active RAG loop". The
+harvest module had existed since P7 with no production caller: grading
+measured the student and taught the project nothing, which is the exact
+seven-silent-cycles failure the module's own comments warn about. Ruled and
+built: gymHarvest is a spend-touching job under the same two locks as the
+cycle (gate scope gym-cycle, per-call consent) that asks the TEACHER one
+question per graded gap and records a PROPOSAL-ONLY batch in the ledger
+(migration 004-harvest); gymHarvestApply is the separate act with a
+different name that writes an EVALUATION batch's accepted lessons into
+.daijin/brain/lessons/ (one unit file each, provenance in the body, wx so a
+lesson can never silently overwrite one) and reindexes the brain through
+the same derivation init uses, so retrieval serves what was learned in the
+same run that learned it. The mode quarantine is enforced three times
+(applyProposals, the ledger column, the TUI), an experiment batch is
+advice to read, and a batch applies at most once. The run artifact now
+records shownDocumentIds from the retrieval seam, because the packet's
+shown list had been permanently empty: a teacher could never cite a
+document and a retrieval-miss check had nothing to check.
+
+## D-0066 (2026-08-22) The watcher speaks with its own model, and only under the triage locks
+
+The owner configured GLM on the watcher role and asked for the watcher to
+properly report to the auditor. Until now the watcher was purely
+mechanical and its role model was pinged but never used. Ruled: with
+triage on (and only then - the same gate and consent), each new finding is
+first verified by the watcher role in one cheap generation; its note
+(confirmed or not, plus a sentence) rides the finding's thread as a
+watcher entry ahead of the auditor's, and rides the auditor's prompt. The
+watcher assesses and never chooses a fix - that asymmetry is the same one
+the auditor already lives under. An unconfigured watcher is not a refusal,
+because the mechanical sweep is the watcher's floor; a watcher that fails
+twice in a row is silenced for the loop, announced, and triage carries on.
+
+## D-0067 (2026-08-22) User-facing copy uses plain words; the wire keeps the contract's
+
+The owner: "don't use words like veto, use simpler words". Ruled: the TUI
+renders plain words (Reject for veto, Excluded from scoring for
+quarantined, reviewed for triaged, exams drawn for drawn cohort) while the
+WIRE VALUES stay exactly the frozen contract's, mapped at the display
+boundary only. Renaming the wire would be a contract change bought for a
+label; renaming the label costs a lookup table. The rule for new copy:
+a screen may not introduce a term of art the owner would have to be
+taught, and the stale "the mining button ships next" empty-state was
+replaced by instructions for the button that shipped.
+
+## D-0068 (2026-08-22) A sub-passing verdict must be attributed: empty gaps on partial or fail are refused
+
+The first two graded live cycles surfaced the platform's cycle-32 shape
+intact: a rubric graded partial with gaps: [], which the mechanism accepted
+because gap validation only ran per-gap, over gaps that existed. The
+acceptance doc names this failure in its preamble ("empty gaps on all five
+exams, teaching nothing while looking complete") and no clause guarded it.
+Ruled: validateRubric refuses any verdict other than pass whose gaps list
+is empty. Attribution never forces invention - model-limit and
+harness-defect are measured tags that write nothing to the brain, so the
+teacher can always say what went wrong without teaching a lie. The check
+reads the verdict the teacher AUTHORED, not the capped one: a partial
+manufactured by the metric-regression cap carries the cap itself as its
+reason, and a grader cannot be refused for a mechanical downgrade it never
+saw. The teacher prompt states the rule so a live teacher complies rather
+than manufacturing refusals; an inline refusal still leaves the attempt
+pending and gradable later, per the P7 wiring.
+
+## D-0069 (2026-08-23) The unit of leakage prose is the whitespace-delimited word
+
+The goldset leakage gate blocked TokaiHub's whole floor on one case whose
+query "shares a 6 token run" with its answer - the run was the package name
+@aws-sdk/client-cognito-identity-provider, which word-tokenizes to six
+tokens. The 2026-08-16 fix (drop punctuation TOKENS) was one identifier
+too short. Ruled: for the leakage span measure, each whitespace-delimited
+chunk collapses to its word-character skeleton and counts as ONE token, so
+any single identifier is span 1 while a copied sentence still counts word
+by word. The gate's own comment already carried the principle ("a single
+identifier is not a quotation, and a gate that says it is will be turned
+off"); the rule now enforces it at any identifier length. Also ruled: a
+goldset block whose failures are QUALITY gates (leakage, staleness,
+provenance, existence) carries actionCode case-quality and prose naming
+the re-mine remedy - the old text sent a leakage-blocked owner to "mine
+more material", away from the case the gate had just named.
+
+## D-0070 (2026-08-23) A standing spending instruction is the owner's to write, once, in Settings
+
+The owner: users should not have to open the spend gate on every run. The
+gate's design (D-0060) stands - the flip is the owner's hand, scoped, with
+a written reason, auto-re-blocked when the run ends. Ruled: Settings gains
+one checkbox that WRITES a standing instruction (spend.autoUnlockReason, a
+recorded sentence) into settings; while it stands, the gate-open dialog is
+skipped for runs the owner starts and the client performs the open with
+that stored reason. Writing the instruction is itself the explicit act.
+What does NOT change: the engine still refuses unconsented spends, every
+paid run still shows its confirmation dialog, and the gate still re-blocks
+in each job's finally. The instruction moves one click, not one boundary.

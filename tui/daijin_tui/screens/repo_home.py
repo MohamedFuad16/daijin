@@ -46,7 +46,7 @@ class RepoHomeScreen(DaijinScreen):
     notice_id = "#home-notice"
     BINDINGS = [("ctrl+p", "attach_repository_root", "Attach parent repo")]
     heading = "Repo home"
-    subheading = "connected repos, health, measured floor"
+    subheading = "your repos, their health, and how well each brain answers"
 
     def content(self) -> Iterable[Any]:
         # THE BIG MARK IS GONE FROM HERE (owner field round 8): with DAIJIN
@@ -190,27 +190,24 @@ class RepoHomeScreen(DaijinScreen):
     async def _enrich(self, card: RepoCard) -> None:
         """Fill in the facts the card needs beyond serveStatus.
 
-        hasBrainFolder comes from analyze, the current case rate from
-        retrievalScore, and the trend line from scoreHistory. All three are
-        contract methods and all three are zero-spend. The budget sweep is NOT
-        drawn here: it belongs to the retrieval view, under its own caption.
+        The current case rate comes from retrievalScore (recalled) and the
+        trend line from scoreHistory; both are contract methods, both
+        zero-spend. Whether a brain EXISTS is the health field's answer alone:
+        analyze's hasBrainFolder answers "is there a knowledge folder to
+        adopt", and using it here once offered Open brain on repos with no
+        brain at all. The budget sweep is NOT drawn here: it belongs to the
+        retrieval view, under its own caption.
         """
         await gather_all(
-            self._has_brain(card),
             self._floor(card),
             self._history(card),
         )
 
-    async def _has_brain(self, card: RepoCard) -> None:
-        try:
-            analysis = await self.client.call("analyze", {"repoPath": card.repo_path})
-        except RpcError:
-            return
-        card.set_has_brain(bool(analysis.get("hasBrainFolder")))
-
     async def _floor(self, card: RepoCard) -> None:
         try:
-            card.set_score(await self.client.call("retrievalScore", {"repoPath": card.repo_path}))
+            # recall: the stored measurement. One full embedding sweep per card per
+            # home-screen visit is why the app felt slow to open.
+            card.set_score(await self.client.call("retrievalScore", {"repoPath": card.repo_path, "recall": True}))
         except RpcError:
             # No gold set means no floor. The card already says so.
             pass
@@ -245,25 +242,24 @@ class RepoHomeScreen(DaijinScreen):
         results, so they are real even when ollama is down; only version and
         digest go null, and hint goes non-null and names the host it probed.
         """
+        # Plain words only (owner field, 2026-08-22): what a person needs here is
+        # "is the engine ready", the embedding model's name, and its version. The
+        # store path, the model digest and the spend-gate file are operator detail
+        # that lives in Settings and the Gym, not on the front door.
         ollama = status.get("ollama") or {}
-        db = status.get("db") or {}
-        gate = status.get("spendGate") or {}
         reachable = bool(ollama.get("reachable"))
-        reach = "[green]reachable[/green]" if reachable else "[red]unreachable[/red]"
-        gate_state = "[green]open[/green]" if gate.get("open") else "[yellow]blocked[/yellow]"
-
-        lines = [
-            f"ollama {reach} at {cls._said(ollama.get('endpoint'), 'no endpoint configured')}, "
-            f"model {cls._said(ollama.get('model'), 'no model configured')} "
-            f"dim {cls._said(ollama.get('dimension'), 'no dimension configured')}",
-            f"version {cls._said(ollama.get('version'), 'not probed while unreachable')}, "
-            f"digest {cls._said(ollama.get('digest'), 'not probed while unreachable')}",
-            f"store {cls._said(db.get('backend'), 'not reported')} at "
-            f"{cls._said(db.get('stateRoot'), 'not reported')}, "
-            f"{format_count(db.get('repos'))} repos",
-            f"spend gate {gate_state} at {cls._said(gate.get('path'), 'no gate file')}  "
-            f"[dim]observable here before anything is attempted[/dim]",
-        ]
+        model = cls._said(ollama.get("model"), "no model configured")
+        version = ollama.get("version")
+        if reachable:
+            lines = [
+                f"[green]Engine ready.[/green] Embeddings by [b]{model}[/b] via Ollama"
+                + (f" [dim]v{version}[/dim]" if version else ""),
+            ]
+        else:
+            lines = [
+                f"[red]Embedding engine not running.[/red] Start Ollama to serve "
+                f"[b]{model}[/b]; brains cannot be built or searched without it.",
+            ]
         if not reachable:
             # The engine caches its probe for a few seconds, failures included,
             # so a check made immediately after starting ollama can still read

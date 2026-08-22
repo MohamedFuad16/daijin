@@ -22,7 +22,7 @@ from ..widgets.texture import texture_for_verdict
 from .base import DaijinScreen
 from .dialogs import TextPromptScreen
 
-EXAM_COLUMNS = ("exam", "title", "tier", "status", "benchmark", "held out", "quarantine reason")
+EXAM_COLUMNS = ("exam", "title", "tier", "status", "scoring", "held out", "excluded because")
 ATTEMPT_COLUMNS = ("attempt", "mode", "tokens", "verdict", "why not graded")
 
 # Only an evaluation attempt touches the scored record. The contract names
@@ -51,13 +51,12 @@ STATUS_OPTIONS = [
     ("draft", "draft"),
     ("validated", "validated"),
     ("promoted", "promoted"),
-    ("vetoed", "vetoed"),
+    ("rejected", "vetoed"),
 ]
-BENCHMARK_OPTIONS = [
-    ("all benchmark states", "all"),
-    ("active", "active"),
-    ("quarantined", "quarantined"),
-]
+# Wire values stay the contract's words; what the user reads is plainer.
+# Display-only maps, so a filter or a patch still sends the frozen value.
+STATUS_LABELS = {"vetoed": "rejected"}
+BENCHMARK_LABELS = {"active": "counted", "quarantined": "excluded"}
 
 # Both reasons are required at a minimum of 20 characters by the engine. The
 # dialog enforces the same bound so a user is told before the round trip
@@ -146,26 +145,31 @@ class ExamsScreen(DaijinScreen):
 
     def content(self) -> Iterable[Any]:
         yield Banner("", tone="info", id="exam-notice")
+        yield Static(
+            "Exams are real tasks mined from this repo's own history. Promote the ones "
+            "you accept; the gym runs promoted exams and the teacher grades each attempt.",
+            id="exams-intro",
+            markup=True,
+        )
         with Horizontal(id="exam-filters"):
             yield Select(STATUS_OPTIONS, value="all", id="filter-exam-status", allow_blank=False)
-            yield Select(BENCHMARK_OPTIONS, value="all", id="filter-exam-benchmark", allow_blank=False)
             yield Button("Mine exams (spends)", id="exam-mine", variant="primary")
             yield Button("Promote", id="exam-promote")
-            yield Button("Veto", id="exam-veto", variant="warning")
-            yield Button("Quarantine", id="exam-quarantine")
-            yield Button("Release quarantine", id="exam-release")
-        yield SectionTitle("Bank and draft queue", "select a row with the mouse or the arrow keys")
+            yield Button("Reject", id="exam-veto", variant="warning")
+            yield Button("Exclude from scoring", id="exam-quarantine")
+            yield Button("Undo exclusion", id="exam-release")
+        yield SectionTitle("Exam bank", "select a row with the mouse or the arrow keys")
         yield DataTable(id="exam-table", cursor_type="row")
-        yield SectionTitle("Axes", "press r or click the chart to switch radar and bars")
+        yield SectionTitle("How attempts scored", "five grading criteria; press r or click to switch chart style")
         yield Static("", id="exam-axes-note", markup=True)
         yield RadarChart([], id="exam-radar")
         yield SectionTitle("Attempts")
         yield DataTable(id="attempt-table", cursor_type="row")
-        yield SectionTitle("Verdict history", "texture carries the outcome, colour only repeats it")
+        yield SectionTitle("Results over attempts")
         yield StippleLine(title="verdict by attempt", height=5, id="exam-history")
-        yield SectionTitle("Tokens per attempt", "each bar wears its attempt's verdict")
+        yield SectionTitle("Cost per attempt", "in work tokens; each bar wears its attempt's result")
         yield DitherBars(title="tokens by attempt", height=10, id="exam-tokens")
-        yield SectionTitle("Provenance")
+        yield SectionTitle("Where this exam came from")
         yield Static("[dim]no exam selected[/dim]", id="exam-provenance", markup=True)
 
     async def load(self) -> None:
@@ -187,11 +191,12 @@ class ExamsScreen(DaijinScreen):
         # engine defines. Sending it asks the engine for exams whose status is
         # literally "all", which matches nothing: the bank rendered empty
         # against a real ledger that had a row.
+        # The scoring-state select is gone (owner field, 2026-08-22): the
+        # "excluded because" column already carries the same fact per row.
         filters = {
             key: value
             for key, value in (
                 ("status", self.query_one("#filter-exam-status", Select).value),
-                ("benchmarkStatus", self.query_one("#filter-exam-benchmark", Select).value),
             )
             if value and value != "all"
         }
@@ -225,8 +230,8 @@ class ExamsScreen(DaijinScreen):
                 exam.get("examId", ""),
                 exam.get("title", ""),
                 exam.get("tier", ""),
-                exam.get("status", ""),
-                exam.get("benchmarkStatus", ""),
+                STATUS_LABELS.get(exam.get("status", ""), exam.get("status", "")),
+                BENCHMARK_LABELS.get(exam.get("benchmarkStatus", ""), exam.get("benchmarkStatus", "")),
                 "yes" if exam.get("heldOut") else "no",
                 exam.get("quarantineReason") or "-",
                 key=exam.get("examId"),
@@ -236,7 +241,7 @@ class ExamsScreen(DaijinScreen):
         if self.exams:
             self.query_one("#exam-notice", Banner).set_notice(
                 f"{len(self.exams)} exams shown, {len(drafts)} in the draft queue, "
-                f"{len(quarantined)} quarantined out of measurement.",
+                f"{len(quarantined)} excluded from scoring.",
                 "warn" if quarantined else "info",
             )
         else:
@@ -244,12 +249,11 @@ class ExamsScreen(DaijinScreen):
             # "I don't know how to start the exam itself"). Say where exams
             # come from and what stands between here and there.
             self.query_one("#exam-notice", Banner).set_notice(
-                "No exams yet. Exams are mined from this repo's real commit history: "
-                "a free deterministic pass finds candidate commits, then the AUDITOR "
-                "role (an LLM you configure in Settings) selects and words the exam "
-                "bank, which is a paid step behind the owner's spend gate. The mining "
-                "button ships next; until then the bank stays empty and the gym has "
-                "nothing to run.",
+                "No exams yet. Press 'Mine exams' to build them from this repo's real "
+                "commit history: a free pass finds candidate commits, then the AUDITOR "
+                "role (an LLM you configure in Settings) picks and words the exams, "
+                "which is a paid step behind the spending gate. Promote the ones you "
+                "accept; only promoted exams can run in the gym.",
                 "info",
             )
         if self.exams:
@@ -406,9 +410,9 @@ class ExamsScreen(DaijinScreen):
         # beside quarantineReason and with the same shape: present exactly when
         # its precondition is true.
         if row.get("vetoReason"):
-            lines.append(f"[yellow]veto reason: {row['vetoReason']}[/yellow]")
+            lines.append(f"[yellow]rejected because: {row['vetoReason']}[/yellow]")
         if quarantine:
-            lines.append(f"[yellow]quarantined out of measurement: {quarantine}[/yellow]")
+            lines.append(f"[yellow]excluded from scoring: {quarantine}[/yellow]")
         self.query_one("#exam-provenance", Static).update("\n".join(lines))
 
     async def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
@@ -548,13 +552,13 @@ class ExamsScreen(DaijinScreen):
             return
         reason = await self.app.push_screen_wait(
             TextPromptScreen(
-                title=f"Veto {exam['examId']}",
+                title=f"Reject {exam['examId']}",
                 prompt=(
-                    f"Say why. A veto with no written reason cannot be reviewed "
+                    f"Say why. A rejection with no written reason cannot be reviewed "
                     f"later, so the engine requires at least {VETO_REASON_MIN} characters."
                 ),
                 min_length=VETO_REASON_MIN,
-                placeholder="reason for the veto",
+                placeholder="reason for rejecting this exam",
             )
         )
         if not reason:
@@ -577,10 +581,10 @@ class ExamsScreen(DaijinScreen):
             return
         reason = await self.app.push_screen_wait(
             TextPromptScreen(
-                title=f"Quarantine {exam['examId']}",
+                title=f"Exclude {exam['examId']} from scoring",
                 prompt=(
-                    f"Quarantine takes this exam out of measurement without touching its "
-                    f"authoring status. The reason is required, at least "
+                    f"This takes the exam out of scoring without touching where it sits "
+                    f"in the pipeline. The reason is required, at least "
                     f"{QUARANTINE_REASON_MIN} characters."
                 ),
                 min_length=QUARANTINE_REASON_MIN,

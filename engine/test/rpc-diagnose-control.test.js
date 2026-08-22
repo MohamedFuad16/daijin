@@ -380,3 +380,106 @@ test('every measured corpus carries the STORE\'s project, never a null scope', a
     await rm(repo.stateRoot, { recursive: true, force: true });
   }
 });
+
+test('diagnoseNarrate: the auditor reads the mechanical clusters and returns a recommendation', async () => {
+  // The stub reports one missed case so the prompt has something real to carry. The
+  // auditor is scripted through the same deps hook the goal loop's tests use; an
+  // unconfigured auditor must refuse BEFORE the free sweep re-measures anything.
+  const repo = await fixture();
+  const { repoPath } = repo;
+  const prompts = [];
+  const scoreRuns = [];
+  const missScore = async ({ corpus }) => {
+    scoreRuns.push(corpus.id);
+    const cases = YAML.parse(await readFile(corpus.goldsetPath, 'utf8'));
+    const results = cases.map((entry, index) => ({
+      id: entry.id,
+      complete: index !== 0,
+      misses: index === 0 ? [entry.must_return[0]] : [],
+      reciprocalRank: index === 0 ? 0 : 1,
+      identifier: false,
+      standingAssisted: false,
+      documents: entry.must_return,
+    }));
+    return {
+      results,
+      diagnostics: [],
+      summary: { cases: results.length, caseRate: (results.length - 1) / results.length, mrr: 0.8, violations: 0, identifierCaseRate: 1 },
+      record: {},
+    };
+  };
+  const state = new EngineState({ stateRoot: repo.stateRoot });
+  await state.attachRepo(repoPath);
+  const methods = createMethods({
+    state,
+    jobs: new JobRunner({ notify: () => {} }),
+    deps: {
+      scoreGoldset: missScore,
+      resolveKey: async () => 'test-key',
+      createRoleGenerate: () => async ({ prompt }) => {
+        prompts.push(prompt);
+        return { text: '  Enrich doc.a in area storage, then re-measure; the gym is premature. ' };
+      },
+    },
+  });
+  try {
+    // Unconfigured auditor: refused at the call, and the sweep never ran for it.
+    await assert.rejects(
+      methods.diagnoseNarrate({ repoPath, confirm: true }),
+      /auditor.*not configured|no provider/i,
+    );
+    assert.equal(scoreRuns.length, 0, 'no measurement was spent on a call that could not narrate');
+
+    await state.patchSettings({ roles: [{ role: 'auditor', provider: 'zai', model: 'glm-5.3', keyRef: 'env:DIAG_TEST_KEY' }] });
+    const { recommendation } = await methods.diagnoseNarrate({ repoPath, confirm: true });
+    assert.equal(recommendation, 'Enrich doc.a in area storage, then re-measure; the gym is premature.');
+    assert.equal(prompts.length, 1, 'one explicit action, one generation');
+    assert.match(prompts[0], /g001: missed doc\.a/, 'the missed case rides the prompt by name');
+    assert.match(prompts[0], /area storage: 1 miss/, 'the area cluster rides the prompt');
+    assert.match(prompts[0], /must-not violations: 0/);
+  } finally {
+    await rm(repo.repoPath, { recursive: true, force: true });
+    await rm(repo.stateRoot, { recursive: true, force: true });
+  }
+});
+
+test('recall serves the stored measurement instantly, and never re-runs the sweep', async () => {
+  // A screen visit must not cost an embedding sweep. Measuring writes the full record
+  // beside the history; recall reads it back stamped recalled: true, and diagnose
+  // clusters over the same stored results with no scorer call at all.
+  const repo = await fixture();
+  const { repoPath } = repo;
+  const seen = [];
+  const { methods, cleanup } = await methodsOver(repo, async (options) => {
+    seen.push(options.corpus.id);
+    return stubScore({})(options);
+  });
+  try {
+    const measured = await methods.retrievalScore({ repoPath });
+    assert.equal(seen.length, 1, 'the real measurement ran once');
+    assert.ok(!measured.recalled, 'a fresh measurement is not stamped recalled');
+
+    const recalled = await methods.retrievalScore({ repoPath, recall: true });
+    assert.equal(recalled.recalled, true);
+    assert.equal(recalled.at, measured.at, 'the stored measurement keeps its own timestamp');
+    assert.deepEqual(recalled.caseRate, measured.caseRate);
+    assert.equal(seen.length, 1, 'recall did not re-measure');
+
+    const diagnosis = await methods.diagnose({ repoPath, recall: true });
+    assert.equal(diagnosis.recalled, true);
+    assert.equal(diagnosis.cases, 3);
+    assert.equal(seen.length, 1, 'diagnose recall did not re-measure either');
+
+    // No stored record falls through to a real measurement rather than refusing.
+    const { rm: rmFile } = await import('node:fs/promises');
+    const { repoLayout: layoutOf } = await import('../src/state/layout.js');
+    await rmFile((await layoutOf(repoPath, { stateRoot: repo.stateRoot })).lastScorePath, { force: true });
+    const fresh = await methods.retrievalScore({ repoPath, recall: true });
+    assert.ok(!fresh.recalled);
+    assert.equal(seen.length, 2, 'with nothing stored, recall measures for real');
+  } finally {
+    await cleanup();
+    await rm(repo.repoPath, { recursive: true, force: true });
+    await rm(repo.stateRoot, { recursive: true, force: true });
+  }
+});

@@ -8,11 +8,12 @@ from textual import work
 from textual.containers import Horizontal
 from textual.widgets import Button, DataTable, Input, Select, Static, TabbedContent, TabPane
 
+from textual.content import Content
+
 from ..concurrency import gather_all
 from ..rpc import RpcError
 from ..widgets import (
     Banner,
-    DitherBars,
     Gauge,
     MCP_THRESHOLD,
     SectionTitle,
@@ -20,12 +21,11 @@ from ..widgets import (
     format_case_rate,
     format_ratio,
 )
-from ..widgets.texture import NEUTRAL, PASS
 from .base import DaijinScreen
 
 CHUNK_COLUMNS = ("rank", "chunk", "document", "type", "area", "arm", "score", "tokens", "standing")
 PER_CASE_COLUMNS = ("case", "hit", "rank", "arm", "type", "area")
-CLUSTER_COLUMNS = ("axis", "key", "missed", "of", "share")
+CLUSTER_COLUMNS = ("axis", "key", "missed cases", "share")
 DOCUMENT_COLUMNS = ("document", "type", "area", "title", "tags")
 
 
@@ -46,7 +46,7 @@ class BrainScreen(DaijinScreen):
     mode_name = "brain"
     notice_id = "#brain-notice"
     heading = "Brain browser, retrieval tester, diagnosis"
-    subheading = "measured retrieval accuracy, count and percentage together"
+    subheading = "what the brain knows, how accurately it answers, and how to connect it"
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
@@ -77,18 +77,13 @@ class BrainScreen(DaijinScreen):
                     yield Select([], id="brain-budget", prompt="budget", allow_blank=True)
                     yield Button("Re-measure at this budget", id="brain-remeasure", variant="primary")
                 yield Static("", id="brain-budget-note", markup=True, classes="field-note")
-                yield SectionTitle(
-                    "Budget sweep",
-                    "one measurement across budgets, not a trend over time; the card sparkline is the trend",
-                )
-                yield DitherBars(
-                    title="cases hit by token budget", height=10, bar_width=5, id="budget-sweep"
-                )
-                yield SectionTitle("Per case", "arm, type, and area are what the diagnosis clusters on")
+                yield Static("", id="budget-sweep-note", markup=True, classes="field-note")
+                yield SectionTitle("Gold cases", "every question the brain is tested on, and how it did")
                 yield DataTable(id="percase-table", cursor_type="row")
-                yield SectionTitle("MCP unlock")
+                yield SectionTitle("Connect your coding agent (MCP)")
+                yield Button("Get the connection code", id="mcp-unlock", disabled=True)
                 yield Static("", id="mcp-summary", markup=True)
-                yield SectionTitle("Retrieval tester")
+                yield SectionTitle("Ask the brain", "type a question and see what your agent would get back")
                 with Horizontal(id="search-row"):
                     yield Input(placeholder="ask the brain something", id="search-input")
                     yield Button("Search", id="search-go", variant="primary")
@@ -98,7 +93,10 @@ class BrainScreen(DaijinScreen):
                 yield Static("[dim]no chunk selected[/dim]", id="chunk-detail", markup=True)
 
             with TabPane("Inventory", id="brain-tab-inventory"):
-                yield SectionTitle("Brain inventory", "from documents, browsing is not search only")
+                yield SectionTitle(
+                    "What the brain knows",
+                    "every document in this repo's brain - the knowledge your agent retrieves from",
+                )
                 with Horizontal(id="inventory-filters"):
                     yield Input(placeholder="filter by title, id, or path", id="inventory-query")
                     yield Select(
@@ -107,17 +105,17 @@ class BrainScreen(DaijinScreen):
                         id="inventory-type",
                         allow_blank=False,
                     )
-                    yield Button("Apply", id="inventory-apply", variant="primary")
+                    yield Button("Filter", id="inventory-apply", variant="primary")
                 yield Static("", id="inventory-summary", markup=True)
                 yield DataTable(id="inventory-table", cursor_type="row")
                 yield Static("[dim]no document selected[/dim]", id="inventory-detail", markup=True)
             with TabPane("Diagnosis", id="brain-tab-diagnosis"):
                 yield Static("", id="diagnosis-headline", markup=True)
-                yield SectionTitle("Mechanical clusters", "zero-spend, arithmetic over the per case rows")
+                yield SectionTitle("Where the misses cluster", "free arithmetic over the questions the brain got wrong")
                 yield DataTable(id="cluster-table", cursor_type="row")
-                yield SectionTitle("Missed cases")
+                yield SectionTitle("The questions it missed")
                 yield DataTable(id="missed-table", cursor_type="row")
-                yield SectionTitle("Auditor recommendation", "a paid generation, on your explicit go ahead only")
+                yield SectionTitle("Ask the auditor what to do", "a paid model call, only on your explicit go ahead")
                 yield Button("Ask the auditor to narrate (spends)", id="narrate-go", variant="warning")
                 yield Static("[dim]not requested[/dim]", id="narration", markup=True)
 
@@ -155,7 +153,10 @@ class BrainScreen(DaijinScreen):
 
     async def _load_floor(self, repo: str) -> None:
         try:
-            score = await self.client.call("retrievalScore", {"repoPath": repo, "sweep": True})
+            # recall: the STORED last measurement, instantly. Opening this screen used to
+            # re-run a four-budget embedding sweep, which is why it took so long to load;
+            # measuring is the explicit Re-measure button now.
+            score = await self.client.call("retrievalScore", {"repoPath": repo, "sweep": True, "recall": True})
         except RpcError as error:
             self.query_one("#brain-hero", Static).update(f"[yellow]{error.hint}[/yellow]")
             return
@@ -176,33 +177,21 @@ class BrainScreen(DaijinScreen):
                 row.get("type", ""),
                 row.get("area") or "-",
             )
+        # One readable line per measured budget, recommendation marked. The dithered
+        # bar chart this replaces read as broken UI to the owner (field, 2026-08-22):
+        # four near-identical bars carry less than four labelled numbers.
         sweep = score.get("budgetSweep") or []
+        note = self.query_one("#budget-sweep-note", Static)
         if sweep:
-            # The house chart vocabulary (owner field round 4): dithered bars,
-            # texture and colour as two channels, not a plotext line. The
-            # CHOSEN budget wears the pass texture and every other point the
-            # neutral one, and the ceiling is the case total so the bars stay
-            # comparable across repos instead of always looking full.
-            hits = []
-            total = 0
-            for point in sweep:
-                cases = str(point.get("caseRate", {}).get("cases", ""))
-                if " of " in cases:
-                    hit, _, denominator = cases.partition(" of ")
-                    hits.append(int(hit))
-                    total = max(total, int(denominator))
-                else:
-                    hits.append(0)
             chosen = score.get("chosenBudget")
-            self.query_one("#budget-sweep", DitherBars).set_data(
-                [str(point["budget"]) for point in sweep],
-                hits,
-                textures=[
-                    PASS if point["budget"] == chosen else NEUTRAL for point in sweep
-                ],
-                ceiling=total or None,
-                ceiling_label=f"ceiling {total} cases; chosen budget carries the solid texture",
-            )
+            lines = []
+            for point in sweep:
+                cases = str(point.get("caseRate", {}).get("cases", "?"))
+                marker = "  [green]<- recommended[/green]" if point.get("budget") == chosen else ""
+                lines.append(f"  {point.get('budget'):>6} tokens: {cases} answered{marker}")
+            note.update("[dim]measured at each budget:[/dim]\n" + "\n".join(lines))
+        else:
+            note.update("")
 
     def _fill_budget_control(self, score: dict[str, Any]) -> None:
         select = self.query_one("#brain-budget", Select)
@@ -263,101 +252,150 @@ class BrainScreen(DaijinScreen):
             hero.update("[b yellow]NOT MEASURED[/b yellow]  [dim]run init to measure this brain[/dim]")
             facts.update("")
             return
-        percent = f"{value * 100:.1f}%"
-        cases = ""
-        if isinstance(score.get("caseRate"), dict):
-            cases = str(score["caseRate"].get("cases") or "")
+        percent = f"{value * 100:.0f}%"
         if violations:
             status, status_tone = "UNHEALTHY", "red"
-            why = f"{violations} must-not violation(s): wrong answers are being served"
+            why = f"{violations} wrong answer(s) are being served; MCP stays off until they clear"
         elif (value or 0) >= MCP_THRESHOLD:
             status, status_tone = "HEALTHY", "green"
-            why = "above the unlock threshold; MCP serving is offered"
+            why = "good enough to serve your coding agent over MCP"
         else:
             status, status_tone = "BELOW FLOOR", "yellow"
-            why = "under the unlock threshold; see Diagnosis for what is missing"
+            why = "not accurate enough to serve yet; the Diagnosis tab says what is missing"
+        # One statement of the rate, once: the status word, the number, and the bar on the
+        # same line. The owner read "retrieval 96%" three times on this screen before this.
         hero.update(
             f"[b {status_tone}]{status}[/b {status_tone}]"
-            f"   retrieval [b {status_tone}]{percent}[/b {status_tone}]"
-            + (f" [dim]({cases} gold cases answered)[/dim]" if cases else "")
-            + f"\n[dim]{why}[/dim]"
+            f"   MCP retrieval rate [b {status_tone}]{percent}[/b {status_tone}]"
+            f"\n[dim]{why}[/dim]"
         )
         gauge.set_value(
             float(value),
             motion=getattr(self.app, "motion", None),
-            caption=f"retrieval {percent}, threshold {MCP_THRESHOLD}",
+            caption=f"needs {MCP_THRESHOLD:.0%} to serve",
         )
-        measured = f"   measured {score['at']}" if score.get("at") else ""
+        mrr = score.get("mrr")
+        mrr_text = f"{float(mrr):.3f}" if isinstance(mrr, (int, float)) else "-"
+        measured = f"   measured {str(score.get('at'))[:16].replace('T', ' ')}" if score.get("at") else ""
         facts.update(
-            f"[dim]MRR {score.get('mrr')} (movement only, never a floor)   "
-            f"violations {violations}   budget {score.get('chosenBudget')}{measured}[/dim]"
+            f"[dim]answer ranking (MRR) {mrr_text}{measured}\n"
+            f"MRR: how close to the top the right answer lands, 0 to 1; 1.0 means it is "
+            f"always the first result.[/dim]"
         )
 
     async def _load_mcp(self, repo: str) -> None:
+        """Arm or gray the connect button; the code itself appears on the click.
+
+        The owner's ask (field, 2026-08-22): a button that is grayed out below
+        the threshold and clickable above it, not a dialog of prose. The
+        engine's own reason sentence still rides the panel, because the
+        decision is the engine's.
+        """
         panel = self.query_one("#mcp-summary", Static)
+        button = self.query_one("#mcp-unlock", Button)
         try:
             result = await self.client.call("mcpSnippet", {"repoPath": repo})
         except RpcError as error:
             panel.update(f"[yellow]{error.hint}[/yellow]")
+            button.disabled = True
             return
-        # The engine's reason sentence comes from floor.js, the module that
-        # made the decision; show it verbatim rather than paraphrasing. The
-        # owner asked this panel to say what the unlock actually is: the
-        # threshold, why this repo is on its side of it, and once unlocked,
-        # what to do with the snippet.
+        self.mcp_result = result
         reason = str(result.get("reason") or "").strip()
         if not result.get("unlocked"):
-            detail = reason or (
-                f"The floor sits below the {result.get('threshold', MCP_THRESHOLD)} "
-                "threshold, so no snippet is offered."
-            )
+            button.disabled = True
+            button.variant = "default"
+            detail = reason or "The retrieval rate is under the bar, so connecting is not offered yet."
             panel.update(
-                f"[yellow]MCP locked.[/yellow] {detail}\n"
-                f"[dim]threshold {result.get('threshold', MCP_THRESHOLD)}. "
-                f"Re-run init after improving the brain; the Diagnosis tab says "
-                f"what is missing.[/dim]"
+                f"[yellow]Not available yet.[/yellow] {detail}\n"
+                f"[dim]The button turns green when this brain answers well enough "
+                f"({MCP_THRESHOLD:.0%} of its gold cases). The Diagnosis tab says what is "
+                f"missing.[/dim]"
             )
             return
+        button.disabled = False
+        button.variant = "success"
         panel.update(
-            f"[green]MCP unlocked[/green] at threshold {result.get('threshold')}."
-            + (f" {reason}" if reason else "")
-            + "\n\nPaste ready config:\n\n"
-            f"{result.get('snippet', '')}\n\n"
-            f"[dim]Paste into your MCP client config (Claude Code: .mcp.json at "
-            f"the repo root; Claude Desktop: claude_desktop_config.json). Your "
-            f"agent then gets brain.search, brain.conventions, brain.impact_of "
-            f"and brain.relevant_adrs answered from this repo's measured "
-            f"brain.[/dim]"
+            "[green]Ready to connect.[/green] Press the button for a config snippet you "
+            "can paste into your coding agent."
         )
+
+    def show_mcp_snippet(self) -> None:
+        result = getattr(self, "mcp_result", None) or {}
+        if not result.get("unlocked"):
+            return
+        # The snippet is UNTRUSTED text as far as markup goes: it is JSON, and
+        # JSON's brackets parse as tags. Content.from_markup substitutes the
+        # $variable as plain text, which is Textual's own escape hatch; raw
+        # interpolation crashed the whole app on the click (fresh-install
+        # walkthrough, 2026-08-23).
+        self.query_one("#mcp-summary", Static).update(Content.from_markup(
+            "Paste this into your MCP client config "
+            "[dim](Claude Code: .mcp.json at the repo root; Claude Desktop: "
+            "claude_desktop_config.json)[/dim]:\n\n"
+            "$snippet\n\n"
+            "[dim]Your agent then gets brain.search, brain.conventions, "
+            "brain.impact_of and brain.relevant_adrs answered from this repo's "
+            "measured brain.[/dim]",
+            snippet=str(result.get("snippet", "")),
+        ))
 
     async def _load_diagnosis(self, repo: str) -> None:
         headline = self.query_one("#diagnosis-headline", Static)
         try:
-            diagnosis = await self.client.call("diagnose", {"repoPath": repo})
+            # recall: clusters over the stored measurement, no embedding sweep on load.
+            diagnosis = await self.client.call("diagnose", {"repoPath": repo, "recall": True})
         except RpcError as error:
             headline.update(f"[yellow]{error.hint}[/yellow]")
             return
+        # The v5 contract row for diagnose: misses is a LIST of case ids, cases is the
+        # denominator, clusters come keyed byType/byArea/byArm with {value, count} rows,
+        # and the per-case detail rides perCase (hit flag included). This pane was written
+        # against a mock that invented friendlier keys, so it rendered "None of None" and
+        # two empty tables over a diagnosis that had a real miss in it.
         case_rate = diagnosis.get("caseRate")
         value = case_rate_value(case_rate)
         threshold = diagnosis.get("threshold", MCP_THRESHOLD)
         above = (value or 0) >= threshold
+        miss_ids = diagnosis.get("misses") or []
+        total = diagnosis.get("cases")
+        if not miss_ids:
+            report = "Nothing to fix: every gold case was answered."
+        elif above:
+            report = (
+                f"{len(miss_ids)} of {total} question(s) missed. The brain still clears the "
+                f"serving bar; the tables below say where the misses sit."
+            )
+        else:
+            report = (
+                f"{len(miss_ids)} of {total} question(s) missed, and the brain is under the "
+                f"serving bar. The tables below say which areas and kinds of knowledge are "
+                f"thin - that is what to improve first."
+            )
         headline.update(
-            f"case rate [b]{format_case_rate(case_rate)}[/b], "
-            f"{'above' if above else 'below'} the {threshold} threshold. "
-            f"{diagnosis.get('missed')} of {diagnosis.get('total')} cases miss.\n"
-            f"[dim]This clustering is mechanical and free. The narration below is not.[/dim]"
+            f"[b]Brain report:[/b] answered [b]{format_case_rate(case_rate)}[/b] of its gold "
+            f"cases. {report}\n"
+            f"[dim]This report is free and mechanical. The auditor's advice below is a paid "
+            f"model call.[/dim]"
         )
         table = self.query_one("#cluster-table", DataTable)
         table.clear()
-        for axis in ("type", "area", "arm"):
-            for row in (diagnosis.get("clusters") or {}).get(axis, []):
-                of = row.get("of") or 0
-                share = f"{row.get('missed', 0)} of {of}"
-                table.add_row(axis, row.get("key", ""), str(row.get("missed", 0)), str(of), share)
+        clusters = diagnosis.get("clusters") or {}
+        for axis, wire_key in (("type", "byType"), ("area", "byArea"), ("arm", "byArm")):
+            for row in clusters.get(wire_key, []):
+                count = row.get("count", 0)
+                share = f"{count} of {len(miss_ids)} misses" if miss_ids else "-"
+                table.add_row(axis, str(row.get("value", "")), str(count), share)
         missed = self.query_one("#missed-table", DataTable)
         missed.clear()
-        for row in diagnosis.get("missedCases", []):
-            missed.add_row(row.get("caseId", ""), row.get("arm", ""), row.get("type", ""), row.get("area") or "-")
+        for row in diagnosis.get("perCase") or []:
+            if row.get("hit"):
+                continue
+            missed.add_row(
+                row.get("caseId", ""),
+                row.get("arm") or "-",
+                row.get("type") or "-",
+                row.get("area") or "-",
+            )
 
     async def _load_inventory(self, repo: str) -> None:
         summary = self.query_one("#inventory-summary", Static)
@@ -425,6 +463,9 @@ class BrainScreen(DaijinScreen):
             repo = getattr(self.app, "selected_repo", None)
             if repo:
                 await self._load_inventory(repo)
+        elif event.button.id == "mcp-unlock":
+            event.stop()
+            self.show_mcp_snippet()
         elif event.button.id == "narrate-go":
             event.stop()
             self.run_narration()
@@ -468,7 +509,7 @@ class BrainScreen(DaijinScreen):
             self.report_rpc_error(error)
             panel.update(f"[red]{error.hint}[/red]")
             return
-        panel.update(str(result.get("recommendation", "")))
+        panel.update(Content.from_markup("$text", text=str(result.get("recommendation", ""))))
 
     async def run_search(self) -> None:
         repo = getattr(self.app, "selected_repo", None)
@@ -525,11 +566,12 @@ class BrainScreen(DaijinScreen):
 
     def _show_chunk(self, chunk: dict[str, Any]) -> None:
         detail = self.query_one("#chunk-detail", Static)
-        detail.update(
+        detail.update(Content.from_markup(
             f"[b]{chunk.get('id')}[/b]  {chunk.get('documentId')}  "
             f"[dim]{chunk.get('type')} / {chunk.get('area') or 'no area'} / "
-            f"{chunk.get('tokens')} tokens[/dim]\n\n{chunk.get('text', '')}"
-        )
+            f"{chunk.get('tokens')} tokens[/dim]\n\n$text",
+            text=str(chunk.get("text", "")),
+        ))
 
     def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
         key = event.row_key.value if event.row_key else None

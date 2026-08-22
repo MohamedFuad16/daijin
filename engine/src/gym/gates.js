@@ -16,6 +16,7 @@
 // Everything else is the platform's, unchanged: the process group kill on timeout, the
 // GATE_METRIC convention, and the classification precedence.
 import { spawn } from 'node:child_process';
+import path from 'node:path';
 
 function tail(value, limit = 16_000) {
   return value.length <= limit ? value : value.slice(-limit);
@@ -143,7 +144,15 @@ function metricClassification(before, after) {
 export async function runGateSet(gates, options) {
   const results = [];
   for (const gate of gates) {
-    const gateOptions = { ...options, cwd: gate.cwd || options.cwd };
+    // A gate's cwd is REPO-RELATIVE (discovery writes `path.dirname(file)`), so it must
+    // resolve against the tree being tested, never the daemon's own process cwd. Discovery
+    // already resolved it (gate-discovery.js joins repoPath); this runner did not, so the
+    // same subdirectory gate was `live` when discovered and `unavailable` when the goal
+    // sweep or a gym sandbox ran it - both honest about two different directories.
+    const cwd = gate.cwd
+      ? (path.isAbsolute(gate.cwd) ? gate.cwd : path.join(options.cwd, gate.cwd))
+      : options.cwd;
+    const gateOptions = { ...options, cwd };
     if (gate.availabilityCommand) {
       const availability = await runCommand(gate.availabilityCommand, {
         ...gateOptions,

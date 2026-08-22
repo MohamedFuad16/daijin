@@ -7,7 +7,7 @@
 // work rather than inside the job. The refusals are also exercised over the real pipe in
 // rpc-spend.test.js, because those are what a user meets.
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -192,23 +192,39 @@ test('a pipeline failure reaches the user on the step stream', async () => {
   }
 });
 
-test('mode ingest is refused BEFORE a job starts, naming why', async () => {
-  // The pipeline throws for ingest too, but only after its analyze pass, so a user would
-  // watch a job start and then fail. This refusal is the one they meet.
+test('mode ingest without a knowledge folder is refused BEFORE a job starts, naming why', async () => {
+  // The pipeline refuses too, but only after its analyze pass, so a user would watch a
+  // job start and then fail. This refusal is the one they meet.
   const repoPath = await mkdtemp(path.join(tmpdir(), 'daijin-init-repo-'));
   const context = await harness({ repoPath });
   try {
     await assert.rejects(
       context.server.methods.initBrain({ repoPath, mode: 'ingest' }),
-      (error) => {
-        assert.equal(error.code, ERR_NOT_IMPLEMENTED);
-        assert.match(error.data.phase, /^P3/);
-        assert.match(error.data.hint, /overwrite your work with machine output/);
-        return true;
-      },
+      /no knowledge folder|none that qualifies/,
     );
     assert.equal(context.calls.length, 0, 'no job ran');
     assert.deepEqual(context.steps(), [], 'and nothing was streamed');
+  } finally {
+    await context.cleanup();
+    await rm(repoPath, { recursive: true, force: true });
+  }
+});
+
+test('mode ingest with a knowledge folder starts a job and hands the pipeline the mode', async () => {
+  // Ingest is BUILT: adopt.js splits the curated folder into human-written units, the
+  // citation validator is the drift check, and the derived brain lands in .daijin/brain
+  // while the source folder is never written. This pins the RPC seam: the mode reaches
+  // the pipeline instead of dying at a stale not-implemented wall.
+  const repoPath = await mkdtemp(path.join(tmpdir(), 'daijin-init-repo-'));
+  await mkdir(path.join(repoPath, 'agent'), { recursive: true });
+  await writeFile(path.join(repoPath, 'agent', 'state.md'), '# State\n\nA curated note worth adopting.\n', 'utf8');
+  const context = await harness({ repoPath, pipeline: async () => ({ floor: null }) });
+  try {
+    const { jobId } = await context.server.methods.initBrain({ repoPath, mode: 'ingest' });
+    assert.match(jobId, /^job-/);
+    await context.server.jobs.drain();
+    assert.equal(context.calls.length, 1, 'the pipeline ran once');
+    assert.equal(context.calls[0].mode, 'ingest');
   } finally {
     await context.cleanup();
     await rm(repoPath, { recursive: true, force: true });

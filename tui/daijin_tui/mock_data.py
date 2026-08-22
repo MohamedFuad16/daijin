@@ -232,59 +232,72 @@ DIAGNOSE: dict[str, dict[str, Any]] = {
     "/Users/owner/code/lantern-ios": {
         "caseRate": case_rate(21, 31),
         "threshold": MCP_THRESHOLD,
-        "missed": 10,
-        "total": 31,
+        "cases": 31,
+        "hits": 21,
+        "misses": [
+            "gold-002", "gold-005", "gold-009", "gold-012", "gold-015",
+            "gold-018", "gold-021", "gold-024", "gold-027", "gold-030",
+        ],
+        "identifierMisses": 1,
         "clusters": {
-            "type": [
-                {"key": "commit-archaeology", "missed": 6, "of": 9},
-                {"key": "structural", "missed": 3, "of": 14},
-                {"key": "identifier", "missed": 1, "of": 8},
+            "byType": [
+                {"value": "commit-archaeology", "count": 6},
+                {"value": "structural", "count": 3},
+                {"value": "identifier", "count": 1},
             ],
-            "area": [
-                {"key": "Packages/Core", "missed": 6, "of": 12},
-                {"key": "Lantern", "missed": 4, "of": 17},
-                {"key": "LanternTests", "missed": 0, "of": 2},
+            "byArea": [
+                {"value": "Packages/Core", "count": 6},
+                {"value": "Lantern", "count": 4},
             ],
-            "arm": [
-                {"key": "semantic", "missed": 7, "of": 14},
-                {"key": "fused", "missed": 2, "of": 11},
-                {"key": "lexical", "missed": 1, "of": 6},
+            "byArm": [
+                {"value": "semantic", "count": 7},
+                {"value": "fused", "count": 2},
+                {"value": "lexical", "count": 1},
             ],
         },
-        "missedCases": [
-            {"caseId": "gold-002", "arm": "semantic", "type": "structural", "area": "Lantern"},
-            {"caseId": "gold-015", "arm": "semantic", "type": "commit-archaeology", "area": "Packages/Core"},
-            {"caseId": "gold-018", "arm": "semantic", "type": "commit-archaeology", "area": "Packages/Core"},
-            {"caseId": "gold-027", "arm": "fused", "type": "structural", "area": "Lantern"},
+        # Four detailed rows are enough for the screen; the ids above carry the count.
+        "perCase": [
+            {"caseId": "gold-001", "hit": True, "rank": 1, "arm": None, "type": None, "area": None, "missed": None},
+            {"caseId": "gold-002", "hit": False, "rank": None, "arm": "semantic", "type": "structural", "area": "Lantern", "missed": "brain.architecture.lantern"},
+            {"caseId": "gold-015", "hit": False, "rank": None, "arm": "semantic", "type": "commit-archaeology", "area": "Packages/Core", "missed": "brain.decision.core-split"},
+            {"caseId": "gold-018", "hit": False, "rank": None, "arm": "semantic", "type": "commit-archaeology", "area": "Packages/Core", "missed": "brain.decision.core-naming"},
+            {"caseId": "gold-027", "hit": False, "rank": None, "arm": "fused", "type": "structural", "area": "Lantern", "missed": "brain.architecture.lantern-ui"},
         ],
+        "discriminatingRange": None,
+        "controlSkipped": None,
+        "recommendation": None,
     },
     "/Users/owner/code/orchard-web": {
         "caseRate": case_rate(31, 34),
         "threshold": MCP_THRESHOLD,
-        "missed": 3,
-        "total": 34,
+        "cases": 34,
+        "hits": 31,
+        "misses": ["gold-026", "gold-033", "gold-048"],
+        "identifierMisses": 0,
         "clusters": {
-            "type": [
-                {"key": "commit-archaeology", "missed": 2, "of": 10},
-                {"key": "structural", "missed": 1, "of": 15},
-                {"key": "identifier", "missed": 0, "of": 9},
+            "byType": [
+                {"value": "commit-archaeology", "count": 2},
+                {"value": "structural", "count": 1},
             ],
-            "area": [
-                {"key": "src/styles", "missed": 2, "of": 3},
-                {"key": "src/components", "missed": 1, "of": 6},
-                {"key": "src/lib", "missed": 0, "of": 17},
+            "byArea": [
+                {"value": "src/styles", "count": 2},
+                {"value": "src/components", "count": 1},
             ],
-            "arm": [
-                {"key": "semantic", "missed": 1, "of": 12},
-                {"key": "fused", "missed": 1, "of": 13},
-                {"key": "lexical", "missed": 1, "of": 9},
+            "byArm": [
+                {"value": "semantic", "count": 1},
+                {"value": "fused", "count": 1},
+                {"value": "lexical", "count": 1},
             ],
         },
-        "missedCases": [
-            {"caseId": "gold-026", "arm": "semantic", "type": "commit-archaeology", "area": "src/styles"},
-            {"caseId": "gold-033", "arm": "fused", "type": "commit-archaeology", "area": "src/styles"},
-            {"caseId": "gold-048", "arm": "lexical", "type": "structural", "area": "src/components"},
+        "perCase": [
+            {"caseId": "gold-001", "hit": True, "rank": 2, "arm": None, "type": None, "area": None, "missed": None},
+            {"caseId": "gold-026", "hit": False, "rank": None, "arm": "semantic", "type": "commit-archaeology", "area": "src/styles", "missed": "brain.convention.styles"},
+            {"caseId": "gold-033", "hit": False, "rank": None, "arm": "fused", "type": "commit-archaeology", "area": "src/styles", "missed": "brain.decision.tokens"},
+            {"caseId": "gold-048", "hit": False, "rank": None, "arm": "lexical", "type": "structural", "area": "src/components", "missed": "brain.architecture.components"},
         ],
+        "discriminatingRange": None,
+        "controlSkipped": None,
+        "recommendation": None,
     },
 }
 
@@ -841,7 +854,7 @@ EXAMS: list[dict[str, Any]] = [
             "source": "commit-archaeology",
             "selectedBy": "auditor",
             "supersedes": None,
-            "note": "Vetoed by the user: the statement cannot be written without leaking the fix.",
+            "note": "Rejected by the user: the statement cannot be written without leaking the fix.",
         },
     },
 ]
@@ -1010,6 +1023,92 @@ GYM_STATUS: dict[str, Any] = {
         "exams": EXAMS,
     },
 }
+
+# Harvest batch summaries, the gymStatus.harvest shape (2026-08-22 amendment).
+# One evaluation batch ready to apply and one experiment batch that can only be
+# read, so both button states are testable offline.
+HARVEST_BATCHES: list[dict[str, Any]] = [
+    {
+        "id": 2,
+        "cycleId": 5,
+        "mode": "evaluation",
+        "at": "2026-08-21T18:30:00.000Z",
+        "questionsAsked": 2,
+        "accepted": 1,
+        "rejected": 1,
+        "applied": False,
+        "appliedAt": None,
+        "written": None,
+    },
+    {
+        "id": 1,
+        "cycleId": 4,
+        "mode": "experiment",
+        "at": "2026-08-20T11:05:00.000Z",
+        "questionsAsked": 1,
+        "accepted": 1,
+        "rejected": 0,
+        "applied": False,
+        "appliedAt": None,
+        "written": None,
+    },
+]
+
+# What a fresh mock harvest lands (id is assigned by the mock engine).
+HARVEST_BATCH_NEW: dict[str, Any] = {
+    "id": 0,
+    "cycleId": 5,
+    "mode": "evaluation",
+    "at": "2026-08-22T12:00:00.000Z",
+    "questionsAsked": 1,
+    "accepted": 1,
+    "rejected": 0,
+    "applied": False,
+    "appliedAt": None,
+    "written": None,
+}
+
+
+def harvest_script(job_id: str, batch_id: int) -> list[dict[str, Any]]:
+    """The gymHarvest step stream, shape-faithful to the daemon's harvest job."""
+    def ev(offset_ms, phase, step, detail, counts=None, level="info"):
+        row = {"ts": offset_ms, "jobId": job_id, "phase": phase, "step": step, "detail": detail, "level": level}
+        if counts:
+            row["counts"] = counts
+        return row
+    return [
+        ev(200, "harvest", "read", "1 graded attempt(s) in cycle 5"),
+        ev(600, "harvest", "questions", "1 question(s); 1 gap(s) measured with no brain write",
+           {"questions": 1, "skipped": 1}),
+        ev(4_000, "done", "harvested",
+           f"Batch {batch_id}: 1 question(s) asked, 1 lesson proposal(s) kept, 0 dropped. "
+           "Review them and apply to teach the brain.",
+           {"batch": batch_id, "questions": 1, "accepted": 1, "rejected": 0}),
+    ]
+
+
+def harvest_apply_script(job_id: str, written: int) -> list[dict[str, Any]]:
+    def ev(offset_ms, phase, step, detail, counts=None, level="info"):
+        row = {"ts": offset_ms, "jobId": job_id, "phase": phase, "step": step, "detail": detail, "level": level}
+        if counts:
+            row["counts"] = counts
+        return row
+    return [
+        ev(200, "apply", "lesson-written", "gym-lesson-b2-r9-g0 -> lessons/gym-lesson-b2-r9-g0.md"),
+        ev(900, "reindex", "brain-read", "12 units from 7 file(s), schema 1"),
+        ev(1_600, "reindex", "ingested", "12 units, 49 chunks"),
+        ev(2_000, "done", "applied",
+           f"{written} lesson(s) written into the brain and the index rebuilt from it.",
+           {"written": written}),
+    ]
+
+
+def harvest_apply_refused_script(job_id: str, reason: str) -> list[dict[str, Any]]:
+    return [{
+        "ts": 200, "jobId": job_id, "phase": "done", "step": "failed",
+        "detail": reason, "level": "error",
+    }]
+
 
 BOARD_ROWS: list[dict[str, Any]] = [
     {

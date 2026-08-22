@@ -209,6 +209,20 @@
     width: 1fr;
 }
 
+/* Without an explicit height the budget row collapsed inside its tab and the
+   re-measure button was invisible (owner field, 2026-08-22). */
+#budget-row {
+    height: 3;
+}
+
+#brain-budget {
+    width: 30;
+}
+
+#mcp-unlock {
+    margin: 0 0 1 0;
+}
+
 #chunk-table {
     height: 12;
 }
@@ -308,6 +322,21 @@
     width: 80;
 }
 
+/* The block panel is the field test's most important message: it gets its own
+   bordered box with breathing room instead of sitting flush under the scope
+   input (owner field, 2026-08-22). */
+#init-blocked {
+    height: auto;
+    padding: 1;
+    margin: 1 0;
+    border: round $warning;
+}
+
+#init-blocked-actions {
+    height: 3;
+    margin: 0 0 1 0;
+}
+
 #exam-filters {
     height: 3;
 }
@@ -373,6 +402,17 @@
 
 #agent-file-text {
     height: 20;
+}
+
+/* gates.yaml is YAML: it needs width and real lines, not a squeezed strip of
+   wrapped comments (owner field, 2026-08-22). */
+#gates-file-dialog {
+    width: 110;
+    max-width: 95%;
+}
+
+#gates-file-text {
+    height: 24;
 }
 
 .dialog-actions {

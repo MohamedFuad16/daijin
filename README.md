@@ -2,12 +2,12 @@
 
 # Daijin
 
-**A project brain for any repo: measured retrieval served over MCP, with a certification gym for coding agents. Terminal-native.**
+**A project brain for any repo: measured retrieval served over MCP, and a gym that grades what the brain teaches and feeds the lessons back. Terminal-native.**
 
 [![TUI](https://img.shields.io/badge/TUI-Python_Textual-1f425f?style=for-the-badge&logo=python&logoColor=white)](tui/)
 [![Engine](https://img.shields.io/badge/Engine-Node_22_ESM-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)](engine/)
 [![Retrieval](https://img.shields.io/badge/Retrieval-Local_first%2C_zero_spend-brightgreen?style=for-the-badge)](#the-floor-is-measured)
-[![Tests](https://img.shields.io/badge/Tests-900%2B_across_both_suites-blue?style=for-the-badge)](#getting-started)
+[![Tests](https://img.shields.io/badge/Tests-1250%2B_across_both_suites-blue?style=for-the-badge)](#development)
 
 </div>
 
@@ -24,7 +24,11 @@ questions about its own repo does not get recommended to your tools.
 On top of the brain sits a **certification gym**: exams mined from the repo's
 real commit history, run under a harness with graded five-axis rubrics, an
 append-only ledger, and a spend gate that is **blocked by default** and opened
-only by the owner's hand.
+only by the owner's hand. The loop closes: graded gaps become questions to the
+teacher role, surviving answers become **lesson proposals**, and applying an
+accepted batch writes durable lessons into the brain and reindexes it, so
+retrieval improves from what the gym measured - an active RAG loop with a
+human hand on every write.
 
 The whole product is terminal-native: a Python Textual TUI over a Node engine
 daemon, speaking a frozen JSON-RPC contract over stdio or a Unix socket.
@@ -53,7 +57,25 @@ daemon, speaking a frozen JSON-RPC contract over stdio or a Unix socket.
   rendered as radar and dithered charts, per-attempt token accounting against
   the real cap, quarantine semantics for compromised benchmarks, and
   certify-by-elimination. All provider spend sits behind an owner-only gate
-  file; the engine can only ever write it blocked.
+  file; the engine can only ever write it blocked. Run modes read plainly in
+  the UI: practice (ungraded), graded practice, and official runs that touch
+  the scored record.
+- **The learning loop**: `gymHarvest` turns graded gaps into lesson proposals
+  (proposal-only, teacher-answered, citation-checked against current code);
+  `gymHarvestApply` is the owner's separate act that writes accepted
+  evaluation lessons into `.daijin/brain/lessons/` and reindexes. A rubric
+  graded below pass must name its gaps, and measured-only tags (model-limit,
+  harness-defect, stale-gold) never write to the brain - the loop refuses to
+  teach a lie.
+- **Four model roles, yours to configure**: the engineer (student under
+  test), teacher (grades with citations), auditor (mines exams, narrates
+  diagnoses, triages findings), and watcher (verifies findings cheaply, in
+  its own voice, before the auditor reads them). Any OpenAI-compatible
+  provider or a local Claude Code agent per role.
+- **A board with a goal loop**: a zero-spend watcher sweep that runs until
+  the tool is clean, with optional paid triage where the watcher verifies
+  each finding and the auditor judges it - both voices on the finding's
+  thread.
 - **Eight-screen TUI**: repos, init activity feed (live step events), brain
   browser + retrieval tester, gates, gym, exams, board, settings. Textured
   chart vocabulary (pattern and color as two channels, readable without
@@ -76,7 +98,9 @@ daemon, speaking a frozen JSON-RPC contract over stdio or a Unix socket.
 3. Floor      retrieval is scored against the gold set, with a permuted control beside it.
 4. Serve      above the floor, daijin hands you a paste-ready MCP snippet for your tools.
 5. Gym        (owner-gated) exams run under the harness; rubrics grade five axes; the
-              ledger records everything, and only evaluation-mode runs touch the scored record.
+              ledger records everything, and only official runs touch the scored record.
+6. Learn      graded gaps become teacher-answered lesson proposals; applying an accepted
+              batch writes lessons into the brain and reindexes, closing the RAG loop.
 ```
 
 ## Tech Stack
@@ -89,7 +113,7 @@ daemon, speaking a frozen JSON-RPC contract over stdio or a Unix socket.
 | Embeddings | Ollama, `bge-m3`, fully local |
 | RPC | JSON-RPC 2.0 over stdio or Unix socket, frozen contract (`methods.md` v5) |
 | Serving | MCP (Model Context Protocol) server per repo |
-| Testing | `node:test` (engine, 600+) and pytest (TUI, 320+), mutation-verified gates |
+| Testing | `node:test` (engine, 800+) and pytest (TUI, 450+), mutation-verified gates |
 
 ## Project Structure
 
@@ -141,12 +165,12 @@ To hack on Daijin itself rather than install it:
 # Engine
 cd engine
 npm install
-npm test                 # 600+ tests, zero network, zero spend
+npm test                 # 800+ tests, zero network, zero spend
 
 # TUI
 cd ../tui
 python -m venv .venv && .venv/bin/pip install -e '.[dev]'
-.venv/bin/python -m pytest   # 320+ tests
+.venv/bin/python -m pytest   # 450+ tests
 .venv/bin/daijin . --mock    # run the dev checkout directly
 ```
 

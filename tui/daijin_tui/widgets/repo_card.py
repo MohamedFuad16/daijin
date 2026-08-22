@@ -9,7 +9,8 @@ from textual.containers import Horizontal, Vertical
 from textual.message import Message
 from textual.widgets import Button, Static
 
-from .common import MCP_THRESHOLD, case_rate_value, format_case_rate, format_ratio, health_glyph
+from .common import MCP_THRESHOLD, case_rate_value, format_ratio, health_glyph
+from .gauge import Gauge
 from .sparkline import Sparkline
 
 
@@ -76,7 +77,10 @@ class RepoCard(Vertical):
         yield Static(f"[b]{glyph}[/b] [b]{name}[/b]", markup=True, classes=f"card-title {klass}")
         yield Static(self.repo_path, classes="card-path")
         yield Static(self._floor_text(), markup=True, classes="card-floor")
-        yield Sparkline([], caption="floor over time", classes="card-spark")
+        # The bar the owner asked for (field, 2026-08-22): the rate as a fill,
+        # under the percentage, so a glance reads it without parsing a ratio.
+        yield Gauge(caption="", width=36, classes="card-gauge")
+        yield Sparkline([], caption="accuracy over time", classes="card-spark")
         yield Static(self._mcp_text(), markup=True, classes="card-mcp")
         with Horizontal(classes="card-actions"):
             yield Button(
@@ -108,37 +112,35 @@ class RepoCard(Vertical):
         if self.case_rate is not None:
             value = case_rate_value(self.case_rate)
             tone = "green" if (value or 0) >= MCP_THRESHOLD else "yellow"
-            return (
-                f"floor [{tone}]{format_case_rate(self.case_rate)}[/{tone}] cases  "
-                f"[dim]ratio {format_ratio(value)}, threshold {MCP_THRESHOLD}[/dim]"
-            )
+            return f"MCP retrieval rate [{tone} b]{(value or 0) * 100:.0f}%[/{tone} b]"
         floor = self.repo.get("floorScore")
         if floor is None:
             # "no brain yet" is only true for no-brain. A warn repo with a null
             # floor HAS a brain that nobody has scored, which is a different
             # thing to tell the user and a different thing for them to do.
             if self.repo.get("health") == "no-brain":
-                return "[dim]floor not measured, no brain yet[/dim]"
+                return "[dim]no brain yet - press Initialize brain[/dim]"
             return "[dim]indexed, floor never measured. Run the retrieval score.[/dim]"
         tone = "green" if floor >= MCP_THRESHOLD else "yellow"
-        return (
-            f"floor ratio [{tone}]{format_ratio(floor)}[/{tone}]  "
-            f"[dim]denominator not carried by serveStatus, threshold {MCP_THRESHOLD}[/dim]"
-        )
+        return f"MCP retrieval rate [{tone} b]{floor * 100:.0f}%[/{tone} b]"
 
     def _mcp_text(self) -> str:
         active = self.repo.get("mcpActive")
         if active:
             return "[green]MCP serving[/green]"
         if self.needs_brain:
-            return "[dim]MCP locked until the floor is measured[/dim]"
+            return "[dim]MCP off until the brain is built and measured[/dim]"
         return "[yellow]MCP idle[/yellow]"
 
     def set_score(self, score: dict[str, Any]) -> None:
-        """Fill the current floor from one retrievalScore result."""
+        """Fill the current rate and its bar from one retrievalScore result."""
         self.case_rate = score.get("caseRate")
         for child in self.query(".card-floor"):
             child.update(self._floor_text())
+        value = case_rate_value(self.case_rate)
+        if value is not None:
+            for gauge in self.query(Gauge):
+                gauge.set_value(float(value))
 
     def set_history(self, history: list[dict[str, Any]]) -> None:
         """Draw the floor over TIME from scoreHistory.
@@ -153,9 +155,9 @@ class RepoCard(Vertical):
         if history:
             oldest = history[-1].get("at", "")[:10]
             newest = history[0].get("at", "")[:10]
-            caption = f"floor over time, {oldest} to {newest}, {len(history)} measurements"
+            caption = f"accuracy over time, {oldest} to {newest}, {len(history)} measurements"
         else:
-            caption = "floor over time, no measurements yet"
+            caption = "accuracy over time, no measurements yet"
         for child in self.query(Sparkline):
             child.set_values(self.history, caption)
 
@@ -173,7 +175,13 @@ class RepoCard(Vertical):
             child.update("[dim]not read, because the calls above did not answer[/dim]")
 
     def set_has_brain(self, has_brain: bool) -> None:
-        """Authoritative answer from analyze(repoPath).hasBrainFolder."""
+        """DEPRECATED overriding answer; health is the wire's authority.
+
+        analyze(repoPath).hasBrainFolder answers "is there a knowledge folder
+        to adopt", which is TRUE for any repo with an agent/ or docs folder,
+        and using it here offered "Open brain" on repos with no brain at all
+        (found live, fresh-attach walkthrough 2026-08-23).
+        """
         self.has_brain = has_brain
         for button in self.query(".card-action"):
             button.label = "Initialize brain" if self.needs_brain else "Open brain"

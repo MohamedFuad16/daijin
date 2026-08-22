@@ -435,7 +435,7 @@ test('the rubric migration is appended, not edited, and the ledger refuses an ed
     const first = GymLedger.open(file);
     assert.deepEqual(
       first.database.prepare('SELECT id FROM schema_migration ORDER BY id').all().map((row) => row.id),
-      ['001-gym-base', '002-rubrics', '003-certification-rubric'],
+      ['001-gym-base', '002-rubrics', '003-certification-rubric', '004-harvest'],
       'appended, so an existing ledger gains the tables without 001 being touched',
     );
     first.close();

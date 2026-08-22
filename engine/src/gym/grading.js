@@ -210,6 +210,20 @@ export function validateRubric(rubric, packet, { grader, exam } = {}) {
     }
   }
 
+  // A sub-passing verdict must be ATTRIBUTED: at least one gap saying what went wrong.
+  // This is the platform's cycle 32 verbatim - empty gaps on failed exams, teaching
+  // nothing while looking complete. Attribution never forces invention: model-limit and
+  // harness-defect are measured and write nothing to the brain. The check reads the
+  // verdict the teacher AUTHORED, not the capped one below - a partial manufactured by
+  // the metric-regression cap carries the cap itself as its reason, and the teacher
+  // cannot be refused for a mechanical downgrade it never saw.
+  if (rubric.verdict !== 'pass' && (rubric.gaps ?? []).length === 0) {
+    throw new RubricRefused(
+      `Run ${runId} is graded ${rubric.verdict} with no gap recorded; a sub-passing verdict with empty gaps teaches nothing while looking complete.`,
+      { runId, field: 'gaps' },
+    );
+  }
+
   return {
     ...rubric,
     verdict: capVerdict(rubric.verdict, packet),

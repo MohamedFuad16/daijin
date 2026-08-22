@@ -61,6 +61,10 @@ export function statePaths(stateRoot, repoId) {
     // so a cleared index must not take these with it.
     recordsRoot: path.join(root, 'records'),
     scoreHistoryPath: path.join(root, 'records', 'score-history.json'),
+    // The FULL last measurement (perCase, sweep, mrr), so a screen can open on the stored
+    // number instantly instead of re-running an embedding sweep per visit. The history
+    // above stays the trend; this is the detail of its newest row.
+    lastScorePath: path.join(root, 'records', 'last-score.json'),
   };
 }
 

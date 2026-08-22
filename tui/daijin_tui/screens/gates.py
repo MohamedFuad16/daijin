@@ -13,6 +13,8 @@ from textual import work
 from textual.containers import Horizontal
 from textual.widgets import Button, DataTable, Static
 
+from textual.content import Content
+
 from .. import mock_data
 from ..rpc import RpcError
 from ..stream import FLUSH_INTERVAL, StreamCoalescer
@@ -21,21 +23,29 @@ from ..widgets import Banner, EventLog, PhaseChecklist, SectionTitle
 from .base import DaijinScreen
 from .dialogs import GatesFileEditScreen
 
-GATE_COLUMNS = ("gate", "role", "classification", "enabled", "baseline", "command")
+GATE_COLUMNS = ("check", "kind", "state", "used", "last run", "command")
+
+# Wire values stay the contract's; what the user reads is plainer (D-0067).
+CLASSIFICATION_LABELS = {
+    "live": "working",
+    "measured": "tracked by number",
+    "pre-broken": "already failing",
+    "unavailable": "cannot run here",
+}
 
 CLASSIFICATION_NOTE = {
-    "live": "passes on baseline, fails on a regression. Real coverage.",
-    "measured": "pre-existing violations, judged on movement rather than on a verdict.",
-    "pre-broken": "fails on baseline and candidate alike. Excluded and labelled, never silent coverage.",
-    "unavailable": "the command cannot run here. Excluded and labelled.",
+    "live": "passes on the untouched repo, so a failure after a change means the change broke it.",
+    "measured": "prints a number; judged on whether the number gets worse, not pass/fail.",
+    "pre-broken": "already failing before any change, so it cannot judge one. Set aside, never counted as coverage.",
+    "unavailable": "its tool is not installed on this machine. Set aside, never counted as coverage.",
 }
 
 
 class GatesScreen(DaijinScreen):
     mode_name = "gates"
     notice_id = "#gates-notice"
-    heading = "Repo work gates"
-    subheading = "discovered data, classified against the baseline, editable"
+    heading = "Checks"
+    subheading = "the repo's own tests, builds and linters; daijin runs them to judge a change"
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
@@ -51,24 +61,37 @@ class GatesScreen(DaijinScreen):
 
     def content(self) -> Iterable[Any]:
         yield Banner("", tone="info", id="gates-notice")
+        yield Static(
+            "These are the checks daijin found in this repo - test, build and lint "
+            "commands. Before the gym grades a change, it runs them on the untouched "
+            "code and again after the change: a check that passes before and fails "
+            "after is how a bad change gets caught.",
+            id="gates-intro",
+            markup=True,
+        )
         with Horizontal(id="gates-controls"):
-            yield Button("Discover gates", id="gates-discover", variant="primary")
+            yield Button("Find this repo's checks", id="gates-discover", variant="primary")
             # There is no per-row action. The engine refuses a structural patch
             # with -32602 in every file state, because gates.yaml is the user's
             # document and it replaces the whole of it or nothing.
             yield Button("Edit gates.yaml", id="gates-edit")
-        yield SectionTitle("gates.yaml", "the engine treats this as data")
+        yield SectionTitle("Discovered checks", "stored in gates.yaml; edit it and the engine obeys")
         yield DataTable(id="gates-table", cursor_type="row")
         yield Static("", id="gates-raw", markup=True)
-        yield SectionTitle("Liveness evidence", "why this gate is classified the way it is")
-        yield Static("[dim]no gate selected[/dim]", id="gate-evidence", markup=True)
-        yield SectionTitle("Discovery stream")
+        yield SectionTitle("Why it is classified that way", "select a row above")
+        yield Static("[dim]no check selected[/dim]", id="gate-evidence", markup=True)
+        # The discovery progress exists only while a discovery is running; an idle
+        # checklist of pending steps read as a broken widget (owner field, 2026-08-22).
+        yield SectionTitle("Finding checks", id="gates-stream-title")
         yield PhaseChecklist(mock_data.GATES_PHASES, id="gates-checklist")
         yield EventLog(id="gates-events")
 
     async def load(self) -> None:
         self._subscribe()
         self.refresh_heading()
+        # The progress stream earns its screen space only once a discovery has
+        # run; an idle checklist of pending steps read as a broken widget.
+        self._set_stream_visible(self.job_id is not None)
         table = self.query_one("#gates-table", DataTable)
         if not table.columns:
             table.add_columns(*GATE_COLUMNS)
@@ -115,12 +138,14 @@ class GatesScreen(DaijinScreen):
             # a file that parses perfectly and simply has no gates: key. Naming
             # a cause the response does not claim is a false explanation, so the
             # headline stays neutral and the engine's own sentence carries it.
-            text_panel.update(
-                f"[b]No gate list could be taken from this file.[/b]\n"
+            # $raw substitutes as PLAIN text: gates.yaml is the user's file and
+            # its bracketed lists parse as markup tags if interpolated raw.
+            text_panel.update(Content.from_markup(
+                "[b]No gate list could be taken from this file.[/b]\n"
                 f"[red]{self.parse_error or 'the engine gave no reason'}[/red]\n\n"
-                f"The file as it stands:\n\n"
-                + (self.raw_content or "[dim]the file is empty[/dim]")
-            )
+                "The file as it stands:\n\n$raw",
+                raw=self.raw_content or "(the file is empty)",
+            ))
             notice.set_notice(
                 f"{record.get('path', 'gates.yaml')}: no gate list could be taken "
                 f"from it, so nothing in it is classified. This is not zero gates, "
@@ -154,10 +179,11 @@ class GatesScreen(DaijinScreen):
             # classification and the baseline are written by discovery, so
             # until it runs these keys are ABSENT rather than false, and a
             # blank cell would read as a verdict nobody reached.
+            classification = gate.get("classification")
             table.add_row(
                 gate.get("id", ""),
                 gate.get("role") or "-",
-                gate.get("classification") or "not classified",
+                CLASSIFICATION_LABELS.get(classification, classification or "not checked yet"),
                 "yes" if gate.get("enabled") else ("no" if "enabled" in gate else "-"),
                 baseline.get("status") or "not run",
                 gate.get("command", ""),
@@ -185,6 +211,11 @@ class GatesScreen(DaijinScreen):
         if self.gates:
             self._show_gate(self.gates[0])
 
+    def _set_stream_visible(self, visible: bool) -> None:
+        for selector in ("#gates-stream-title", "#gates-checklist", "#gates-events"):
+            for widget in self.query(selector):
+                widget.display = visible
+
     def _show_gate(self, gate: dict[str, Any]) -> None:
         if not gate:
             # Which empty this is matters. One says the file has nothing in it,
@@ -203,14 +234,15 @@ class GatesScreen(DaijinScreen):
         # saying so beats printing None four times.
         if not baseline:
             evidence = [
-                "No baseline has been run over this row, so nothing here is "
-                "measured yet. Run discovery to classify it."
+                "This check has not been run yet. Press \"Find this repo's checks\" "
+                "to run and classify it."
             ]
         else:
-            evidence = [
-                f"status {baseline.get('status', 'not run')}, exit {baseline.get('exitCode')}, "
-                f"{baseline.get('durationMs')} ms of a {baseline.get('timeoutMs')} ms budget"
-            ]
+            status = baseline.get("status", "not run")
+            took = baseline.get("durationMs")
+            took_text = f" in {took / 1000:.1f}s" if isinstance(took, (int, float)) else ""
+            said = {"pass": "succeeded", "fail": "failed", "unavailable": "could not run"}.get(status, status)
+            evidence = [f"On the untouched repo, this check {said}{took_text}."]
         if baseline.get("unavailableReason"):
             evidence.append(f"unavailable: {baseline['unavailableReason']}")
         if gate.get("unavailableHint"):
@@ -221,10 +253,10 @@ class GatesScreen(DaijinScreen):
                 evidence.append(f"{stream}: {tail.splitlines()[-1][:100]}")
         # source is written by discovery too, so a hand-typed row has none and
         # "from None" is the word None leaking into copy.
-        origin = f"  [dim]from {gate['source']}[/dim]" if gate.get("source") else "  [dim]hand written[/dim]"
+        origin = f"  [dim]found in {gate['source']}[/dim]" if gate.get("source") else "  [dim]added by hand[/dim]"
         self.query_one("#gate-evidence", Static).update(
             f"[b]{gate.get('id')}[/b]  {gate.get('command')}{origin}\n"
-            f"classification [b]{classification or 'not classified'}[/b]  "
+            f"[b]{CLASSIFICATION_LABELS.get(classification, classification or 'not checked yet')}[/b]  "
             f"[dim]{CLASSIFICATION_NOTE.get(classification, '')}[/dim]\n"
             + "\n".join(evidence)
         )
@@ -253,6 +285,7 @@ class GatesScreen(DaijinScreen):
         button_id = event.button.id
         event.stop()
         if button_id == "gates-discover":
+            self._set_stream_visible(True)
             await self.discover()
         elif button_id == "gates-edit":
             self.edit_document()

@@ -25,14 +25,14 @@ BOARD_COLUMNS = ("ts", "source", "severity", "category", "target", "evidence", "
 
 SEVERITY_OPTIONS = [("all severities", "all"), ("info", "info"), ("warn", "warn"), ("critical", "critical")]
 SOURCE_OPTIONS = [("all sources", "all"), ("watcher", "watcher"), ("auditor", "auditor"), ("engine", "engine")]
-STATUS_OPTIONS = [("all statuses", "all"), ("open", "open"), ("triaged", "triaged"), ("resolved", "resolved")]
+STATUS_OPTIONS = [("all statuses", "all"), ("open", "open"), ("reviewed", "triaged"), ("resolved", "resolved")]
 
 
 class BoardScreen(DaijinScreen):
     mode_name = "board"
     notice_id = "#board-notice"
     heading = "Board"
-    subheading = "watcher detects, auditor judges, the user reads"
+    subheading = "everything the watcher notices about this tool, and what the auditor says about it"
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
@@ -42,13 +42,21 @@ class BoardScreen(DaijinScreen):
 
     def content(self) -> Iterable[Any]:
         yield Banner("", tone="info", id="board-notice")
+        yield Static(
+            "The watcher sweeps the tool and posts what it finds here. Start the goal "
+            "loop to sweep until everything is clean; tick the review box and the "
+            "watcher verifies each finding and the auditor weighs in - both voices "
+            "land in the thread below.",
+            id="board-intro",
+            markup=True,
+        )
         with Horizontal(id="board-filters"):
             yield Select(SEVERITY_OPTIONS, value="all", id="filter-severity", allow_blank=False)
             yield Select(SOURCE_OPTIONS, value="all", id="filter-source", allow_blank=False)
             yield Select(STATUS_OPTIONS, value="all", id="filter-status", allow_blank=False)
-            yield Button("Apply", id="board-apply", variant="primary")
+            yield Button("Filter", id="board-apply", variant="primary")
         yield DataTable(id="board-table", cursor_type="row")
-        yield SectionTitle("Status thread", "corrections are dated in place, withdrawn claims are marked, never deleted")
+        yield SectionTitle("What was said about it", "watcher first, then the auditor; corrections are dated, never deleted")
         yield Static("[dim]no finding selected[/dim]", id="board-detail", markup=True)
         with Horizontal(id="board-actions"):
             yield Button("Apply auditor fix", id="board-fix", variant="warning")
@@ -56,7 +64,7 @@ class BoardScreen(DaijinScreen):
             # is clean. Zero spend on its own; the auditor triage checkbox is
             # what makes it a paid loop, so it is a separate, explicit choice.
             yield Button("Start goal loop", id="board-goal", variant="primary")
-            yield Checkbox("auditor triages and fixes (spends)", id="board-goal-triage", value=False)
+            yield Checkbox("review new findings (spends)", id="board-goal-triage", value=False)
 
     async def load(self) -> None:
         # boardFinding notifications are not job scoped and arrive with no job
@@ -175,8 +183,11 @@ class BoardScreen(DaijinScreen):
             lines.append(
                 f"[dim]evidence {row.get('evidence')} into the jsonl stream, status {row.get('status')}[/dim]"
             )
+        voice_tone = {"watcher": "cyan", "auditor": "magenta"}
         thread = "\n".join(
-            f"  {entry.get('at', '')}  [b]{entry.get('by', '')}[/b]  {entry.get('text', '')}"
+            f"  [{voice_tone.get(entry.get('by'), 'white')} b]{entry.get('by', '')}[/{voice_tone.get(entry.get('by'), 'white')} b]"
+            f" [dim]{str(entry.get('at', ''))[:16].replace('T', ' ')}[/dim]\n"
+            f"    {entry.get('text', '')}"
             for entry in row.get("thread", [])
         )
         if thread:
@@ -227,13 +238,14 @@ class BoardScreen(DaijinScreen):
                 method="goalStart",
                 summary=(
                     "The watcher sweeps the whole tool on a loop until nothing is open. "
-                    "With triage on, the AUDITOR role reads every new finding, which is "
-                    "one real provider generation per finding, and may apply a fix from "
-                    "daijin's closed catalog. It needs the owner gate too."
+                    "With review on, the WATCHER role double-checks each new finding and "
+                    "the AUDITOR role decides what should happen - one real provider "
+                    "generation per finding for each - and the auditor may apply a fix "
+                    "from daijin's closed catalog. It needs the owner gate too."
                 ),
-                estimate_lines=["one auditor generation per NEW finding, not per sweep",
+                estimate_lines=["one watcher check and one auditor read per NEW finding, not per sweep",
                                 "the sweep itself, and every fix, cost nothing"],
-                confirm_label="Run the loop with auditor triage",
+                confirm_label="Run the loop with reviews",
             )
             if not confirmed:
                 notice.set_notice("Not started. Nothing was sent to a provider.", "info")
@@ -263,7 +275,7 @@ class BoardScreen(DaijinScreen):
         notice.set_notice(
             f"Goal loop running, job {self.goal_job_id}. It sweeps the tool, runs this "
             f"repo's gates and reads the exam bank, and stops itself when two sweeps in "
-            f"a row find nothing." + (" The auditor triages each new finding." if triage else ""),
+            f"a row find nothing." + (" The watcher and auditor review each new finding." if triage else ""),
             "info",
         )
 

@@ -16,7 +16,7 @@ import { homedir } from 'node:os';
 import { loadProviderCatalog } from '../roles/providers.js';
 import { resolveKey } from '../roles/keys.js';
 import { pingProvider } from '../roles/ping.js';
-import { FIX_CATALOG, ZAI_PAYG_URL, auditTriage, examBankFindings, gateFindings, gateRunFindings, goalStopDecision, roleFindings, statusFindings } from './watch.js';
+import { FIX_CATALOG, ZAI_PAYG_URL, auditTriage, examBankFindings, gateFindings, gateRunFindings, goalStopDecision, roleFindings, statusFindings, watcherVerify } from './watch.js';
 import { scanAgentCatalog } from '../roles/agents.js';
 import { cloneRepository, parseCloneUrl } from '../init/clone.js';
 import { createHash } from 'node:crypto';
@@ -29,7 +29,8 @@ import YAML from 'yaml';
 import { analyze as analyzeRepo } from '../init/analyze.js';
 import { discoverGates, gatesFilePath, renderGatesYaml } from '../init/gate-discovery.js';
 import { embedderFromOllama, servedIndexIdentity } from '../init/ingest.js';
-import { initBrain as runInitPipeline } from '../init/pipeline.js';
+import { artifactPaths, initBrain as runInitPipeline, reindexFromBrain } from '../init/pipeline.js';
+import { writeLessonUnit } from '../init/brain-artifacts.js';
 import { caseRateOf, MCP_UNLOCK_THRESHOLD, mcpUnlock } from '../init/floor.js';
 import { discriminatingRange, permuteAnswers } from '../init/rerank-ab.js';
 import { scoreGoldset } from '../init/retrieval-score.js';
@@ -39,7 +40,9 @@ import { formatContext } from '../rag/context.js';
 import { retrieve as retrieveImpl } from '../rag/retrieve.js';
 import { getAgentFile as readAgentFile, setAgentFile as writeAgentFile, studentRules } from '../gym/agent-files.js';
 import { runGymCycle } from '../gym/cycle.js';
-import { AXES } from '../gym/grading.js';
+import { AXES, buildGradingPacket } from '../gym/grading.js';
+import { answersToProposals, applyProposals, buildHarvestQuestions, curateProposals, harvestBatch } from '../gym/harvest.js';
+import { harvestAnswersWithTeacher } from '../gym/teacher-driver.js';
 import { examDrawRefusal, examListRow, parseExamRecord, quarantineExam, vetoExam } from '../gym/exams.js';
 import { GymLedger, gymDatabasePath } from '../gym/ledger.js';
 import { loadResultFiles } from '../gym/result-files.js';
@@ -53,7 +56,7 @@ import { createSandbox } from '../gym/sandbox.js';
 import { expandGates, runGateSet } from '../gym/gates.js';
 import { createSqliteStore } from '../store/sqlite.js';
 import { noteOrigin, repoLayout } from '../state/layout.js';
-import { invalidParams, notImplemented, spendRefused } from './errors.js';
+import { invalidParams, spendRefused } from './errors.js';
 
 /**
  * The health states a repo row can report, and the only source of them.
@@ -1349,6 +1352,16 @@ export function createMethods({
 
     async retrievalScore(params) {
       const repoPath = await requireAttached(params);
+      // recall: true serves the STORED last measurement instantly, stamped recalled: true
+      // with the `at` it was taken. A screen opening on a repo should not re-run an
+      // embedding sweep per visit - measuring is the explicit button. No stored record
+      // falls through to a real measurement, so a first look still works.
+      if (params?.recall === true) {
+        try {
+          const stored = JSON.parse(await readFile((await layoutFor(repoPath)).lastScorePath, 'utf8'));
+          if (stored?.record?.caseRate) return { ...stored.record, recalled: true };
+        } catch { /* nothing stored yet; measure below */ }
+      }
       const goldsetPath = (await layoutFor(repoPath)).goldsetPath;
       const settings = await state.settings();
       // `project` is filled in from the STORE below, not here. A null scope reaches
@@ -1445,6 +1458,13 @@ export function createMethods({
           embedding: chosen.record?.embedding ?? null,
           violations: record.violations ?? null,
         }, { store, at: record.at });
+
+        // The FULL record beside the history row, so recall: true (and diagnose's recall)
+        // can serve this measurement without re-running the sweep. The raw scorer results
+        // ride along because clustering needs the misses arrays, not the display rows.
+        const layout = await layoutFor(repoPath);
+        await mkdir(path.dirname(layout.lastScorePath), { recursive: true });
+        await writeFile(layout.lastScorePath, JSON.stringify({ record, results: chosen.results }, null, 2), 'utf8');
 
         return record;
       });
@@ -1547,6 +1567,38 @@ export function createMethods({
       const repoPath = await requireAttached(params);
       const goldsetPath = (await layoutFor(repoPath)).goldsetPath;
       const settings = await state.settings();
+      // recall: true clusters over the STORED last measurement - arithmetic and a sqlite
+      // read, no embedder. The arms column is unattributed on recall because per-arm
+      // diagnostics are not stored; a fresh diagnose (the default) still carries them.
+      if (params?.recall === true) {
+        let stored = null;
+        try {
+          stored = JSON.parse(await readFile((await layoutFor(repoPath)).lastScorePath, 'utf8'));
+        } catch { /* nothing stored yet; measure below */ }
+        if (Array.isArray(stored?.results) && stored.results.length) {
+          return withStore(repoPath, async (store) => {
+            const inventory = new Map((await store.allDocuments({ project: null }))
+              .map((row) => [row.id, { type: row.type, area: row.meta?.area ?? null }]));
+            const clustered = clusterCases(stored.results, inventory, new Map());
+            const fingerprint = rangeFingerprint({
+              k: settings.retrieval?.k ?? 8,
+              tokenBudget: settings.retrieval?.tokenBudget ?? 4_000,
+              goldset: await readFile(goldsetPath, 'utf8').catch(() => ''),
+              documents: inventory.size,
+            });
+            return {
+              caseRate: caseRateShape(stored.results),
+              violations: stored.record?.violations ?? 0,
+              ...clustered,
+              discriminatingRange: await recallRange(repoPath, fingerprint),
+              controlSkipped: null,
+              recommendation: null,
+              recalled: true,
+              at: stored.record?.at ?? null,
+            };
+          });
+        }
+      }
       return withStore(repoPath, async (store) => {
         const environment = await embedderEnvironment(store, { ollamaBaseUrl: settings.retrieval?.ollamaBaseUrl });
         if (!environment) {
@@ -1779,8 +1831,19 @@ export function createMethods({
         if (wanted.length === 0) {
           throw invalidParams('unknown examId', `${config.examId} is not a promoted, active exam in this bank.`);
         }
-        // Full records, not list rows: the runner needs the whole exam.
-        return wanted.slice(0, config.cohortSize ?? 1).map((row) => ledger.getExam(row.examId));
+        // An OPEN draw (no examId) skips exams the draw rule would refuse - a reserved
+        // held-out exam in a training cohort is excluded from sampling, not a reason to
+        // fail the whole run. The rule is asked, not duplicated. An EXPLICIT pick keeps
+        // its loud refusal below, because a person naming a reserved exam should be told.
+        const records = wanted.map((row) => ledger.getExam(row.examId));
+        const pool = config.examId
+          ? records
+          : records.filter((exam) => !examDrawRefusal(exam, { mode: config.mode ?? 'harness-debug', cohort: config.cohort ?? 'training' }));
+        if (pool.length === 0) {
+          throw invalidParams('nothing drawable',
+            'Every promoted exam is reserved for held-out measurement under the current mode and cohort. Pick one explicitly to run it as held-out, or promote more exams.');
+        }
+        return pool.slice(0, config.cohortSize ?? 1);
       });
 
       // THE DRAW RULES ARE CHECKED HERE, before consent buys a cycle the runner
@@ -1873,7 +1936,16 @@ export function createMethods({
                 { query, project: store.project, excludeDocumentIds, tokenBudget: settings.retrieval?.tokenBudget ?? 4_000 },
                 { store, environment },
               );
-              return formatContext(result);
+              // Context AND the ids it carried: the run artifact records what was shown, so
+              // the teacher's citations and the harvest's absent-list have a real list to
+              // check against instead of a permanently empty one.
+              return {
+                context: formatContext(result),
+                // Deduplicated: retrieve.js already unions the standing ids into
+                // retrievedIds, and a doubled id reaches the teacher's citable list as a
+                // doubled id in the prompt's own sentence.
+                shownDocumentIds: [...new Set([...(result.meta?.retrievedIds || []), ...(result.meta?.standingIds || [])])],
+              };
             },
             policy: config.policy ?? {},
             repoPath,
@@ -1931,8 +2003,235 @@ export function createMethods({
           // renders that as "not derivable" and never as 0: a zero meaning "four exams
           // vanished" is the exact defect the drawn-cohort rule exists to remove.
           ledger: ledger.summary({ resultFiles: files }),
+          // Harvest batches, newest first. Summaries only: the full proposal set is read
+          // for review through the batch record, not painted on every status call.
+          harvest: ledger.harvestBatches(),
         };
       });
+    },
+
+    /**
+     * The learning half of the loop: turn a graded cycle's gaps into reviewed proposals.
+     *
+     * PROPOSAL-ONLY (P7 clause 10): this writes a batch record and never a brain document.
+     * The teacher answers one question per gap ("what knowledge, had it been retrieved,
+     * would have prevented this?"), harvest.js validates every answer, the curation gates
+     * and the citation backstop drop what cannot be checked, and the surviving batch lands
+     * in the ledger for the owner to read. gymHarvestApply is the separate act that writes.
+     */
+    async gymHarvest(params) {
+      const repoPath = await requireAttached(params);
+      // Same locks as the cycle that produced the grades: the teacher speaks, so the gate
+      // and per-call consent both apply, and the gate re-blocks when the job ends.
+      await assertGate('gym-cycle', { file: gymSpendGatePath(repoPath) });
+      await requireConsent('gymHarvest', params,
+        'Harvest asks the teacher role one question per graded gap, which is a real provider generation. Proposals are recorded for your review; nothing is written to the brain by this call.');
+      const settings = await state.settings();
+      // Built BEFORE the job, the gymStart rule: an unconfigured teacher refuses at the
+      // call, not inside a job the user already consented to.
+      const resolved = deps.createTeacher ? await deps.createTeacher({ settings, repoPath }) : await roleGenerate('teacher');
+      const teacher = { generate: resolved.generate };
+      const requestedCycle = Number.isInteger(params?.cycleId) ? params.cycleId : null;
+
+      const jobId = jobs.start('harvest', async ({ emit }) => {
+        let store = null;
+        let ledger = null;
+        try {
+          ledger = openLedger(repoPath);
+          const cycles = ledger.cycles();
+          const cycle = requestedCycle !== null
+            ? cycles.find((row) => row.id === requestedCycle)
+            : cycles.find((row) => row.status === 'completed' && isGradableRun(row.mode));
+          if (!cycle) {
+            throw new Error(requestedCycle !== null
+              ? `No cycle ${requestedCycle} exists in this ledger.`
+              : 'No completed graded cycle exists. Run the gym in a graded mode first; a debug run is never graded, so there is nothing to learn from it.');
+          }
+          if (!isGradableRun(cycle.mode)) {
+            throw new Error(`Cycle ${cycle.id} ran in mode ${cycle.mode}, which is never graded, so there is nothing to learn from.`);
+          }
+          const runs = ledger.cycleRuns(cycle.id, { scoredOnly: false });
+          const rubrics = runs.map((run) => ledger.rubricFor(run.id)).filter(Boolean);
+          if (rubrics.length === 0) throw new Error(`Cycle ${cycle.id} has no graded attempt to learn from.`);
+          emit('harvest', 'read', `${rubrics.length} graded attempt(s) in cycle ${cycle.id}`);
+
+          // Packets rebuilt from the result artifacts, never from anything the teacher
+          // says: the artifact recorded what the student was shown, and the gaps' target
+          // ids that exist but were not shown form the packet's absent list, which is
+          // exactly the set a retrieval-fix may name.
+          const examsByRunId = {};
+          const packetsByRunId = {};
+          const resultsRoot = (await layoutFor(repoPath)).gymResultsRoot;
+          for (const rubric of rubrics) {
+            const run = runs.find((row) => row.id === rubric.runId);
+            const exam = ledger.getExam(run.exam_id);
+            examsByRunId[rubric.runId] = exam;
+            let artifact = null;
+            try {
+              artifact = JSON.parse(await readFile(path.join(resultsRoot, run.result_file), 'utf8'));
+            } catch {
+              // A missing artifact leaves this run without a packet; targeted answers for
+              // it are refused by answersToProposals, which is the honest degradation.
+            }
+            if (artifact) {
+              const packet = buildGradingPacket({ artifact, exam });
+              packet.absentDocumentIds = (rubric.gaps || [])
+                .map((gap) => gap.targetDocumentId)
+                .filter((id) => id && !packet.shownDocumentIds.includes(id));
+              packetsByRunId[rubric.runId] = packet;
+            }
+          }
+
+          const { questions, skipped } = buildHarvestQuestions({ rubrics, examsByRunId });
+          emit('harvest', 'questions',
+            `${questions.length} question(s); ${skipped.length} gap(s) measured with no brain write`,
+            { counts: { questions: questions.length, skipped: skipped.length } });
+
+          let proposals = [];
+          if (questions.length > 0) {
+            store = await openBrain(repoPath);
+            const documents = await store.allDocuments({ project: null }).catch(() => []);
+            const answers = await (deps.harvestAnswers || harvestAnswersWithTeacher)({
+              questions, packetsByRunId, generate: teacher.generate,
+            });
+            proposals = answersToProposals(answers, questions, {
+              documentIds: documents.map((document) => document.id),
+              packetsByRunId,
+            });
+            proposals = await curateProposals(proposals, {
+              existingDocuments: documents,
+              // The citation backstop reads CURRENT code, confined to the repo: a teacher
+              // path that resolves outside it reads as "no longer exists" rather than as a
+              // window into the machine.
+              readFileLines: async (file) => {
+                const target = path.resolve(repoPath, String(file));
+                if (target !== repoPath && !target.startsWith(repoPath + path.sep)) return null;
+                try {
+                  return (await readFile(target, 'utf8')).split('\n').length;
+                } catch {
+                  return null;
+                }
+              },
+            });
+          }
+          const batch = harvestBatch({
+            cycleId: cycle.id, mode: cycle.mode, proposals, skipped, at: new Date(now()).toISOString(),
+          });
+          const batchId = ledger.recordHarvestBatch(batch);
+          const accepted = proposals.filter((proposal) => proposal.accepted).length;
+          emit('done', 'harvested',
+            `Batch ${batchId}: ${questions.length} question(s) asked, ${accepted} lesson proposal(s) kept, ${proposals.length - accepted} dropped. `
+            + (cycle.mode === 'evaluation'
+              ? (accepted ? 'Review them and apply to teach the brain.' : 'Zero kept is a measured outcome, and it is recorded as one.')
+              : 'An experiment batch is a recommendation to read; only an evaluation cycle teaches the brain.'),
+            { counts: { batch: batchId, questions: questions.length, accepted, rejected: proposals.length - accepted } });
+        } finally {
+          await store?.close?.();
+          ledger?.close?.();
+          // The gate re-blocks when the run ends (D-0060), same as every spending job.
+          await reblockGate(repoPath);
+        }
+      });
+      return { jobId };
+    },
+
+    /**
+     * THE SEPARATE ACT (P7 clause 10): write an evaluation batch's accepted proposals into
+     * the brain as lesson documents, and reindex so retrieval serves what was learned.
+     *
+     * No provider is called; this is the owner's hand, so it is not spend-gated, and
+     * consent is still explicit because it writes into the repo's brain. applyProposals and
+     * the ledger both refuse a non-evaluation batch and a second apply.
+     */
+    async gymHarvestApply(params) {
+      const repoPath = await requireAttached(params);
+      if (!Number.isInteger(params?.batchId)) {
+        throw invalidParams('batchId is required', 'gymHarvestApply needs the harvest batch to apply.');
+      }
+      await requireConsent('gymHarvestApply', params,
+        "Applying a harvest batch writes the accepted lessons into this repo's brain and reindexes it.");
+      const settings = await state.settings();
+
+      const jobId = jobs.start('harvest-apply', async ({ emit }) => {
+        let store = null;
+        let ledger = null;
+        try {
+          ledger = openLedger(repoPath);
+          const stored = ledger.getHarvestBatch(params.batchId);
+          if (!stored) throw new Error(`No harvest batch ${params.batchId} exists for this repo.`);
+          // The ledger column is the truth about application, not the stored record: the
+          // record is the batch as harvested, and it stays byte-identical after an apply.
+          if (stored.applied) throw new Error(`Harvest batch ${stored.id} has already been applied.`);
+          const brainRoot = artifactPaths(repoPath).brainRoot;
+
+          const applied = await applyProposals(stored.batch, {
+            mode: stored.mode,
+            writeDocument: async ({ kind, body, targetDocumentId, provenance }) => {
+              const id = `gym-lesson-b${stored.id}-r${provenance.runId}-g${provenance.gapIndex}`;
+              const title = String(provenance.concern || 'Harvested lesson').slice(0, 80);
+              // Targeted kinds become lessons that NAME their target rather than editing
+              // it: the brain learns the pointer, and the user's document stays theirs.
+              const opening = kind === 'retrieval-fix'
+                ? `The document ${targetDocumentId} held the answer and was not retrieved.\n\n`
+                : kind === 'sharpen-convention'
+                  ? `Sharpens ${targetDocumentId}.\n\n`
+                  : '';
+              const proposal = (stored.batch.proposals || []).find((row) => (
+                row.runId === provenance.runId && row.gapIndex === provenance.gapIndex
+              ));
+              const written = await writeLessonUnit(brainRoot, {
+                id,
+                type: 'lesson',
+                title,
+                content: `# ${title}\n\n${opening}${body}\n\nProvenance: gym run ${provenance.runId}, exam ${provenance.examId}.`,
+                citations: proposal?.citations ?? [],
+                meta: { area: 'lessons', layer: 3, generated: true },
+              });
+              emit('apply', 'lesson-written', `${id} -> ${written.file}`);
+              return { id, file: written.file };
+            },
+          });
+          ledger.markHarvestApplied(stored.id, { written: applied.written, at: new Date(now()).toISOString() });
+
+          // REINDEX FROM THE BRAIN, the same derivation init uses, so retrieval actually
+          // serves the lessons that were just written. An index that lagged its brain would
+          // report "applied" while retrieving the world as it was.
+          const retrieval = settings.retrieval || {};
+          const model = retrieval.embeddingModel || DEFAULT_EMBEDDING.model;
+          const dimension = Number(retrieval.embeddingDimension || DEFAULT_EMBEDDING.dimension);
+          const baseUrl = retrieval.ollamaBaseUrl || undefined;
+          const client = makeEmbedderClient({ model, dimension, baseUrl });
+          const digest = retrieval.embeddingDigest?.trim() || (await ollama({
+            environment: { EMBEDDING_MODEL: model, ...(baseUrl ? { OLLAMA_BASE_URL: baseUrl } : {}) },
+          })).digest;
+          const served = await indexIdentity({
+            environment: {
+              EMBEDDING_PROVIDER: 'ollama',
+              EMBEDDING_MODEL: model,
+              EMBEDDING_DIM: String(dimension),
+              EMBEDDING_MODEL_DIGEST: digest,
+              ...(baseUrl ? { OLLAMA_BASE_URL: baseUrl } : {}),
+            },
+          });
+          const layout = await layoutFor(repoPath);
+          store = await openStore(repoPath, { path: layout.databasePath, embedder: served, project: 'default' });
+          await reindexFromBrain({
+            repoPath,
+            store,
+            embedder: embedderFromClient(client),
+            project: 'default',
+            jobId,
+            onStep: (event) => emit(event.phase, event.step, event.detail, { counts: event.counts, level: event.level }),
+          });
+          emit('done', 'applied',
+            `${applied.written} lesson(s) written into the brain and the index rebuilt from it.`,
+            { counts: { written: applied.written } });
+        } finally {
+          await store?.close?.();
+          ledger?.close?.();
+        }
+      });
+      return { jobId };
     },
 
     /// The bank plus the draft queue. An empty bank is a legitimate state, not an error: a
@@ -2096,6 +2395,7 @@ export function createMethods({
       const maxSweeps = Math.max(1, Math.min(Number(params?.maxSweeps) || 1_000, 10_000));
 
       let auditor = null;
+      let watcherVoice = null;
       if (triage) {
         // The auditor SPEAKS here, so both locks apply, and they are taken
         // before the loop starts rather than at the first finding: a loop
@@ -2104,6 +2404,16 @@ export function createMethods({
         await requireConsent('goalStart', params,
           'Auditor triage sends each new finding to the auditor role, which is a real provider generation per finding.');
         auditor = await roleGenerate('auditor');
+        // The WATCHER'S VOICE rides the same locks: with triage on, the
+        // configured watcher role verifies each new finding cheaply and its
+        // note reaches the auditor and the finding's thread. An unconfigured
+        // watcher is not a refusal - the mechanical sweep IS the watcher's
+        // floor, and the loop degrades to it rather than dying for a voice.
+        try {
+          watcherVoice = await roleGenerate('watcher');
+        } catch {
+          watcherVoice = null;
+        }
       }
 
       const jobId = jobs.start('goal', async ({ emit, cancelled }) => {
@@ -2113,6 +2423,8 @@ export function createMethods({
         let fixed = 0;
         let triageFailures = 0;
         let triageStopped = false;
+        let watcherFailures = 0;
+        let watcherStopped = false;
         try {
           while (!cancelled() && sweep < maxSweeps && clean < cleanSweepsToStop) {
             sweep += 1;
@@ -2186,11 +2498,39 @@ export function createMethods({
               for (const row of fresh) {
                 if (cancelled()) break;
                 if (triageStopped) break;
+                // THE WATCHER SPEAKS FIRST: a cheap verification whose note
+                // rides the finding's thread and the auditor's prompt. A
+                // failing watcher degrades to the mechanical finding alone
+                // (two consecutive failures silence it for the loop, the same
+                // rule the auditor has), because the sweep must not die for
+                // its commentary.
+                let watcherNote = null;
+                if (watcherVoice && !watcherStopped) {
+                  try {
+                    const check = await watcherVerify(watcherVoice, row);
+                    watcherFailures = 0;
+                    watcherNote = `${check.confirmed ? 'confirmed' : 'not confirmed'}: ${check.note}`;
+                    emit('watch', 'verified', `${row.id} ${watcherNote}`.slice(0, 200));
+                  } catch (error) {
+                    watcherFailures += 1;
+                    emit('watch', 'verify-failed', `${row.id}: ${String(error.message).slice(0, 160)}`, { level: 'warn' });
+                    if (watcherFailures >= 2) {
+                      watcherStopped = true;
+                      emit('watch', 'verify-stopped',
+                        'The watcher role failed twice in a row; findings go to the auditor without its note for the rest of this loop.',
+                        { level: 'warn' });
+                    }
+                  }
+                }
                 try {
-                  const verdict = await auditTriage(auditor, row);
+                  const verdict = await auditTriage(auditor, row, { watcherNote });
                   triageFailures = 0;
-                  const thread = { at: new Date(now()).toISOString(), by: 'auditor', text: verdict.reasoning };
-                  await state.addBoardFinding({ ...row, status: 'triaged', thread: [thread] });
+                  const stamp = new Date(now()).toISOString();
+                  const thread = [
+                    ...(watcherNote ? [{ at: stamp, by: 'watcher', text: watcherNote }] : []),
+                    { at: stamp, by: 'auditor', text: verdict.reasoning },
+                  ];
+                  await state.addBoardFinding({ ...row, status: 'triaged', thread });
                   emit('audit', 'triaged', `${row.id}: ${String(verdict.reasoning).slice(0, 120)}`);
                   if (verdict.applyFixId && row.action?.fixId === verdict.applyFixId) {
                     const applied = await api.systemFix({
@@ -2445,16 +2785,22 @@ export function createMethods({
           'Layer 2 narration runs on your engineer key and spends. The estimated budget from budgetEstimate has to be shown and agreed before the job starts. Layer 1 is deterministic and free.');
       }
       if (mode === 'ingest') {
-        // Refused HERE as well as in the pipeline, and the duplication is deliberate: the
-        // pipeline's throw comes after its analyze pass, so a user who asked for a mode
-        // that does not exist would watch a job start and then fail. This is the refusal
-        // they meet; the pipeline's is the backstop for a direct caller.
+        // Ingest ADOPTS the user's curated knowledge folder: adopt.js splits it into
+        // units marked human-written, validateCitations is the mechanical drift check
+        // (a unit citing a file or commit that is not there is dropped and named), and
+        // the derived brain lands in .daijin/brain while the source folder is never
+        // written. Zero spend: no narration runs, so no consent beyond the click.
         //
-        // The reason is init-miner's and stands: adopting an existing knowledge folder
-        // as-is needs its own auditor drift check, and silently generating a Layer 1 brain
-        // over a curated one would overwrite the user's work with machine output.
-        throw notImplemented('initBrain mode ingest', 'P3 (adopt an existing knowledge folder)',
-          'Adopting an existing knowledge folder as-is needs its own drift check; generating over a curated folder would overwrite your work with machine output. Use mode layer1 to generate.');
+        // Checked HERE as well as in the pipeline, because the pipeline's own refusal
+        // comes after its analyze pass: a repo with no qualifying folder would watch a
+        // job start and then fail. This is the refusal they meet; the pipeline's is the
+        // backstop for a direct caller.
+        const analysis = await analyze(repoPath);
+        if (!analysis.brainFolder?.present) {
+          throw invalidParams('no knowledge folder',
+            'Mode ingest adopts an existing knowledge folder and this repo has none that qualifies. '
+            + 'A folder counts when it holds at least one markdown file. Use mode layer1 to generate one.');
+        }
       }
 
       const settings = await state.settings();
@@ -2556,7 +2902,40 @@ export function createMethods({
           // A floor measured by init is the same measurement retrievalScore produces, so it
           // lands in the same history the repo card trend reads. Two sources writing two
           // histories would give a card that shows half its own measurements.
-          if (report?.floor?.caseRate) await appendScoreHistory(repoPath, report.floor, { store });
+          if (report?.floor?.caseRate) {
+            await appendScoreHistory(repoPath, report.floor, { store });
+            // The SAME measurement, stored for recall: without this, the first Brain
+            // visit after init re-ran the whole sweep init had just finished. Arm and
+            // rank detail are not in the pipeline's per-case rows, so recall shows
+            // them unattributed until the first explicit re-measure.
+            const layout = await layoutFor(repoPath);
+            const results = (report.floor.perCase || []).map((row) => ({
+              id: row.caseId,
+              complete: Boolean(row.hit),
+              misses: row.misses || [],
+              reciprocalRank: null,
+              identifier: Boolean(row.identifier),
+              standingAssisted: Boolean(row.standingAssisted),
+            }));
+            const record = {
+              at: new Date(now()).toISOString(),
+              caseRate: report.floor.caseRate,
+              mrr: report.floor.mrr ?? null,
+              violations: report.floor.violations ?? 0,
+              chosenBudget: report.floor.chosenBudget ?? null,
+              rationale: report.floor.rationale ?? null,
+              perCase: results.map((row) => ({
+                caseId: row.id, hit: row.complete, rank: null, arm: null, type: null, area: null,
+                missed: row.misses[0] ?? null, identifier: row.identifier, standingAssisted: row.standingAssisted,
+              })),
+              budgetSweep: (report.floor.budgetSweep || []).map((point) => ({
+                budget: point.budget ?? point.tokenBudget ?? null,
+                caseRate: point.caseRate ?? null,
+              })),
+            };
+            await mkdir(path.dirname(layout.lastScorePath), { recursive: true });
+            await writeFile(layout.lastScorePath, JSON.stringify({ record, results }, null, 2), 'utf8');
+          }
         } finally {
           await store.close?.();
         }
@@ -2564,12 +2943,55 @@ export function createMethods({
       return { jobId };
     },
 
+    /**
+     * The auditor narrates a recommendation over the MECHANICAL diagnosis.
+     *
+     * The division is the contract's: diagnose is free arithmetic and already names which
+     * cases missed and how they cluster; choosing between enriching documents, running
+     * Layer 2 on an area, or bootstrapping through the gym is the auditor's call, and that
+     * one spends. One generation per explicit user action; no gate scope, because the
+     * consent IS the whole authorization for a single bounded call (methods.md spend table).
+     */
     async diagnoseNarrate(params) {
-      await requireAttached(params);
+      const repoPath = await requireAttached(params);
       await requireConsent('diagnoseNarrate', params,
         "The auditor's recommendation is a paid generation. The mechanical clusters from diagnose are free and already answer most of the question.");
-      throw notImplemented('diagnoseNarrate', 'P3 (auditor narration)',
-        'Confirmed, but the auditor role and the mechanical clusters it narrates over do not exist yet.');
+      // The auditor is built BEFORE the free sweep runs: an unconfigured role refuses at
+      // the call, not after the embedder has re-measured every gold case for nothing.
+      const auditor = await roleGenerate('auditor');
+      const diagnosis = await api.diagnose({ repoPath });
+      const clusterLines = (axis, rows) => (rows || []).map((row) => `- ${axis} ${row.value}: ${row.count} miss(es)`);
+      const missedRows = (diagnosis.perCase || []).filter((row) => !row.hit);
+      const prompt = [
+        'You are the auditor for a developer tool called daijin. A repo\'s retrieval was measured',
+        'against its gold set, and the mechanical diagnosis below clusters the missed cases.',
+        '',
+        `repo: ${repoPath}`,
+        `case rate: ${diagnosis.caseRate?.cases ?? '?'} complete`,
+        `must-not violations: ${diagnosis.violations}`,
+        `identifier misses: ${diagnosis.identifierMisses}`,
+        '',
+        'Missed cases:',
+        ...(missedRows.length
+          ? missedRows.map((row) => `- ${row.caseId}: missed ${row.missed ?? '?'} (type ${row.type ?? 'unattributed'}, area ${row.area ?? 'unattributed'}, arm ${row.arm ?? 'unattributed'})`)
+          : ['- none; every case is complete']),
+        '',
+        'Clusters:',
+        ...clusterLines('type', diagnosis.clusters?.byType),
+        ...clusterLines('area', diagnosis.clusters?.byArea),
+        ...clusterLines('arm', diagnosis.clusters?.byArm),
+        '',
+        'Recommend what the owner should do next, in a short paragraph. The available moves',
+        'are: enrich or split the named documents, run Layer 2 narration on a named area,',
+        'bootstrap knowledge through the gym, or accept the number and do nothing yet. Name',
+        'the move and the evidence for it. Do not invent cases or documents not listed above.',
+      ].join('\n');
+      const { text } = await auditor.generate({ prompt, maxTokens: 2_048 });
+      const recommendation = String(text || '').trim();
+      if (!recommendation) {
+        throw invalidParams('empty narration', 'The auditor returned no text, so there is no recommendation to show. The spend still happened; try again or check the auditor role.');
+      }
+      return { recommendation };
     },
 
     // ---- settings, roles, board -------------------------------------------------------

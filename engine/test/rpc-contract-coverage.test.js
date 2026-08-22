@@ -92,8 +92,10 @@ const PROSE = Object.freeze({
 const REFUSING = Object.freeze({
   gymStart: 'refuses for spend before returning a success shape',
   examMine: 'refuses for spend before returning a success shape; the funnel is pinned in exam-mining-rpc.test.js',
+  gymHarvest: 'refuses for spend before returning a success shape; the funnel is pinned in gym-harvest-rpc.test.js',
+  gymHarvestApply: 'refuses for consent before returning a success shape; apply and its mode quarantine are pinned in gym-harvest-rpc.test.js',
   rolePing: 'refuses for spend before returning a success shape',
-  diagnoseNarrate: 'refuses for spend before returning a success shape',
+  diagnoseNarrate: 'refuses for spend before returning a success shape; the built narration path is pinned in rpc-diagnose-control.test.js',
 });
 
 /// A repo with everything the hermetic calls need: an indexed brain, a ledger with one

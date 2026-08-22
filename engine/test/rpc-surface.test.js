@@ -168,17 +168,19 @@ test('every not-implemented answer names the phase that will implement it', asyn
   // and the guard against the list emptying for the WRONG reason (the code stopping
   // answering rather than starting working) is the first test, not a count here.
   //
-  // What remains deferred is reachable only with different params than this sweep sends:
-  // initBrain mode ingest, covered in its own test. rolePing left this list when its
-  // real implementation landed (owner field round 4).
+  // Nothing remains deferred: initBrain mode ingest was the last wall and it now runs
+  // the adopt pipeline (rpc-init.test.js pins the seam). rolePing left this list when
+  // its real implementation landed (owner field round 4).
   for (const method of deferred) assert.ok(method, method);
 });
 
-test('the deferrals that remain are reachable, and still name their phase', async () => {
-  // A deferral that no test reaches is a deferral nobody notices going stale.
+test('mode ingest on a repo with no knowledge folder refuses by name, not as a deferral', async () => {
+  // The last not-implemented wall came down when adopt was wired through the RPC seam.
+  // What remains is the honest parameter refusal: a repo with nothing to adopt is told
+  // so before any job starts.
   const ingest = errorOf(await daemon.request('initBrain', { repoPath, mode: 'ingest' }));
-  assert.equal(ingest.code, ERR_NOT_IMPLEMENTED);
-  assert.match(ingest.data.phase, /^P3/);
+  assert.equal(ingest.code, -32602);
+  assert.match(ingest.data.hint, /none that qualifies|knowledge folder/);
 });
 
 test('the handshake, repo lifecycle and settings are really wired', async () => {

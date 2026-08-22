@@ -109,7 +109,7 @@ export async function existenceGate(cases, { store }) {
 }
 
 /**
- * Word-like tokens only.
+ * Whitespace-delimited words, compared by their word-character skeleton.
  *
  * The content tokenizer emits lone symbols as tokens, which is right for a token BUDGET
  * and wrong for a leakage measure: leakage is about copied prose, and punctuation is not
@@ -117,9 +117,18 @@ export async function existenceGate(cases, { store }) {
  * @vitejs/plugin-react package used" tripped the six-token threshold because the package
  * name alone tokenizes to `@ vitejs / plugin - react`, three of which are punctuation. A
  * single identifier is not a quotation, and a gate that says it is will be turned off.
+ *
+ * [Amended 2026-08-22, found live on TokaiHub: stripping punctuation TOKENS was not
+ * enough - `@aws-sdk/client-cognito-identity-provider` still splits into six word tokens,
+ * so one package name blocked the whole gold set as a "copied phrase". The unit of prose
+ * is the whitespace-delimited word: each chunk collapses to its word characters and
+ * counts as ONE token, so any single identifier is span 1 while a genuinely copied
+ * sentence still counts word by word.]
  */
 function wordTokens(text) {
-  return tokens(text).filter((token) => /[\p{L}\p{N}_]/u.test(token));
+  return String(text).toLowerCase().split(/\s+/)
+    .map((chunk) => (chunk.match(/[\p{L}\p{N}_]/gu) || []).join(''))
+    .filter((chunk) => chunk.length > 0);
 }
 
 /** Longest contiguous run of word tokens the two strings share. */

@@ -39,6 +39,9 @@ const MANIFEST = {
   'package.json': {
     name: 'fixture',
     scripts: { test: 'node --test', lint: 'eslint .', build: 'tsc -p .', start: 'node server.js', 'format:check': 'prettier -c .' },
+    // The scripts call installed tools, so the manifest declares them: the node_modules
+    // half of the availability probe exists exactly for this shape of package.
+    devDependencies: { eslint: '^9', typescript: '^5', prettier: '^3' },
   },
 };
 
@@ -56,6 +59,20 @@ test('probing reads package.json scripts by NAME and assigns the declared role',
     /test -d node_modules/,
     'a script that fails only because dependencies are absent is UNAVAILABLE, not pre-broken; pre-broken is a claim about the repo',
   );
+});
+
+test('a dependency-free package does not demand node_modules to run its gates', () => {
+  // The gym runs baseline gates in a worktree at a BASE commit, where node_modules never
+  // exists. A package with no dependencies runs its scripts from the runtime alone, and
+  // probing for node_modules there marked every gate unavailable and kept every mined
+  // exam a draft on the one repo shape that needs no install at all.
+  const candidates = probeGateCandidates({
+    files: ['package.json'],
+    manifests: { 'package.json': { name: 'bare', scripts: { test: 'node --test' } } },
+  });
+  const gate = candidates.find((entry) => entry.id === 'test');
+  assert.equal(gate.availabilityCommand, 'npm --version');
+  assert.doesNotMatch(gate.unavailableHint, /run its install step/);
 });
 
 test('the package manager comes from the lockfile', () => {
@@ -189,8 +206,12 @@ test('a repo whose dependencies are not installed reports UNAVAILABLE, never pre
   // repo and everything about the machine the probe ran on.
   const bare = mkdtempSync(path.join(tmpdir(), 'daijin-gates-bare-'));
   try {
-    writeFileSync(path.join(bare, 'package.json'), JSON.stringify({ name: 'bare', scripts: { build: 'vite build' } }));
-    const candidates = probeGateCandidates({ files: ['package.json'], manifests: { 'package.json': { scripts: { build: 'vite build' } } } });
+    // The manifest DECLARES the tool its script calls: that declaration is what makes a
+    // missing node_modules a machine problem. An undeclared tool would be the repo's own
+    // manifest lying, which is a different (pre-broken) story.
+    const manifest = { name: 'bare', scripts: { build: 'vite build' }, devDependencies: { vite: '^6' } };
+    writeFileSync(path.join(bare, 'package.json'), JSON.stringify(manifest));
+    const candidates = probeGateCandidates({ files: ['package.json'], manifests: { 'package.json': manifest } });
     const { gates, summary } = await discoverGates({ repoPath: bare, candidates, timeoutMs: 20_000 });
     assert.equal(gates[0].classification, 'unavailable');
     assert.equal(gates[0].enabled, false);

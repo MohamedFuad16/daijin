@@ -34,7 +34,7 @@ CONTRACT_PATH = Path(__file__).resolve().parents[2] / "engine" / "src" / "rpc" /
 CONTRACT_METHODS = [
     ("hello", {"clientVersion": "0.1.0"}, ["engineVersion", "contractVersion"]),
     ("analyze", {"repoPath": DEFAULT_REPO}, ["languages", "commitCount", "structure", "gateCandidates", "hasBrainFolder"]),
-    ("diagnose", {"repoPath": SUB_75_REPO}, ["clusters", "missed", "total"]),
+    ("diagnose", {"repoPath": SUB_75_REPO}, ["clusters", "misses", "cases", "perCase"]),
     ("retrievalScore", {"repoPath": DEFAULT_REPO}, ["caseRate", "mrr", "violations", "chosenBudget", "rationale", "perCase"]),
     ("search", {"repoPath": DEFAULT_REPO, "query": "upload queue backoff"}, ["chunks", "tokensUsed"]),
     ("serveStatus", {}, ["repos", "ollama", "db", "spendGate"]),
@@ -252,6 +252,31 @@ async def test_gym_start_is_refused_when_the_spend_gate_is_blocked():
 
 
 @run_async
+async def test_gym_harvest_holds_both_locks_and_apply_holds_consent():
+    """The learning loop's locks, mirrored: gymHarvest needs the gate AND
+    confirm; gymHarvestApply calls no provider but still never infers consent."""
+    blocked = MockRpcClient(MockEngine(speed=0.0, gate_open=False))
+    with pytest.raises(RpcError) as caught:
+        await blocked.call("gymHarvest", {"repoPath": DEFAULT_REPO, "confirm": True})
+    assert caught.value.code == ERR_SPEND_GATE
+    await blocked.aclose()
+
+    unconfirmed = MockRpcClient(MockEngine(speed=0.0, gate_open=True))
+    with pytest.raises(RpcError) as caught:
+        await unconfirmed.call("gymHarvest", {"repoPath": DEFAULT_REPO})
+    assert caught.value.code == ERR_SPEND_GATE
+    assert "nothing is written to the brain" in caught.value.hint.lower()
+    with pytest.raises(RpcError) as caught:
+        await unconfirmed.call("gymHarvestApply", {"repoPath": DEFAULT_REPO, "batchId": 2})
+    assert caught.value.code == ERR_SPEND_GATE
+    await unconfirmed.aclose()
+    assert is_spend_touching("gymHarvest", {}) is True
+    assert is_spend_touching("gymHarvestApply", {}) is False, (
+        "apply calls no provider; its consent is the write-to-brain confirmation"
+    )
+
+
+@run_async
 async def test_role_ping_is_refused_without_an_explicit_confirmation():
     client = MockRpcClient(MockEngine(speed=0.0))
     with pytest.raises(RpcError) as caught:
@@ -393,7 +418,7 @@ async def test_layer1_init_never_needs_confirmation():
 async def test_diagnose_is_free_and_narration_is_not():
     client = MockRpcClient(MockEngine(speed=0.0))
     diagnosis = await client.call("diagnose", {"repoPath": SUB_75_REPO})
-    assert diagnosis["missed"] > 0
+    assert len(diagnosis["misses"]) > 0
     with pytest.raises(RpcError) as caught:
         await client.call("diagnoseNarrate", {"repoPath": SUB_75_REPO})
     assert caught.value.code == ERR_SPEND_GATE

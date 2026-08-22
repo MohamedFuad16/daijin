@@ -13,7 +13,7 @@ from typing import Any, Iterable
 
 from textual import work
 from textual.containers import Horizontal
-from textual.widgets import Button, DataTable, Static
+from textual.widgets import Button, Checkbox, DataTable, Static
 
 from ..concurrency import gather_iter
 from ..rpc import RpcError
@@ -52,11 +52,12 @@ def _said(value: Any, absent: str = "not set") -> str:
     return str(value)
 FILE_COLUMNS = ("agent file", "current hash", "default hash", "badge")
 
+# Plain words: what each role does for the user, not how the design justifies it.
 ROLE_NOTES = {
-    "engineer": "the model under test, and the key Layer 2 narration spends",
-    "teacher": "blind five axis grading, strong model, never calibrates its own gauge",
-    "auditor": "scheduled judgment, exam committee, gold set paraphrases, strong model",
-    "watcher": "continuous detection, never judgment, cheapest model",
+    "engineer": "the student: attempts the exams. Also embeds brain narration.",
+    "teacher": "grades each attempt against five criteria, with citations",
+    "auditor": "mines exams from your history and advises on findings",
+    "watcher": "keeps an eye on runs and verifies findings cheaply",
 }
 AGENT_ROLES = ("student", "teacher", "auditor", "watcher")
 
@@ -65,7 +66,7 @@ class SettingsScreen(DaijinScreen):
     mode_name = "settings"
     notice_id = "#settings-notice"
     heading = "Settings"
-    subheading = "the served model id is the identity check; a catalogue endpoint is not authoritative"
+    subheading = "models for each role, instruction files, spending, retrieval"
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
@@ -86,6 +87,20 @@ class SettingsScreen(DaijinScreen):
         yield Static("", id="file-detail", markup=True)
         with Horizontal(id="file-actions"):
             yield Button("Edit selected file", id="file-edit", variant="primary")
+        yield SectionTitle("Spending", "paid model calls always show a confirmation; this controls the extra unlock step")
+        yield Checkbox(
+            "Unlock spending automatically when I start a paid run",
+            id="spend-auto-unlock",
+        )
+        yield Static(
+            "[dim]Off: starting a paid run first asks you to unlock spending, then to "
+            "confirm the run. On: runs you start unlock spending by themselves; you "
+            "still confirm each run, and spending locks itself again when the run "
+            "ends.[/dim]",
+            id="spend-auto-note",
+            markup=True,
+            classes="field-note",
+        )
         yield SectionTitle("Retrieval and storage")
         yield Static("", id="config-summary", markup=True)
 
@@ -105,7 +120,31 @@ class SettingsScreen(DaijinScreen):
         # the four files have nothing to do with each other, so reading them
         # one after another only spent the user's time.
         await gather_iter(self._load_agent_file(role) for role in AGENT_ROLES)
+        # The standing spending instruction is stored settings; the checkbox
+        # reflects it without firing its Changed handler as a user act.
+        box = self.query_one("#spend-auto-unlock", Checkbox)
+        with box.prevent(Checkbox.Changed):
+            box.value = bool((self.settings.get("spend") or {}).get("autoUnlockReason"))
         self._update_view()
+
+    async def on_checkbox_changed(self, event: Checkbox.Changed) -> None:
+        if event.checkbox.id != "spend-auto-unlock":
+            return
+        event.stop()
+        # The standing instruction is WRITTEN, with a reason, or cleared. Writing
+        # it is the owner's explicit act; the engine still re-blocks the gate
+        # after every run and every paid run still shows its confirmation.
+        reason = (
+            "Standing instruction from Settings: runs the owner starts unlock "
+            "spending without the extra dialog."
+        ) if event.value else None
+        try:
+            await self.client.call("settingsSet", {"patch": {"spend": {"autoUnlockReason": reason}}})
+            self.settings.setdefault("spend", {})["autoUnlockReason"] = reason
+        except RpcError as error:
+            self.show_rpc_error(error, "#settings-notice")
+            with event.checkbox.prevent(Checkbox.Changed):
+                event.checkbox.value = not event.value
 
     async def _load_agent_file(self, role: str) -> None:
         try:

@@ -97,6 +97,13 @@ export function probeGateCandidates({ files = [], manifests = {}, texts = {} } =
     if (!file.endsWith('package.json') || !manifest?.scripts) continue;
     const directory = path.dirname(file) === '.' ? null : path.dirname(file);
     const manager = packageManagerOf(files);
+    // Only a manifest that declares dependencies needs an installed node_modules. A
+    // dependency-free package runs its scripts from the runtime alone, and demanding
+    // node_modules there turned every gate `unavailable` in exactly the place gates
+    // matter most: a gym sandbox at a base commit, where node_modules never exists.
+    const needsInstall = Boolean(
+      Object.keys(manifest.dependencies || {}).length || Object.keys(manifest.devDependencies || {}).length,
+    );
     for (const name of Object.keys(manifest.scripts).sort()) {
       const role = roleForScript(name);
       if (!role) continue;
@@ -110,8 +117,12 @@ export function probeGateCandidates({ files = [], manifests = {}, texts = {} } =
         // because node_modules is absent is UNAVAILABLE, not pre-broken. Labelling it
         // pre-broken would blame the repo for the state of the machine running the probe,
         // and pre-broken is a claim about the repo's own health that a user acts on.
-        availabilityCommand: `${manager} --version && test -d node_modules`,
-        unavailableHint: `Install ${manager} and run its install step in ${directory || 'the repo root'}; dependencies are not present, so the script cannot run here.`,
+        availabilityCommand: needsInstall
+          ? `${manager} --version && test -d node_modules`
+          : `${manager} --version`,
+        unavailableHint: needsInstall
+          ? `Install ${manager} and run its install step in ${directory || 'the repo root'}; dependencies are not present, so the script cannot run here.`
+          : `Install ${manager}; the scripts need only the runtime, no install step.`,
         cwd: directory,
       });
     }

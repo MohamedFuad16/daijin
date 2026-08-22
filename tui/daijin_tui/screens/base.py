@@ -124,8 +124,34 @@ class DaijinScreen(Screen):
         naming the scope, opening it only on an explicit yes. The engine
         re-blocks the gate when the authorized run ends, so a click authorizes
         one run, never a standing state.
+
+        STANDING INSTRUCTION (owner field, 2026-08-22): the owner can record in
+        Settings that runs they start should unlock spending without this dialog.
+        Writing that instruction is itself the owner's explicit act, with a
+        written reason, so the flip stays the owner's hand; the engine still
+        re-blocks after every run, and the per-run consent dialog still shows.
         """
         from .dialogs import ConfirmScreen
+
+        standing = None
+        try:
+            settings = await self.client.call("settingsGet", {})
+            standing = (settings.get("spend") or {}).get("autoUnlockReason")
+        except RpcError:
+            standing = None
+        if standing:
+            try:
+                await self.client.call("spendGateSet", {
+                    "repoPath": repo,
+                    "status": "authorized",
+                    "scope": scope,
+                    "reason": str(standing),
+                    "confirm": True,
+                })
+                return True
+            except RpcError as error:
+                self.report_rpc_error(error)
+                return False
 
         confirmed = await self.app.push_screen_wait(ConfirmScreen(
             title=f"Open the spend gate for {scope}?",

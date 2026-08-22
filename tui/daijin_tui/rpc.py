@@ -83,7 +83,7 @@ ERR_NOT_IMPLEMENTED = -32001
 # Exhaustive per the error convention. Adding to this set is a contract change,
 # not an implementation detail. Since v5 EVERY member requires confirm: true in
 # its params; the engine never infers consent, not even from an open gate.
-SPEND_TOUCHING = frozenset({"gymStart", "examMine", "goalStart:triage", "rolePing", "initBrain:layer1+layer2", "diagnoseNarrate"})
+SPEND_TOUCHING = frozenset({"gymStart", "examMine", "gymHarvest", "goalStart:triage", "rolePing", "initBrain:layer1+layer2", "diagnoseNarrate"})
 
 # documents filter keys, fixed by v5.
 DOCUMENT_FILTER_KEYS = frozenset({"q", "type", "area"})
@@ -726,6 +726,7 @@ class MockEngine:
         self.agent_files = copy.deepcopy(mock_data.AGENT_FILES)
         self.repos = copy.deepcopy(mock_data.REPOS)
         self.board_rows = copy.deepcopy(mock_data.BOARD_ROWS)
+        self.harvest_batches = copy.deepcopy(mock_data.HARVEST_BATCHES)
         self.calls: list[tuple[str, dict[str, Any]]] = []
         self.spend_calls: list[tuple[str, dict[str, Any]]] = []
         # What each confirmed spend call echoed back, as the real engine records
@@ -1316,7 +1317,74 @@ class MockEngine:
 
     async def _rpc_gymStatus(self, params: dict[str, Any]) -> dict[str, Any]:
         self._require_ledger(params.get("repoPath"))
-        return copy.deepcopy(mock_data.GYM_STATUS)
+        status = copy.deepcopy(mock_data.GYM_STATUS)
+        # Harvest batches ride gymStatus (2026-08-22 amendment), newest first,
+        # from live state so a mock harvest is visible on the next status read.
+        status["harvest"] = copy.deepcopy(self.harvest_batches)
+        return status
+
+    async def _rpc_gymHarvest(self, params: dict[str, Any]) -> dict[str, Any]:
+        """The learning half, mirrored: gate, consent, then a streaming job
+        that records one PROPOSAL-ONLY batch. Nothing touches the brain."""
+        if not self.gate_open:
+            raise RpcError(
+                ERR_SPEND_GATE,
+                "spend gate is blocked",
+                {
+                    "gate": mock_data.SPEND_GATE["path"],
+                    "hint": (
+                        "The spend gate is blocked. Learning from graded runs asks the "
+                        "teacher role one question per gap, which is a paid generation."
+                    ),
+                },
+            )
+        if not params.get("confirm"):
+            self._refuse_spend(
+                "gymHarvest",
+                "Learning from graded runs asks the teacher role one question per "
+                "graded gap, which is a real provider generation. Proposals are "
+                "recorded for your review; nothing is written to the brain by this call.",
+            )
+        self._require_ledger(params.get("repoPath"))
+        job_id = self._new_job_id("harvest")
+        batch = copy.deepcopy(mock_data.HARVEST_BATCH_NEW)
+        batch["id"] = max((row["id"] for row in self.harvest_batches), default=0) + 1
+        self.harvest_batches.insert(0, batch)
+        self._start_stream(job_id, mock_data.harvest_script(job_id, batch["id"]))
+        return {"jobId": job_id}
+
+    async def _rpc_gymHarvestApply(self, params: dict[str, Any]) -> dict[str, Any]:
+        """The separate act, mirrored: consent required, evaluation-only, once."""
+        if not params.get("confirm"):
+            self._refuse_spend(
+                "gymHarvestApply",
+                "Applying a harvest batch writes the accepted lessons into this "
+                "repo's brain and reindexes it.",
+            )
+        self._require_ledger(params.get("repoPath"))
+        batch_id = params.get("batchId")
+        batch = next((row for row in self.harvest_batches if row["id"] == batch_id), None)
+        if batch is None:
+            raise RpcError(ERR_INVALID_PARAMS, "unknown batchId",
+                           {"hint": f"No harvest batch {batch_id} exists for this repo."})
+        job_id = self._new_job_id("harvest-apply")
+        if batch["mode"] != "evaluation":
+            self._start_stream(job_id, mock_data.harvest_apply_refused_script(
+                job_id,
+                f"Refusing to apply a harvest batch from mode {batch['mode']}; "
+                f"only an evaluation cycle teaches the brain.",
+            ))
+            return {"jobId": job_id}
+        if batch.get("applied"):
+            self._start_stream(job_id, mock_data.harvest_apply_refused_script(
+                job_id, f"Harvest batch {batch_id} has already been applied.",
+            ))
+            return {"jobId": job_id}
+        batch["applied"] = True
+        batch["appliedAt"] = "2026-08-22T12:00:00.000Z"
+        batch["written"] = batch.get("accepted", 0)
+        self._start_stream(job_id, mock_data.harvest_apply_script(job_id, batch["written"]))
+        return {"jobId": job_id}
 
     async def _rpc_spendGateSet(self, params: dict[str, Any]) -> dict[str, Any]:
         """The gate as a button, mirrored: authorized needs scope, reason and

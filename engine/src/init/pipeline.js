@@ -546,10 +546,15 @@ export async function initBrain({
       report.phases.gates.ranIn = gateRoot;
       report.phases.gates.sandboxed = gateRoot !== root;
     }
+    // The exclusion clause appears only when something WAS excluded: "0 pre-broken,
+    // 0 unavailable, both excluded" read as nonsense on a fully healthy repo.
+    const excluded = discovered.summary.preBroken + discovered.summary.unavailable;
     await steps.emit({
       step: 'gates-classified',
-      detail: `${discovered.summary.carryingSignal} of ${discovered.summary.total} gate(s) carry signal `
-        + `(${discovered.summary.preBroken} pre-broken, ${discovered.summary.unavailable} unavailable, both excluded and labeled)`,
+      detail: `${discovered.summary.carryingSignal} of ${discovered.summary.total} gate(s) carry signal`
+        + (excluded > 0
+          ? ` (${discovered.summary.preBroken} pre-broken, ${discovered.summary.unavailable} unavailable, excluded and labeled)`
+          : ''),
       counts: discovered.summary,
     });
   }
@@ -612,15 +617,24 @@ export async function initBrain({
     // "the gauge measured and cannot see". A client that renders both the same way sends
     // the user to mine more material when the material is not the problem.
     const tiny = gated.cases.length < 5;
+    // THREE KINDS OF FAILURE with three different next moves: too little material (attach
+    // the root, or the repo is nearly empty), a thin-but-diverse-enough problem (mine
+    // more), and a QUALITY failure (a named case quotes or outlived its answer) - telling
+    // the third's owner to "mine more material" sends them away from the case the gate
+    // just named, which is what happened live on TokaiHub (one leaking case, action text
+    // about corpus size).
+    const quality = gated.gates.some((entry) => entry.status !== 'pass' && ['leakage', 'staleness', 'provenance', 'existence'].includes(entry.id));
     const action = tiny
       ? `Only ${gated.cases.length} case(s) could be mined, which usually means the attached directory holds very little: check that you attached the repository root rather than a subdirectory, and that the repo has code and history to mine.`
-      : 'Mine more material, or attach a repository with more code and history; the gates above name what is short.';
+      : quality
+        ? 'The failures above name the exact case(s). Re-run initialization to re-mine the gold set; the miner filters with the same rules and will not propose them again.'
+        : 'Mine more material, or attach a repository with more code and history; the gates above name what is short.';
     // A CODE BESIDE THE PROSE. The TUI wants to offer "attach the root instead" as a
     // button, and branching on the sentence would make the wording load-bearing: a comma
     // moved in a message written for a human would silently unwire a control. The prose
     // stays the thing a person reads and the code stays the thing a client switches on.
     // Closed set, so a client can exhaust it.
-    const actionCode = tiny ? 'too-little-material' : 'gold-set-too-thin';
+    const actionCode = tiny ? 'too-little-material' : quality ? 'case-quality' : 'gold-set-too-thin';
 
     report.blocked = {
       at: 'goldset-gates',

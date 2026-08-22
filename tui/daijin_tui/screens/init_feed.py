@@ -9,6 +9,8 @@ from textual.containers import Horizontal
 from textual.widgets import Button, Input, Select, Static
 
 from .. import mock_data
+from textual.content import Content
+
 from ..rpc import RpcError
 from ..stream import FLUSH_INTERVAL, StreamCoalescer
 from ..widgets.activity import IDLE_UNTIL_INFERRED, TERMINAL_PHASES
@@ -53,15 +55,21 @@ class InitFeedScreen(DaijinScreen):
         yield Static(MODE_NOTES["layer1"], id="init-mode-note", classes="field-note", markup=True)
         yield Static("Layer 2 scope", classes="field-label")
         yield Input(
-            placeholder="optional, comma separated areas, used by the sub-75 path",
+            placeholder="optional: comma-separated areas to narrate when accuracy is low",
             id="init-scope",
         )
         # A block is the outcome the field test hit, and it used to be one
         # line in a scrolling log. It gets its own panel, above the stream.
         yield Static("", id="init-blocked", markup=True)
-        yield Button(
-            "Attach the repository root instead", id="init-attach-root"
-        )
+        with Horizontal(id="init-blocked-actions"):
+            yield Button(
+                "Attach the repository root instead", id="init-attach-root"
+            )
+            # The owner's ask (field, 2026-08-22): when a block lands, offer a
+            # way to have the auditor look at it, not only prose.
+            yield Button(
+                "Ask the auditor what to do (spends)", id="init-ask-auditor", variant="warning"
+            )
         yield SectionTitle("Phases")
         # Semantic, not decorative: during a long init the thing a watcher is
         # tracking is how far through the pipeline the run is, so the bar moves
@@ -91,7 +99,9 @@ class InitFeedScreen(DaijinScreen):
     def _hide_block(self) -> None:
         try:
             self.query_one("#init-blocked", Static).display = False
+            self.query_one("#init-blocked-actions", Horizontal).display = False
             self.query_one("#init-attach-root", Button).display = False
+            self.query_one("#init-ask-auditor", Button).display = False
         except Exception:  # noqa: BLE001 - before compose has mounted them
             pass
 
@@ -196,8 +206,12 @@ class InitFeedScreen(DaijinScreen):
         panel.update(
             f"[b][yellow]{event.get('phase', 'a phase')} blocked.[/yellow][/b]\n{detail}"
         )
-        # A block happened, so the offer is worth making IF there is a root.
+        # A block happened, so the offers are worth making: the root when one
+        # exists, and the auditor always - a blocked run is exactly when a
+        # person wants a judgment call about what to do next.
+        self.query_one("#init-blocked-actions", Horizontal).display = True
         button.display = False
+        self.query_one("#init-ask-auditor", Button).display = True
         self._offer_root_if_there_is_one(self.ROOT_ACTION_LABEL)
 
     @work
@@ -282,6 +296,9 @@ class InitFeedScreen(DaijinScreen):
         if event.button.id == "init-attach-root":
             event.stop()
             await self._attach_root()
+        elif event.button.id == "init-ask-auditor":
+            event.stop()
+            self.ask_auditor_about_block()
         elif event.button.id == "init-start":
             event.stop()
             self.start_init()
@@ -293,6 +310,40 @@ class InitFeedScreen(DaijinScreen):
             self.job_id = None
             self.query_one("#init-checklist", PhaseChecklist).reset()
             self.query_one("#init-events", EventLog).clear()
+
+    @work
+    async def ask_auditor_about_block(self) -> None:
+        """One paid auditor look at the blocked repo, on explicit consent.
+
+        The narration runs over the mechanical diagnosis of the same gold set
+        the block named, so its advice is about the material that blocked.
+        """
+        repo = getattr(self.app, "selected_repo", None)
+        panel = self.query_one("#init-blocked", Static)
+        if not repo:
+            return
+        confirmed = await self.confirm_spend(
+            method="diagnoseNarrate",
+            summary=(
+                "The auditor reads the free diagnosis of this repo's gold set and "
+                "recommends what to do about the block. One paid generation."
+            ),
+            estimate_lines=["one auditor generation over the mechanical diagnosis"],
+            confirm_label="Ask the auditor and spend",
+        )
+        if not confirmed:
+            return
+        try:
+            result = await self.client.call("diagnoseNarrate", {"repoPath": repo, "confirm": True})
+        except RpcError as error:
+            self.report_rpc_error(error)
+            panel.update(f"{panel.renderable}\n\n[red]{error.hint}[/red]")
+            return
+        panel.update(Content.from_markup(
+            "$existing\n\n[b]The auditor:[/b] $advice",
+            existing=str(panel.renderable),
+            advice=str(result.get("recommendation", "")),
+        ))
 
     def _scope(self) -> dict[str, Any] | None:
         raw = self.query_one("#init-scope", Input).value.strip()

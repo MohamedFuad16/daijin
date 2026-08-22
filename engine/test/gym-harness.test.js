@@ -101,6 +101,25 @@ test('a gate whose runtime is missing is unavailable, with the reason named', as
   assert.ok(!results[0].stdout.includes('ran'), 'an unavailable gate does not run');
 });
 
+test('a repo-relative gate cwd resolves against the tree under test, not the daemon cwd', async () => {
+  // Discovery writes cwd as a directory relative to the repo root ("engine"), and resolves
+  // it itself when classifying. The runner did not, so the same subdirectory gate was live
+  // when discovered and unavailable when the goal sweep or a gym sandbox ran it.
+  const repo = await mkdtemp(path.join(tmpdir(), 'daijin-gate-cwd-'));
+  try {
+    const { mkdir } = await import('node:fs/promises');
+    await mkdir(path.join(repo, 'engine', 'node_modules'), { recursive: true });
+    const results = await runGateSet(
+      [{ id: 'engine:test', command: 'pwd', availabilityCommand: 'test -d node_modules', cwd: 'engine' }],
+      { cwd: repo, timeoutMs: 10_000 },
+    );
+    assert.equal(results[0].status, 'pass', results[0].unavailableReason || results[0].stderr);
+    assert.match(results[0].stdout.trim(), /engine$/, 'the command itself runs in the resolved directory');
+  } finally {
+    await rm(repo, { recursive: true, force: true });
+  }
+});
+
 test('a diff touching forbidden paths is refused before git ever sees it', () => {
   const header = (file) => `diff --git a/${file} b/${file}\n--- a/${file}\n+++ b/${file}\n@@ -1 +1 @@\n-a\n+b\n`;
   assert.doesNotThrow(() => validateUnifiedDiff(header('src/app.js')));

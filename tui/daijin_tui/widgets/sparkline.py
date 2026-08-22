@@ -72,7 +72,9 @@ class Sparkline(Static):
     def _redraw(self) -> None:
         line = self.line
         if not line.strip():
-            self.update("[dim]no series[/dim]")
+            # An empty series still says WHAT would be here; a bare "no series"
+            # read as a broken widget on a freshly attached repo.
+            self.update(f"[dim]{self._caption or 'no measurements yet'}[/dim]")
             return
         text = line
         if self._caption:

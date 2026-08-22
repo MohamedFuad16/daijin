@@ -166,13 +166,24 @@ export async function runExamAttempt({
     });
   }
 
+  // What the student was SHOWN, recorded for the grading packet: the teacher may cite only
+  // these ids, and a retrieval-miss gap is checked against them. A retrieveContext that
+  // returns a bare string (the older seam, and every scripted test) records an empty list,
+  // which is honest for a caller that never said what it showed.
+  let shownDocumentIds = [];
   if (retrieveContext) {
-    context = await retrieveContext({
+    const retrieved = await retrieveContext({
       query: exam.task,
       // Store v3 CandidateFilters.excludeDocumentIds. An empty array is a real answer
       // (nothing to withhold) and is passed as such rather than as undefined.
       excludeDocumentIds: goldExclusion ? goldExclusion.ids : [],
     });
+    if (retrieved && typeof retrieved === 'object') {
+      context = retrieved.context ?? '';
+      shownDocumentIds = Array.isArray(retrieved.shownDocumentIds) ? [...retrieved.shownDocumentIds] : [];
+    } else {
+      context = retrieved;
+    }
   }
 
   const { prompt, audit, mode: promptMode } = buildStudentPrompt({ rules, task: exam.task, context });
@@ -248,6 +259,10 @@ export async function runExamAttempt({
         maxRounds: policy.maxRounds,
       },
       promptAudit: audit,
+      // The ids the student's context actually carried. buildGradingPacket reads this;
+      // before it was recorded the packet's shown list was permanently empty, so a teacher
+      // could never cite a document and a retrieval-miss check had nothing to check.
+      shownDocumentIds,
       // The exclusion record, or null when no brain was supplied. Certification refuses a
       // scored run whose artifact carries no record, so this field is load bearing rather
       // than informational.

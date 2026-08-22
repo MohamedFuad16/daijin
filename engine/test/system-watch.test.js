@@ -8,7 +8,7 @@ import path from 'node:path';
 import { EngineState } from '../src/rpc/state.js';
 import { JobRunner } from '../src/rpc/jobs.js';
 import { createMethods } from '../src/rpc/methods.js';
-import { FIX_CATALOG, ZAI_CODING_URL, ZAI_PAYG_URL, examBankFindings, gateFindings, gateRunFindings, goalStopDecision, parseTriageReply, roleFindings, statusFindings } from '../src/rpc/watch.js';
+import { FIX_CATALOG, ZAI_CODING_URL, ZAI_PAYG_URL, examBankFindings, gateFindings, gateRunFindings, goalStopDecision, parseTriageReply, parseWatcherReply, roleFindings, statusFindings, triagePrompt, watcherVerifyPrompt } from '../src/rpc/watch.js';
 
 const AT = '2026-08-17T12:00:00.000Z';
 
@@ -209,6 +209,98 @@ test('the goal loop sweeps a real repo, persists what it finds, and ends with a 
   assert.equal(done.step, 'goal');
   assert.match(done.detail, /still open/, 'a loop that stopped dirty says so rather than reporting clean');
   assert.ok(done.counts.open >= 2);
+});
+
+test('the watcher reply is an assessment, never a fix, and an empty note is refused', () => {
+  assert.deepEqual(
+    parseWatcherReply('{"confirmed": true, "note": "The gate really does fail on a clean checkout."}'),
+    { confirmed: true, note: 'The gate really does fail on a clean checkout.' },
+  );
+  // Anything but the literal true reads as not confirmed; the watcher cannot half-confirm.
+  assert.equal(parseWatcherReply('{"confirmed": "yes", "note": "Looks real."}').confirmed, false);
+  assert.throws(() => parseWatcherReply('{"confirmed": true}'), /no note/);
+  // A fenced reply still parses, since providers fence JSON despite instructions.
+  assert.equal(parseWatcherReply('```json\n{"confirmed": false, "note": "Stale finding."}\n```').confirmed, false);
+});
+
+test('the watcher note rides the auditor prompt, and its absence leaves the prompt unchanged', () => {
+  const row = { id: 'x', severity: 'warn', category: 'gates', target: '/repo', summary: 'A gate fails', detail: null, action: null };
+  assert.match(watcherVerifyPrompt(row), /verify\s+findings cheaply/i);
+  assert.match(watcherVerifyPrompt(row), /Do not propose fixes/);
+  assert.match(triagePrompt(row, { watcherNote: 'confirmed: it fails on a clean checkout.' }),
+    /The watcher's own verification of this finding: confirmed: it fails/);
+  assert.ok(!triagePrompt(row).includes('own verification'), 'no note, no empty section');
+});
+
+test('with triage on, the watcher verifies each finding and the auditor reads its note', async () => {
+  const repo = await mkdtemp(path.join(tmpdir(), 'goal-repo-'));
+  await mkdir(path.join(repo, '.daijin'), { recursive: true });
+  await writeFile(path.join(repo, '.daijin', 'GATE'),
+    JSON.stringify({ status: 'authorized', scope: 'exam-mining', reason: 'Test-run triage authorization.' }));
+  const auditorPrompts = [];
+  const { methods, state } = await fixture({
+    resolveKey: async () => 'test-key',
+    createRoleGenerate: (role) => async ({ prompt }) => {
+      if (role.role === 'watcher') {
+        assert.match(prompt, /You are the watcher/);
+        return { text: '{"confirmed": true, "note": "Checked; the evidence holds."}' };
+      }
+      auditorPrompts.push(prompt);
+      return { text: '{"reasoning": "The watcher confirmed it; the owner should act.", "applyFixId": null}' };
+    },
+  });
+  await state.patchSettings({ roles: [
+    { role: 'auditor', provider: 'zai', model: 'glm-5.3', keyRef: 'env:WATCH_TEST_KEY' },
+    { role: 'watcher', provider: 'zai', model: 'glm-5.3', keyRef: 'env:WATCH_TEST_KEY' },
+  ] });
+  await methods.repoAttach({ repoPath: repo });
+  const { jobId } = await methods.goalStart({ repoPath: repo, triage: true, confirm: true, intervalMs: 5_000, cleanSweepsToStop: 5, maxSweeps: 1 });
+  assert.match(jobId, /^job-goal-/);
+  await methods.__jobs.drain();
+
+  assert.ok(auditorPrompts.length >= 1, 'the auditor was consulted');
+  assert.match(auditorPrompts[0], /The watcher's own verification of this finding: confirmed: Checked; the evidence holds\./);
+
+  // The finding's thread carries BOTH voices, watcher first.
+  const board = await state.board();
+  const triaged = board.find((row) => row.status === 'triaged' && Array.isArray(row.thread) && row.thread.length >= 2);
+  assert.ok(triaged, 'a triaged finding carries a two-entry thread');
+  assert.equal(triaged.thread[0].by, 'watcher');
+  assert.match(triaged.thread[0].text, /^confirmed: /);
+  assert.equal(triaged.thread[1].by, 'auditor');
+});
+
+test('a watcher that fails twice is silenced for the loop, and triage carries on without it', async () => {
+  const repo = await mkdtemp(path.join(tmpdir(), 'goal-repo-'));
+  await mkdir(path.join(repo, '.daijin'), { recursive: true });
+  await writeFile(path.join(repo, '.daijin', 'GATE'),
+    JSON.stringify({ status: 'authorized', scope: 'exam-mining', reason: 'Test-run triage authorization.' }));
+  const events = [];
+  let watcherCalls = 0;
+  const auditorPrompts = [];
+  const { methods, state } = await fixture({
+    resolveKey: async () => 'test-key',
+    createRoleGenerate: (role) => async ({ prompt }) => {
+      if (role.role === 'watcher') {
+        watcherCalls += 1;
+        throw new Error('watcher provider is down');
+      }
+      auditorPrompts.push(prompt);
+      return { text: '{"reasoning": "Triage still works without the watcher.", "applyFixId": null}' };
+    },
+  }, (params) => events.push(params));
+  await state.patchSettings({ roles: [
+    { role: 'auditor', provider: 'zai', model: 'glm-5.3', keyRef: 'env:WATCH_TEST_KEY' },
+    { role: 'watcher', provider: 'zai', model: 'glm-5.3', keyRef: 'env:WATCH_TEST_KEY' },
+  ] });
+  await methods.repoAttach({ repoPath: repo });
+  await methods.goalStart({ repoPath: repo, triage: true, confirm: true, intervalMs: 5_000, cleanSweepsToStop: 5, maxSweeps: 1 });
+  await methods.__jobs.drain();
+
+  assert.equal(watcherCalls, 2, 'two failures silence the watcher; a third finding never dials it');
+  assert.ok(events.some((row) => row.step === 'verify-stopped'), 'the silencing is announced, not silent');
+  assert.ok(auditorPrompts.length >= 3, 'the auditor still triaged every finding');
+  assert.ok(auditorPrompts.every((prompt) => !prompt.includes('own verification')), 'no invented notes');
 });
 
 test('the board upserts a finding by id, so a loop cannot grow a row per sweep', async () => {

@@ -239,6 +239,25 @@ export async function writeBrainArtifacts(brainRoot, units, { generator = 'daiji
   return { written, units: units.length, unknownTypes: unknown };
 }
 
+/**
+ * Append ONE lesson unit to an existing brain, as its own file under lessons/.
+ *
+ * This is the harvest-apply writer: the only production path that adds to a brain rather
+ * than regenerating it. `wx` is load bearing: a lesson is appended to the brain, never
+ * silently replaced, so an id collision fails loudly instead of overwriting evidence.
+ */
+export async function writeLessonUnit(brainRoot, unit, { generator = 'daijin-gym-harvest' } = {}) {
+  const layout = ARTIFACT_LAYOUT.lesson;
+  await mkdir(path.join(brainRoot, layout.directory), { recursive: true });
+  const file = path.join(layout.directory, `${slugForFile(unit.id)}.md`);
+  await writeFile(
+    path.join(brainRoot, file),
+    `${frontMatter({ generator })}# ${layout.title}\n\n${renderUnit({ ...unit, type: 'lesson' })}\n`,
+    { flag: 'wx' },
+  );
+  return { file };
+}
+
 /** Parse one artifact file back into units. */
 export function parseBrainFile(text, { file }) {
   const schema = Number(text.match(/^daijin-schema:\s*(\d+)\s*$/m)?.[1] ?? 0);

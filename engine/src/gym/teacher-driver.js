@@ -45,13 +45,21 @@ export function teacherPrompt({ packet, exam, diff, candidate }) {
     ...AXES.map((axis) => `- ${axis}: ${AXIS_MEANINGS[axis]}`),
     '',
     `Verdict: one of ${VERDICTS.filter((verdict) => verdict !== 'unsubmitted').join(', ')}.`,
-    `Gaps (optional): tag one of ${GAP_TAGS.join(', ')}, each with a note; a retrieval-miss`,
+    `Gaps: tag one of ${GAP_TAGS.join(', ')}, each with a note; a retrieval-miss`,
     'additionally names targetDocumentId (a document that EXISTS but was not shown).',
+    'A pass may have empty gaps. Any other verdict MUST record at least one gap saying what',
+    'went wrong: use knowledge-gap or retrieval-miss when missing knowledge caused it,',
+    'model-limit when the student had what it needed and still failed, harness-defect when',
+    'the harness broke. A sub-pass verdict with empty gaps is refused.',
     '',
     'Reply with STRICT JSON only, no prose, no fences, exactly:',
     '{"verdict": "pass|partial|fail",',
     ' "axes": {"correctness_vs_gold": {"score": 1, "citations": ["path:12"]}, ...all five...},',
-    ' "gaps": []}',
+    // The gap shape is SHOWN, not described: the first live run that needed a gap wrote
+    // one with no tag, was refused for it, and left the attempt ungraded - the prose
+    // above was read, the template below is what got copied.
+    ` "gaps": [{"tag": "${GAP_TAGS.join('|')}", "note": "<one line>", "targetDocumentId": null}]}`,
+    'gaps is [] only when there is nothing to record; every gap entry MUST carry a tag from the list above.',
   ].join('\n');
 }
 
@@ -65,6 +73,83 @@ export function parseTeacherReply(text) {
     if (start === -1 || end <= start) throw new Error('The teacher reply is not JSON and contains no object literal.');
     return JSON.parse(stripped.slice(start, end + 1));
   }
+}
+
+/**
+ * The harvest round: one question per gap, answered by the teacher in one
+ * generation, validated by harvest.js before anything becomes a proposal.
+ *
+ * The same division of labour as grading: the TEACHER answers (a kind, a
+ * one-line concern, a body, citations); the DRIVER binds each answer to the
+ * (runId, gapIndex) of the question it answers, and answersToProposals
+ * refuses a transposed pair, an invented document id, or an unanswered
+ * question exactly as it would from an external batch.
+ */
+export function harvestPrompt({ questions, packetsByRunId = {} }) {
+  const blocks = questions.map((question, index) => {
+    const packet = packetsByRunId[question.runId];
+    const citable = packet
+      ? [...new Set([...(packet.shownDocumentIds || []), ...(packet.absentDocumentIds || [])])]
+      : [];
+    return [
+      `GAP ${index + 1} (runId ${question.runId}, gapIndex ${question.gapIndex}, exam ${question.examId}, tag ${question.tag}):`,
+      `  what went wrong: ${question.gap}`,
+      question.targetDocumentId ? `  the grader pointed at document: ${question.targetDocumentId}` : '',
+      `  document ids you may name for this gap: ${citable.join(', ') || '(none)'}`,
+    ].filter(Boolean).join('\n');
+  });
+  return [
+    'You are the teacher closing the learning loop after graded coding-exam attempts.',
+    'For EACH gap below, answer the question: what knowledge, had it been retrieved, would',
+    'have prevented this failure?',
+    '',
+    ...blocks,
+    '',
+    'Answer kinds:',
+    '- "new-lesson": a durable lesson the project brain should carry. body is the lesson',
+    '  (two to five sentences, written to be retrieved later). citations are "path:line"',
+    '  references into the repo\'s CURRENT files when you can give them, else [].',
+    '- "retrieval-fix": an EXISTING document (one of the ids listed for that gap) held the',
+    '  answer and was not retrieved. Set targetDocumentId to that id; body says what should',
+    '  have surfaced.',
+    '- "sharpen-convention": an existing document (one of the listed ids) is right but too',
+    '  vague to prevent this. Set targetDocumentId; body is the sharpened wording.',
+    '- "none": nothing worth teaching. Still give the concern.',
+    '',
+    'EVERY answer carries "concern": ONE line naming the single concern it addresses.',
+    'One concern per answer; an answer about three things is retrieved for none of them.',
+    '',
+    'Reply with STRICT JSON only, no prose, no fences: an ARRAY with one entry per gap,',
+    '[{"runId": <number>, "gapIndex": <number>, "kind": "new-lesson|retrieval-fix|sharpen-convention|none",',
+    '  "concern": "<one line>", "body": "<text, empty for none>",',
+    '  "targetDocumentId": null, "citations": []}]',
+  ].join('\n');
+}
+
+export function parseHarvestReply(text) {
+  const stripped = String(text || '').trim().replace(/^```[a-z]*\n?|\n?```$/g, '').trim();
+  try {
+    const parsed = JSON.parse(stripped);
+    if (!Array.isArray(parsed)) throw new Error('not an array');
+    return parsed;
+  } catch {
+    const start = stripped.indexOf('[');
+    const end = stripped.lastIndexOf(']');
+    if (start === -1 || end <= start) throw new Error('The harvest reply is not JSON and contains no array literal.');
+    const parsed = JSON.parse(stripped.slice(start, end + 1));
+    if (!Array.isArray(parsed)) throw new Error('The harvest reply parsed to something other than an array.');
+    return parsed;
+  }
+}
+
+/** Ask the teacher every gap question in one generation. Returns RAW answers;
+ *  answersToProposals is the boundary that accepts or refuses them. */
+export async function harvestAnswersWithTeacher({ questions, packetsByRunId, generate }) {
+  const { text } = await generate({
+    prompt: harvestPrompt({ questions, packetsByRunId }),
+    maxTokens: 16_384,
+  });
+  return parseHarvestReply(text);
 }
 
 /**

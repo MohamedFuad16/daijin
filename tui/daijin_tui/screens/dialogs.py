@@ -175,7 +175,9 @@ class GatesFileEditScreen(ModalScreen[str | None]):
                 "add here stays unclassified until discovery runs again.[/dim]",
                 markup=True,
             )
-            yield TextArea(self.content, id="gates-file-text")
+            # soft_wrap off: YAML reads as lines, and wrapped comment prose made
+            # the editor look broken. Long lines scroll horizontally instead.
+            yield TextArea(self.content, id="gates-file-text", soft_wrap=False, show_line_numbers=True)
             with Horizontal(classes="dialog-actions"):
                 yield Button("Save", id="gates-file-save", variant="primary")
                 yield Button("Cancel", id="gates-file-cancel")

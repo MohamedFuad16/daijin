@@ -182,12 +182,12 @@ test('initBrain spends ONLY on layer1+layer2', async () => {
   const started = [];
   try {
     // layer1 is DETERMINISTIC and free, so it starts a job rather than being gated. ingest
-    // is refused by name, and for a reason that is not spend.
+    // on a repo with nothing to adopt is refused by name, and for a reason that is not spend.
     const layer1 = await daemon.request('initBrain', { repoPath: own, mode: 'layer1' });
     assert.ok(layer1.result?.jobId, 'layer1 is wired and starts a job');
     started.push(layer1.result.jobId);
     const ingest = errorOf(await daemon.request('initBrain', { repoPath: own, mode: 'ingest' }));
-    assert.equal(ingest.code, -32001, 'ingest is deferred, not gated');
+    assert.equal(ingest.code, -32602, 'no knowledge folder here, and the refusal is a parameter error, not a deferral');
     assert.notEqual(ingest.code, ERR_SPEND_REFUSED);
 
     const refused = errorOf(await daemon.request('initBrain', { repoPath: own, mode: 'layer1+layer2' }));

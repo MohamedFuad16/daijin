@@ -180,6 +180,31 @@ export const MIGRATIONS = [
       ALTER TABLE certification ADD COLUMN rubric_id INTEGER REFERENCES rubric(id);
     `,
   },
+  {
+    // Harvest batches (P7 clauses 10 and 17). A TABLE, for the platform's reason: cycles 30
+    // and 32-37 harvested and never applied, and nothing in the record said so. The summary
+    // columns exist so "we harvested and accepted nothing" is a queryable measured zero, and
+    // `applied` is a column rather than an inference so an unapplied batch is visibly
+    // unapplied. The full proposal set lives in `record`, because proposals are read back
+    // whole for review and apply, never queried by field.
+    id: '004-harvest',
+    sql: `
+      CREATE TABLE IF NOT EXISTS harvest_batch (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        cycle_id        INTEGER REFERENCES cycle(id),
+        mode            TEXT NOT NULL,
+        at              TEXT NOT NULL,
+        questions_asked INTEGER NOT NULL,
+        accepted        INTEGER NOT NULL,
+        rejected        INTEGER NOT NULL,
+        applied         INTEGER NOT NULL DEFAULT 0,
+        applied_at      TEXT,
+        written         INTEGER,
+        record          TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS harvest_cycle ON harvest_batch(cycle_id);
+    `,
+  },
 ];
 
 /** A stored rubric, back in the shape grading.js authored: axes keyed by name, gaps a list. */
@@ -473,6 +498,89 @@ export class GymLedger {
 
   gradeBatches() {
     return this.database.prepare('SELECT * FROM grade_batch ORDER BY id DESC').all();
+  }
+
+  // Harvest batches (the learning loop's record).
+
+  /**
+   * Store one harvest batch, exactly as harvestBatch() authored it.
+   *
+   * Refuses a non-gradable mode at the storage layer for the same reason importRubricBatch
+   * does: harvest reads rubrics, rubrics exist only for gradable modes, and a batch claiming
+   * to have harvested a harness-debug cycle is claiming evidence that cannot exist.
+   */
+  recordHarvestBatch(batch) {
+    assertRunMode(batch.mode);
+    if (!isGradableRun(batch.mode)) {
+      throw new Error(
+        `Refusing to store a harvest batch from mode ${batch.mode}; only evaluation and experiment runs are graded, so only they can be harvested.`,
+      );
+    }
+    const accepted = (batch.proposals || []).filter((proposal) => proposal.accepted).length;
+    const info = this.database.prepare(`
+      INSERT INTO harvest_batch (cycle_id, mode, at, questions_asked, accepted, rejected, applied, record)
+      VALUES (?, ?, ?, ?, ?, ?, 0, ?)
+    `).run(
+      batch.cycleId ?? null,
+      batch.mode,
+      batch.at || new Date().toISOString(),
+      batch.questionsAsked ?? (batch.proposals || []).length,
+      accepted,
+      (batch.proposals || []).length - accepted,
+      JSON.stringify(batch),
+    );
+    return Number(info.lastInsertRowid);
+  }
+
+  getHarvestBatch(batchId) {
+    const row = this.database.prepare('SELECT * FROM harvest_batch WHERE id = ?').get(batchId);
+    if (!row) return null;
+    return {
+      id: row.id,
+      cycleId: row.cycle_id,
+      mode: row.mode,
+      at: row.at,
+      questionsAsked: row.questions_asked,
+      accepted: row.accepted,
+      rejected: row.rejected,
+      applied: Boolean(row.applied),
+      appliedAt: row.applied_at,
+      written: row.written,
+      batch: JSON.parse(row.record),
+    };
+  }
+
+  harvestBatches(cycleId = null) {
+    const rows = cycleId === null
+      ? this.database.prepare('SELECT * FROM harvest_batch ORDER BY id DESC').all()
+      : this.database.prepare('SELECT * FROM harvest_batch WHERE cycle_id = ? ORDER BY id DESC').all(cycleId);
+    return rows.map((row) => ({
+      id: row.id,
+      cycleId: row.cycle_id,
+      mode: row.mode,
+      at: row.at,
+      questionsAsked: row.questions_asked,
+      accepted: row.accepted,
+      rejected: row.rejected,
+      applied: Boolean(row.applied),
+      appliedAt: row.applied_at,
+      written: row.written,
+    }));
+  }
+
+  /**
+   * Mark a batch applied. The MODE QUARANTINE is structural here, mirroring applyProposals:
+   * only an evaluation batch teaches the brain, and a batch is applied at most once.
+   */
+  markHarvestApplied(batchId, { written, at = null } = {}) {
+    const stored = this.getHarvestBatch(batchId);
+    if (!stored) throw new Error(`No harvest batch ${batchId} exists in this ledger.`);
+    if (stored.applied) throw new Error(`Harvest batch ${batchId} has already been applied.`);
+    if (stored.mode !== 'evaluation') {
+      throw new Error(`Refusing to mark harvest batch ${batchId} applied: its mode is ${stored.mode}, and only an evaluation cycle teaches the brain.`);
+    }
+    this.database.prepare('UPDATE harvest_batch SET applied = 1, applied_at = ?, written = ? WHERE id = ?')
+      .run(at || new Date().toISOString(), written ?? null, batchId);
   }
 
   // Certification.

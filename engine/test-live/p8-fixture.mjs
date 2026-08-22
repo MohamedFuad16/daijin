@@ -27,8 +27,12 @@ import path from 'node:path';
 const FILES = {
   'package.json': JSON.stringify({
     name: 'orderly', version: '0.1.0', type: 'module',
-    scripts: { test: 'node --test test/', lint: 'echo lint', build: 'echo build' },
-    dependencies: { 'better-sqlite3': '^11.0.0' },
+    // `node --test` with NO directory argument: Node 26 refuses `node --test test/`
+    // (it tries to load the directory as a module), and the default discovers test/
+    // on every Node that has the runner. No dependencies, so the suite runs on a
+    // bare machine: the old better-sqlite3 entry was never imported, and its failed
+    // native build left node_modules absent, classifying every gate unavailable.
+    scripts: { test: 'node --test', lint: 'echo lint', build: 'echo build' },
   }, null, 2),
 
   'README.md': [

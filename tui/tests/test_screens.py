@@ -93,27 +93,32 @@ async def test_repo_home_shows_a_card_per_repo_with_one_primary_action():
         assert len(without_brain) == 1
         assert without_brain[0].repo_path.endswith("kiln-api")
         assert str(without_brain[0].query_one(".card-action", Button).label) == "Initialize brain"
-        assert "sqlite" in text_of(app.screen.query_one("#engine-status", Static))
+        assert "Engine ready" in text_of(app.screen.query_one("#engine-status", Static))
         assert "kiln-api" in text_of(app.screen.query_one("#home-notice", Banner))
 
 
 @run_async
-async def test_repo_home_shows_the_spend_gate_before_anything_is_attempted():
+async def test_repo_home_keeps_gate_plumbing_off_the_front_door():
+    # The gate is observable where it is acted on (Gym, Exams); the home says
+    # whether the engine is ready and nothing an operator manual would need.
     async with running_app(gate_open=False) as (app, pilot):
         status = text_of(app.screen.query_one("#engine-status", Static))
-        assert "spend gate" in status and "blocked" in status
+        assert "spend gate" not in status
+        assert "GATE" not in status
         assert app.client.engine.spend_calls == []
 
 
 @run_async
-async def test_repo_card_shows_the_case_count_with_its_percentage():
-    """Owner-overruled policy: the count keeps the denominator honest and the
-    percentage rides beside it for glanceability. Both, never either alone."""
+async def test_repo_card_shows_the_rate_as_a_percentage_with_a_bar():
+    """Owner re-ruled 2026-08-22: the card carries "MCP retrieval rate NN%" and
+    a fill bar; the honest denominator lives on the Brain screen's gold-case
+    table, one keypress away."""
     async with running_app() as (app, pilot):
         card = next(c for c in app.screen.query(RepoCard) if c.repo_path.endswith("orchard-web"))
         floor = text_of(card.query_one(".card-floor", Static))
-        assert "31 of 34" in floor
-        assert "91.2%" in floor
+        assert "MCP retrieval rate" in floor
+        assert "91%" in floor
+        assert "31 of 34" not in floor
 
 
 @run_async
@@ -124,7 +129,7 @@ async def test_repo_card_sparkline_is_the_score_history_trend_not_the_budget_swe
         # scoreHistory arrives newest first; the trend reads oldest to newest.
         assert card.history == pytest.approx([21 / 31, 24 / 33, 27 / 34, 30 / 34, 31 / 34])
         caption = text_of(card.query_one(Sparkline))
-        assert "floor over time" in caption
+        assert "accuracy over time" in caption
         assert "budget" not in caption
         assert "sweep" not in caption
         assert any(call[0] == "scoreHistory" for call in app.client.engine.calls)
@@ -132,11 +137,13 @@ async def test_repo_card_sparkline_is_the_score_history_trend_not_the_budget_swe
 
 @run_async
 async def test_the_budget_sweep_lives_on_the_brain_view_with_its_own_caption():
+    # One labelled line per measured budget, recommendation marked; the dithered
+    # bars this replaces read as broken UI (owner field, 2026-08-22).
     async with running_app() as (app, pilot):
         await goto(pilot, "3")
         rendered = screen_text(app)
-        assert "one measurement across budgets" in rendered
-        assert "not a trend over time" in rendered
+        assert "measured at each budget" in rendered
+        assert "<- recommended" in rendered
 
 
 
@@ -280,7 +287,7 @@ async def test_warn_says_which_of_its_two_situations_this_is():
         second = " ".join(text_of(s) for s in measured.query(Static))
         assert "never measured" in first, f"the unscored repo does not say so: {first!r}"
         assert "no brain yet" not in first, "a repo that IS indexed was told it has no brain"
-        assert "0.62" in second and "never measured" not in second
+        assert "62%" in second and "never measured" not in second
 
 @run_async
 async def test_a_critical_repo_is_not_offered_a_fresh_brain_over_the_one_it_has():
@@ -494,9 +501,10 @@ async def test_the_brain_hero_says_healthy_and_the_rate_before_anything_else():
         await goto(pilot, "3")
         hero = text_of(app.screen.query_one("#brain-hero", Static))
         assert "HEALTHY" in hero
-        assert "91.2%" in hero
+        assert "MCP retrieval rate" in hero
+        assert "91%" in hero
         facts = text_of(app.screen.query_one("#brain-hero-facts", Static))
-        assert "violations 0" in facts
+        assert "MRR" in facts
 
 
 @run_async
@@ -507,11 +515,10 @@ async def test_brain_reports_the_floor_once_with_mrr_marked_and_a_budget_control
     async with running_app() as (app, pilot):
         await goto(pilot, "3")
         hero = text_of(app.screen.query_one("#brain-hero", Static))
-        assert "31 of 34" in hero
-        assert "91.2%" in hero, "the count carries its percentage beside it"
+        assert "91%" in hero, "the rate is stated once, in the hero"
         facts = text_of(app.screen.query_one("#brain-hero-facts", Static))
-        assert "movement only" in facts
-        assert "never a floor" in facts
+        assert "answer ranking (MRR)" in facts
+        assert "how close to the top" in facts, "MRR is defined where it is shown"
         budget = app.screen.query_one("#brain-budget", Select)
         labels = [label for label, _ in budget._options if isinstance(label, str)]
         assert any("4000 (recommended)" in label for label in labels)
@@ -567,8 +574,34 @@ async def test_a_standing_unit_reports_no_token_cost_rather_than_none():
 async def test_mcp_snippet_unlocks_above_the_threshold():
     async with running_app() as (app, pilot):
         await goto(pilot, "3")
-        assert "MCP unlocked" in text_of(app.screen.query_one("#mcp-summary", Static))
+        button = app.screen.query_one("#mcp-unlock", Button)
+        assert not button.disabled, "above the bar, the connect button is armed"
+        assert "Ready to connect" in text_of(app.screen.query_one("#mcp-summary", Static))
+        # The code appears on the CLICK, not before.
+        assert "mcpServers" not in text_of(app.screen.query_one("#mcp-summary", Static))
+        app.screen.show_mcp_snippet()
         assert "mcpServers" in text_of(app.screen.query_one("#mcp-summary", Static))
+
+
+@run_async
+async def test_the_connection_code_renders_with_its_brackets_intact():
+    """The snippet is JSON and JSON's brackets are Rich markup's tags.
+
+    Interpolating it raw crashed the whole app on the click (fresh-install
+    walkthrough, 2026-08-23): MarkupError over the args array. The text must
+    render escaped, brackets visible.
+    """
+    async with running_app() as (app, pilot):
+        await goto(pilot, "3")
+        app.client.engine.mcp_snippet_args = '["serve", "/Users/x/.daijin"]'
+        app.screen.mcp_result = {
+            "unlocked": True,
+            "snippet": '{"mcpServers": {"daijin": {"args": ["serve", "--state-root=/Users/x/.daijin"]}}}',
+        }
+        app.screen.show_mcp_snippet()
+        await settle(pilot)
+        shown = text_of(app.screen.query_one("#mcp-summary", Static))
+        assert '"--state-root=/Users/x/.daijin"' in shown, "the bracketed JSON must survive rendering"
 
 
 @run_async
@@ -576,8 +609,9 @@ async def test_mcp_snippet_stays_locked_below_the_threshold():
     async with running_app(repo=SUB_75_REPO) as (app, pilot):
         await goto(pilot, "3")
         panel = text_of(app.screen.query_one("#mcp-summary", Static))
-        assert "MCP locked" in panel
+        assert "Not available yet" in panel
         assert "mcpServers" not in panel
+        assert app.screen.query_one("#mcp-unlock", Button).disabled, "below the bar, the button stays gray"
 
 
 @run_async
@@ -585,10 +619,13 @@ async def test_mechanical_diagnosis_is_shown_without_spending():
     async with running_app(repo=SUB_75_REPO) as (app, pilot):
         await goto(pilot, "3")
         headline = text_of(app.screen.query_one("#diagnosis-headline", Static))
+        assert "Brain report" in headline
         assert "21 of 31" in headline
-        assert "below the 0.75 threshold" in headline
+        assert "under the serving bar" in headline
         clusters = app.screen.query_one("#cluster-table", DataTable)
-        assert clusters.row_count == 9
+        # 3 byType + 2 byArea + 3 byArm: the engine's tally only counts MISSES, so a
+        # zero-miss bucket never appears as a row.
+        assert clusters.row_count == 8
         assert app.screen.query_one("#missed-table", DataTable).row_count == 4
         assert app.client.engine.spend_calls == []
 
@@ -676,16 +713,18 @@ async def test_gates_table_classifies_every_candidate_with_evidence():
         await goto(pilot, "4")
         table = app.screen.query_one("#gates-table", DataTable)
         assert table.row_count == len(app.screen.gates)
-        column = GATE_COLUMNS.index("classification")
+        column = GATE_COLUMNS.index("state")
         classifications = {str(table.get_row_at(i)[column]) for i in range(table.row_count)}
-        assert classifications == {"live", "measured", "pre-broken", "unavailable"}
-        # The evidence pane quotes the measurement rather than paraphrasing it,
-        # so the numbers it shows have to be the ones the baseline recorded.
+        # Plain words on screen, contract words on the wire (D-0067).
+        assert classifications == {"working", "tracked by number", "already failing", "cannot run here"}
+        # The evidence pane says what the check did in words a person reads:
+        # what happened, and how long it took.
         evidence = text_of(app.screen.query_one("#gate-evidence", Static))
         first = app.screen.gates[0]["baseline"]
-        assert str(first["durationMs"]) in evidence, f"the duration is not shown: {evidence!r}"
-        assert str(first["timeoutMs"]) in evidence, "the budget the duration is measured against is missing"
-        assert first["status"] in evidence
+        assert "untouched repo" in evidence
+        took = f"{first['durationMs'] / 1000:.1f}s"
+        assert took in evidence, f"the duration is not shown: {evidence!r}"
+        assert {"pass": "succeeded", "fail": "failed"}.get(first["status"], first["status"]) in evidence
 
 
 @run_async
@@ -886,11 +925,11 @@ async def test_a_row_the_user_just_typed_is_not_shown_as_classified():
         await settle(pilot)
         table = app.screen.query_one("#gates-table", DataTable)
         row = table.get_row_at(0)
-        assert str(row[GATE_COLUMNS.index("classification")]) == "not classified"
-        assert str(row[GATE_COLUMNS.index("baseline")]) == "not run"
-        assert str(row[GATE_COLUMNS.index("enabled")]) == "-", "an absent flag was rendered as a no"
+        assert str(row[GATE_COLUMNS.index("state")]) == "not checked yet"
+        assert str(row[GATE_COLUMNS.index("last run")]) == "not run"
+        assert str(row[GATE_COLUMNS.index("used")]) == "-", "an absent flag was rendered as a no"
         evidence = text_of(app.screen.query_one("#gate-evidence", Static))
-        assert "No baseline has been run" in evidence
+        assert "has not been run yet" in evidence
         assert "None" not in evidence, f"a null was printed as the word None: {evidence!r}"
 
 
@@ -1019,7 +1058,10 @@ async def test_gym_reads_the_gate_from_serve_status_before_any_attempt():
     async with running_app(gate_open=False) as (app, pilot):
         await goto(pilot, "5")
         gate = text_of(app.screen.query_one("#gym-gate", Static))
-        assert "blocked" in gate and ".daijin/GATE" in gate
+        # Plain words, no gate-file path on screen (owner field, 2026-08-22):
+        # the state is still readable BEFORE any attempt.
+        assert "locked" in gate and "asked to unlock" in gate
+        assert ".daijin/GATE" not in gate
         assert app.screen.gate_open is False
         assert app.client.engine.spend_calls == [], "reading the gate must not attempt a cycle"
         assert "gate reads blocked" in str(app.screen.query_one("#gym-start", Button).label)
@@ -1147,6 +1189,74 @@ async def test_gym_tabs_switch_with_the_mouse():
         assert tabs.active == "gym-tab-run"
 
 
+@run_async
+async def test_lessons_tab_renders_the_harvest_batches_with_applied_state_visible():
+    """gymStatus.harvest rides the status read: batches render newest first,
+    and an unapplied batch is VISIBLY unapplied, which is the platform's
+    seven-silent-cycles lesson as a table column."""
+    async with running_app() as (app, pilot):
+        await goto(pilot, "5")
+        table = app.screen.query_one("#harvest-table", DataTable)
+        assert table.row_count == 2
+        first = [str(cell) for cell in table.get_row_at(0)]
+        assert first[2] == "evaluation"
+        assert first[6] == "no", "an unapplied batch says no, never blank"
+
+
+@run_async
+async def test_learn_from_results_is_confirmed_and_lands_a_batch():
+    """gymHarvest is spend-touching: the dialog comes first, and the batch
+    appears on the next status read."""
+    async with running_app(gate_open=True) as (app, pilot):
+        await goto(pilot, "5")
+        tabs = app.screen.query_one(TabbedContent)
+        await pilot.click("#--content-tab-gym-tab-lessons")
+        await settle(pilot)
+        assert tabs.active == "gym-tab-lessons"
+        await pilot.click("#gym-harvest")
+        await settle(pilot)
+        assert isinstance(app.screen, SpendConfirmScreen), "the teacher is paid; consent comes first"
+        await pilot.click("#spend-confirm")
+        await settle(pilot, 12)
+        call = next(c for c in app.client.engine.calls if c[0] == "gymHarvest")
+        assert call[1]["confirm"] is True
+        assert len(app.client.engine.harvest_batches) == 3, "the mock records the new batch"
+
+
+@run_async
+async def test_apply_lessons_writes_only_an_evaluation_batch_and_marks_it():
+    """The separate act: consent, evaluation-only, and the batch flips to
+    written on the wire so the next status read shows it."""
+    async with running_app() as (app, pilot):
+        await goto(pilot, "5")
+        await pilot.click("#--content-tab-gym-tab-lessons")
+        await settle(pilot)
+        table = app.screen.query_one("#harvest-table", DataTable)
+        table.move_cursor(row=0)
+        await pilot.click("#gym-apply")
+        await settle(pilot)
+        assert getattr(app.screen, "title_text", "") == "Write batch 2 into the brain"
+        await pilot.click("#confirm-yes")
+        await settle(pilot, 12)
+        call = next(c for c in app.client.engine.calls if c[0] == "gymHarvestApply")
+        assert call[1]["batchId"] == 2 and call[1]["confirm"] is True
+        batch = next(row for row in app.client.engine.harvest_batches if row["id"] == 2)
+        assert batch["applied"] is True and batch["written"] == 1
+
+    # An experiment batch never writes: the screen refuses before any call.
+    async with running_app() as (app, pilot):
+        await goto(pilot, "5")
+        await pilot.click("#--content-tab-gym-tab-lessons")
+        await settle(pilot)
+        table = app.screen.query_one("#harvest-table", DataTable)
+        table.move_cursor(row=1)
+        await pilot.click("#gym-apply")
+        await settle(pilot)
+        notice = text_of(app.screen.query_one("#gym-notice", Banner))
+        assert "never writes the brain" in notice
+        assert not any(c[0] == "gymHarvestApply" for c in app.client.engine.calls)
+
+
 # 6. Exams ------------------------------------------------------------------
 
 
@@ -1157,13 +1267,13 @@ async def test_exams_screen_keeps_the_two_status_axes_apart():
         table = app.screen.query_one("#exam-table", DataTable)
         assert table.row_count == 5
         headers = [str(column.label) for column in table.columns.values()]
-        assert "status" in headers and "benchmark" in headers and "held out" in headers
+        assert "status" in headers and "scoring" in headers and "held out" in headers
         assert "title" in headers
         rows = {str(table.get_row_at(i)[0]): table.get_row_at(i) for i in range(table.row_count)}
         quarantined = rows["exam-0061"]
         assert str(quarantined[1]) == "Add jitter to the retry backoff"
-        assert str(quarantined[3]) == "promoted", "authoring status is untouched by quarantine"
-        assert str(quarantined[4]) == "quarantined"
+        assert str(quarantined[3]) == "promoted", "authoring status is untouched by exclusion"
+        assert str(quarantined[4]) == "excluded", "the wire value quarantined renders as the plain word"
         assert len(str(quarantined[6])) >= 20
         # Every row is readable without decoding an id.
         for index in range(table.row_count):
@@ -1211,7 +1321,9 @@ async def test_veto_records_its_reason():
         await settle(pilot)
         exam = next(e for e in app.screen.exams if e["examId"] == "exam-0058")
         assert exam["status"] == "vetoed"
-        assert "statement leaks the fix" in text_of(app.screen.query_one("#exam-provenance", Static))
+        assert "rejected because: statement leaks the fix" in text_of(
+            app.screen.query_one("#exam-provenance", Static)
+        )
 
 
 @run_async
@@ -1944,61 +2056,31 @@ def test_the_mode_and_ungraded_vocabularies_match_the_contract_both_ways():
         assert UNGRADED_NOTE[code].strip(), f"{code} has no sentence to show"
 
 
-def test_engine_status_speaks_the_engines_field_names():
-    """The shape moved under this renderer and the placeholders made it worse.
+def test_engine_status_speaks_plain_words():
+    """The front door says whether the engine is ready and which model embeds.
 
-    embedder became model, driver became backend, path became stateRoot. The
-    renderer kept reading the old names and printed "not reported" for fields
-    that were right there, which is a CLAIM about the engine rather than the
-    ambiguous "?" it replaced. Confidently wrong beats vaguely wrong only for
-    the person who wrote it.
-
-    Shape verified against the daemon on 2026-08-17.
+    The store path, the model digest and the spend-gate file are operator
+    detail that lives in Settings and the Gym; showing them here read as junk
+    data to the owner (field, 2026-08-22).
     """
     from daijin_tui.screens.repo_home import RepoHomeScreen
 
-    live = {
+    up = RepoHomeScreen._engine_markup({
         "ollama": {"reachable": True, "endpoint": "http://localhost:11434",
-                   "model": "bge-m3:latest", "dimension": 1024,
-                   "version": "0.32.1", "digest": "79076464", "hint": None},
-        "db": {"backend": "sqlite", "repos": 3, "stateRoot": "/Users/owner/.daijin"},
-        "spendGate": {"open": False, "path": ".daijin/GATE"},
-    }
-    markup = RepoHomeScreen._engine_markup(live)
-    for value in ("http://localhost:11434", "bge-m3:latest", "1024", "0.32.1",
-                  "79076464", "sqlite", "/Users/owner/.daijin"):
-        assert value in markup, f"{value} was reported by the engine and is not on screen"
-    assert "not reported" not in markup and "not probed" not in markup, (
-        f"a placeholder stood in for a field the engine sent: {markup!r}"
-    )
-
-
-def test_an_unreachable_embedder_keeps_its_configuration_and_shows_the_hint():
-    """endpoint, model and dimension are CONFIGURATION, not probe results.
-
-    They stay real when ollama is down. Only version and digest go null, and
-    the hint names the host actually probed, so paraphrasing it here would let
-    this line contradict the endpoint printed directly above it.
-    """
-    from daijin_tui.screens.repo_home import RepoHomeScreen
-
-    hint = ("Ollama not reachable at http://gpu-box.local:11434; check that the host "
-            "is up and reachable, or clear the configured endpoint to fall back to a "
-            "local ollama")
-    markup = RepoHomeScreen._engine_markup({
-        "ollama": {"reachable": False, "endpoint": "http://gpu-box.local:11434",
                    "model": "bge-m3", "dimension": 1024,
-                   "version": None, "digest": None, "hint": hint},
-        "db": {"backend": "sqlite", "repos": 0, "stateRoot": "/Users/owner/.daijin"},
-        "spendGate": {"open": False, "path": ".daijin/GATE"},
+                   "version": "0.32.1", "digest": "ab12cd", "hint": None},
+        "db": {"backend": "sqlite", "repos": 4, "stateRoot": "~/.daijin"},
+        "spendGate": {"open": True, "path": ".daijin/GATE"},
     })
-    assert "http://gpu-box.local:11434" in markup, "the configured endpoint vanished when it went down"
-    assert "bge-m3" in markup and "1024" in markup, "configuration was hidden behind unreachable"
-    assert hint in markup, "the engine's hint was dropped or paraphrased"
-    assert markup.count("not probed while unreachable") == 2, (
-        "version and digest are the only two that go null, and they should say so"
-    )
+    assert "Engine ready" in up
+    assert "bge-m3" in up
+    assert "0.32.1" in up
+    for noise in ("digest", "sqlite", "stateRoot", "~/.daijin", "spend gate", ".daijin/GATE"):
+        assert noise not in up, f"operator detail leaked to the front door: {noise}"
 
+    down = RepoHomeScreen._engine_markup({"ollama": {"reachable": False, "model": "bge-m3"}})
+    assert "not running" in down
+    assert "Ollama" in down
 
 def test_engine_status_never_shows_a_bare_question_mark():
     """A lone ? reads as a rendering fault, not as a state.
@@ -2021,20 +2103,7 @@ def test_engine_status_never_shows_a_bare_question_mark():
         markup = RepoHomeScreen._engine_markup(status)
         assert "?" not in markup, f"a bare question mark reached the user: {markup!r}"
         assert "None" not in markup, f"a null printed as the word None: {markup!r}"
-        assert "not measured yet" in markup or "not reachable" in markup or "not reported" in markup
-
-    # And a fully reported status still shows the values themselves. The field
-    # NAMES are the engine's, not the ones this test was first written against.
-    full = RepoHomeScreen._engine_markup({
-        "ollama": {"reachable": True, "endpoint": "http://localhost:11434",
-                   "model": "bge-m3", "dimension": 1024,
-                   "version": "0.32.1", "digest": "ab12cd", "hint": None},
-        "db": {"backend": "sqlite", "repos": 4, "stateRoot": "~/.daijin"},
-        "spendGate": {"open": True, "path": ".daijin/GATE"},
-    })
-    for value in ("http://localhost:11434", "bge-m3", "1024", "sqlite", "ab12cd", "~/.daijin"):
-        assert value in full, f"{value} was replaced by a placeholder"
-    assert "not reported" not in full and "not probed" not in full
+        assert "no model configured" in markup or "not running" in markup
 
 
 @run_async
@@ -2743,10 +2812,10 @@ async def test_the_unreachable_branch_is_reachable_in_the_mock():
     async with running_app(engine=engine) as (app, pilot):
         await settle(pilot, 15)
         status = text_of(app.screen.query_one("#engine-status", Static))
-        assert "unreachable" in status
-        assert "not reachable at" in status, "the engine's hint is not shown"
-        assert "127.0.0.1:11434" in status, "the configured endpoint vanished when it went down"
-        assert "bge-m3" in status, "configuration was hidden behind unreachable"
+        assert "not running" in status
+        # The engine's own hint sentence still rides the panel when it names
+        # the host it probed; the plain headline does not replace it.
+        assert "bge-m3" in status, "the configured model must survive the down state"
 
 
 @run_async
@@ -2815,7 +2884,9 @@ async def test_one_repo_whose_analyze_never_answers_does_not_blank_the_screen():
         original = app.client.call
 
         async def never_answers(method, params=None):
-            if method == "analyze" and (params or {}).get("repoPath") == stalled_path:
+            # retrievalScore is the per-card call now (analyze left the card
+            # path when hasBrainFolder stopped deciding needs_brain).
+            if method == "retrievalScore" and (params or {}).get("repoPath") == stalled_path:
                 await asyncio.sleep(30)
             return await original(method, params)
 
@@ -2831,7 +2902,7 @@ async def test_one_repo_whose_analyze_never_answers_does_not_blank_the_screen():
         # The skeleton painted regardless.
         status = text_of(screen.query_one("#engine-status", Static))
         assert status.strip(), "the status block never painted, so the screen was blank"
-        assert "ollama" in status
+        assert "Ollama" in status
 
         cards = list(screen.query(RepoCard))
         assert len(cards) == len(mock_data.REPOS), "cards were not mounted"
@@ -2902,7 +2973,7 @@ async def test_the_skeleton_paints_before_serve_status_answers():
 
         # And it fills in when the engine finally answers.
         block = text_of(screen.query_one("#engine-status", Static))
-        assert "ollama" in block, f"the real status never replaced the placeholder: {block!r}"
+        assert "Ollama" in block, f"the real status never replaced the placeholder: {block!r}"
         assert "has not answered" not in block
 
 
@@ -2974,7 +3045,7 @@ async def test_the_status_block_says_something_from_the_first_frame():
             app.client.call = original
             repo_home.STATUS_PATIENCE_SECONDS = original_patience
 
-        assert "ollama" in text_of(screen.query_one("#engine-status", Static))
+        assert "Ollama" in text_of(screen.query_one("#engine-status", Static))
 
 
 def test_the_two_bounds_are_derived_from_two_different_engine_numbers():

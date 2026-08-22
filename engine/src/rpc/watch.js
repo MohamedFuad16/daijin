@@ -299,7 +299,7 @@ export function examBankFindings(repoPath, exams, { at } = {}) {
  * obeyed. That asymmetry is the point: the auditor's judgment decides WHETHER
  * a known remedy runs, never WHAT runs.
  */
-export function triagePrompt(row) {
+export function triagePrompt(row, { watcherNote = null } = {}) {
   return [
     'You are the auditor for a developer tool called daijin. The watcher raised this finding:',
     '',
@@ -309,6 +309,7 @@ export function triagePrompt(row) {
     `target: ${row.target}`,
     `summary: ${row.summary}`,
     row.detail ? `detail: ${row.detail}` : '',
+    watcherNote ? `\nThe watcher's own verification of this finding: ${watcherNote}` : '',
     '',
     row.action
       ? `A fix is available and its id is ${row.action.fixId}: ${row.action.label}. You may apply it or decline it.`
@@ -318,6 +319,55 @@ export function triagePrompt(row) {
     '{"reasoning": "<two sentences: what this means, and what should happen>",',
     ' "applyFixId": <the fix id string to apply, or null>}',
   ].filter(Boolean).join('\n');
+}
+
+/**
+ * The watcher's OWN voice: a cheap verification pass over one mechanical finding, run on the
+ * configured watcher role before the finding reaches the auditor. The watcher assesses; it
+ * never fixes and never chooses a fix - `confirmed` and one sentence are all it may say, and
+ * the sentence rides the finding's thread so the auditor (and the owner) read the watcher's
+ * reading beside the raw evidence. An unconfigured or failing watcher degrades to the
+ * mechanical finding alone, because a watch that cannot speak must still watch.
+ */
+export function watcherVerifyPrompt(row) {
+  return [
+    'You are the watcher for a developer tool called daijin. You monitor the tool and verify',
+    'findings cheaply before they reach the auditor. This mechanical finding was raised:',
+    '',
+    `severity: ${row.severity}`,
+    `category: ${row.category}`,
+    `target: ${row.target}`,
+    `summary: ${row.summary}`,
+    row.detail ? `detail: ${row.detail}` : '',
+    '',
+    'Assess it: does the evidence support the finding as stated, and how urgent is it for the',
+    'owner? Do not propose fixes; the auditor decides what happens.',
+    '',
+    'Reply with STRICT JSON only, no prose, no fences:',
+    '{"confirmed": true or false, "note": "<one or two sentences: your reading of the finding>"}',
+  ].filter(Boolean).join('\n');
+}
+
+export function parseWatcherReply(text) {
+  const stripped = String(text || '').trim().replace(/^```[a-z]*\n?|\n?```$/g, '').trim();
+  let parsed;
+  try {
+    parsed = JSON.parse(stripped);
+  } catch {
+    const start = stripped.indexOf('{');
+    const end = stripped.lastIndexOf('}');
+    if (start === -1 || end <= start) throw new Error('The watcher reply is not JSON and contains no object literal.');
+    parsed = JSON.parse(stripped.slice(start, end + 1));
+  }
+  const note = String(parsed?.note || '').trim();
+  if (!note) throw new Error('The watcher reply carries no note; a verification with no statement verifies nothing.');
+  return { confirmed: parsed?.confirmed === true, note };
+}
+
+/** Verify one finding with a resolved watcher role (see roleGenerate). */
+export async function watcherVerify(watcher, row) {
+  const { text } = await watcher.generate({ prompt: watcherVerifyPrompt(row), maxTokens: 1_024 });
+  return parseWatcherReply(text);
 }
 
 export function parseTriageReply(text) {
@@ -339,9 +389,11 @@ export function parseTriageReply(text) {
   return { reasoning, applyFixId };
 }
 
-/** Triage one finding with a resolved auditor role (see roleGenerate). */
-export async function auditTriage(auditor, row) {
-  const { text } = await auditor.generate({ prompt: triagePrompt(row), maxTokens: 2_048 });
+/** Triage one finding with a resolved auditor role (see roleGenerate). The watcher's
+ *  verification note, when one exists, rides the prompt so the auditor judges the finding
+ *  WITH the watcher's reading rather than instead of it. */
+export async function auditTriage(auditor, row, { watcherNote = null } = {}) {
+  const { text } = await auditor.generate({ prompt: triagePrompt(row, { watcherNote }), maxTokens: 2_048 });
   return parseTriageReply(text);
 }
 

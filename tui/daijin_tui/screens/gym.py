@@ -24,11 +24,15 @@ from ..widgets import (
     format_duration,
 )
 from .base import DaijinScreen
-from .dialogs import budget_estimate_lines
+from .dialogs import ConfirmScreen, budget_estimate_lines
 
 
 # The extension ceiling a cycle works against, from the ADR-0167 defaults.
 GYM_TOKEN_BUDGET = 400_000
+
+
+# Client-side sentinel for the "run every ready exam" pick; never on the wire.
+ALL_EXAMS = "__all__"
 
 
 class GymScreen(DaijinScreen):
@@ -59,11 +63,12 @@ class GymScreen(DaijinScreen):
             # quarantined and UNGRADED (the ledger refuses rubrics for it);
             # experiment is graded by the teacher but never scored; evaluation
             # is the scored record itself.
+            # Plain words on screen, contract words on the wire (D-0067).
             yield Select(
                 [
-                    ("harness-debug (ungraded)", "harness-debug"),
-                    ("experiment (graded, not scored)", "experiment"),
-                    ("evaluation (SCORED RECORD)", "evaluation"),
+                    ("Practice run (not graded)", "harness-debug"),
+                    ("Graded practice (teacher grades, nothing counts)", "experiment"),
+                    ("Official run (graded AND counts on the record)", "evaluation"),
                 ],
                 value="harness-debug",
                 id="gym-mode",
@@ -93,6 +98,22 @@ class GymScreen(DaijinScreen):
                 yield Static("", id="ledger-summary", markup=True)
                 yield DataTable(id="cycle-table", cursor_type="row")
                 yield PlotextLine(title="tokens per cycle", height=12, id="cycle-trend")
+            with TabPane("Lessons", id="gym-tab-lessons"):
+                yield Static(
+                    "After a graded run, [b]Learn from results[/b] asks the teacher what "
+                    "knowledge would have prevented each gap. The answers become lesson "
+                    "proposals, checked against the current code, and land here for your "
+                    "review. Nothing touches the brain until you press "
+                    "[b]Write lessons into the brain[/b], and only an evaluation run's "
+                    "lessons can be written: an experiment run's lessons are advice to read.",
+                    id="harvest-explainer",
+                    markup=True,
+                )
+                yield SectionTitle("Lesson batches", "select a row, then write its lessons into the brain")
+                yield DataTable(id="harvest-table", cursor_type="row")
+                with Horizontal(id="harvest-actions"):
+                    yield Button("Learn from results (spends)", id="gym-harvest", variant="primary")
+                    yield Button("Write lessons into the brain", id="gym-apply")
 
     async def load(self) -> None:
         self._subscribe()
@@ -118,6 +139,7 @@ class GymScreen(DaijinScreen):
         status = status_result
         self._render_run(status.get("activeRun") or {})
         self._render_cycles(status.get("cycles") or [], status.get("ledger") or {})
+        self._render_harvest(status.get("harvest") or [])
         # serveStatus carries the gate, so the state is readable BEFORE any
         # attempt. The user should never have to press a button to find out
         # that pressing the button was refused.
@@ -130,8 +152,8 @@ class GymScreen(DaijinScreen):
         state = "open" if self.gate_open else "blocked"
         tone = "green" if self.gate_open else "yellow"
         self.query_one("#gym-gate", Static).update(
-            f"spend gate [{tone}]{state}[/{tone}] at {gate.get('path', '?')}  "
-            f"[dim]the gate moves by the owner's hand, not the agent's[/dim]"
+            f"spending [{tone}]{'unlocked' if self.gate_open else 'locked'}[/{tone}]  "
+            f"[dim]{'this run can pay providers' if self.gate_open else 'you will be asked to unlock when you start'}[/dim]"
         )
         # The button stays live even when the gate reads blocked. The engine is
         # the authority on its own gate; a client that greys the button out is
@@ -158,6 +180,7 @@ class GymScreen(DaijinScreen):
             "#criteria-table": ("criterion", "result", "detail"),
             "#rollback-table": ("round", "discarded edits", "reason"),
             "#cycle-table": ("cycle", "exam", "verdict", "tokens", "rounds", "duration"),
+            "#harvest-table": ("batch", "cycle", "mode", "asked", "kept", "dropped", "written to brain"),
         }
         for selector, columns in specs.items():
             table = self.query_one(selector, DataTable)
@@ -237,9 +260,27 @@ class GymScreen(DaijinScreen):
         tone = "yellow" if mismatch else "green"
         self.query_one("#ledger-summary", Static).update(
             f"mode [b]{ledger.get('mode', '?')}[/b]  scored writes [b]{ledger.get('scoredWrites', '?')}[/b]  "
-            f"drawn cohort [{tone}]{drawn}[/{tone}] counted from result files, rows written {rows}\n"
-            f"[dim]a cap death leaves no row, so the denominator is counted from files, never from rows[/dim]"
+            f"exams drawn [{tone}]{drawn}[/{tone}] (counted from result files), graded rows written {rows}\n"
+            f"[dim]a run that dies at its token cap leaves no row, so the drawn count comes from files, never from rows[/dim]"
         )
+
+    def _render_harvest(self, batches: list[dict[str, Any]]) -> None:
+        self.harvest_rows = {row.get("id"): row for row in batches}
+        table = self.query_one("#harvest-table", DataTable)
+        table.clear()
+        for row in batches:
+            table.add_row(
+                str(row.get("id", "-")),
+                str(row.get("cycleId", "-")),
+                str(row.get("mode", "-")),
+                format_count(row.get("questionsAsked")),
+                format_count(row.get("accepted")),
+                format_count(row.get("rejected")),
+                # "no" for an unapplied batch, never blank: an unapplied batch
+                # being visibly unapplied is the whole point of the column.
+                f"yes, {row.get('written')} lesson(s)" if row.get("applied") else "no",
+                key=str(row.get("id")),
+            )
 
     # Stream ---------------------------------------------------------------
 
@@ -306,9 +347,23 @@ class GymScreen(DaijinScreen):
             if row.get("heldOut"):
                 marks.append("held out")
             suffix = f"  [{', '.join(marks)}]" if marks else ""
-            return f"{row.get('examId')}  {row.get('title', '')}{suffix}".strip()
+            # ONE line per exam: a title that wraps breaks the picker into
+            # unreadable halves (owner field, 2026-08-22), so it is trimmed
+            # to fit beside its id and marks.
+            title = str(row.get("title", ""))
+            room = max(12, 46 - len(suffix))
+            if len(title) > room:
+                title = title[: room - 1].rstrip() + "\u2026"
+            return f"{row.get('examId')}  {title}{suffix}".strip()
 
-        select.set_options([(label(e), e.get("examId")) for e in exams])
+        options = [(label(e), e.get("examId")) for e in exams]
+        # Every runnable exam in one go. The engine draws the whole ready bank
+        # and skips reserved exams itself; ALL_EXAMS is a client-side sentinel,
+        # never sent on the wire.
+        runnable = [e for e in exams if e.get("status") == "promoted"]
+        if len(runnable) > 1:
+            options.insert(0, (f"All ready exams ({len(runnable)})", ALL_EXAMS))
+        select.set_options(options)
 
     def _render_events(self, batch: list[dict[str, Any]]) -> None:
         """Render a batch. A burst costs one repaint, not one per event."""
@@ -379,6 +434,136 @@ class GymScreen(DaijinScreen):
         elif event.button.id == "gym-refresh":
             event.stop()
             self.start_load()
+        elif event.button.id == "gym-harvest":
+            event.stop()
+            self.learn_from_results()
+        elif event.button.id == "gym-apply":
+            event.stop()
+            self.apply_lessons()
+
+    @work
+    async def learn_from_results(self) -> None:
+        """gymHarvest: the teacher answers one question per graded gap.
+
+        Proposal-only: the job records a batch for review and writes nothing
+        into the brain. Same locks as a cycle (gate scope gym-cycle, per-call
+        consent), and the gate re-blocks itself when the job ends.
+        """
+        notice = self.query_one("#gym-notice", Banner)
+        repo = getattr(self.app, "selected_repo", None)
+        if not repo:
+            notice.set_notice("No repo selected. Press 1 for the repo home and pick one.", "warn")
+            return
+        confirmed = await self.confirm_spend(
+            method="gymHarvest",
+            summary=(
+                "Learning from results asks the TEACHER role one question per graded "
+                "gap: what knowledge, had it been retrieved, would have prevented "
+                "this? The answers become lesson proposals for your review. Nothing "
+                "is written to the brain by this call."
+            ),
+            estimate_lines=["one teacher generation over the graded gaps",
+                            "plus free local checks of every proposed citation"],
+            confirm_label="Ask the teacher and spend",
+        )
+        if not confirmed:
+            notice.set_notice("Not started. Nothing was sent to a provider.", "info")
+            return
+        result = None
+        for attempt in range(2):
+            try:
+                result = await self.client.call("gymHarvest", {"repoPath": repo, "confirm": True})
+                break
+            except RpcError as error:
+                if error.is_spend_gate and attempt == 0:
+                    opened = await self.offer_gate_open(
+                        scope="gym-cycle",
+                        repo=repo,
+                        why="The spend gate is blocked, so the teacher cannot be paid to answer.",
+                    )
+                    if opened:
+                        continue
+                self.report_rpc_error(error)
+                notice.set_notice(error.hint, "error")
+                return
+        if result is None:
+            return
+        self.job_id = result.get("jobId")
+        notice.set_notice(
+            f"Learning from results, job {self.job_id}. The batch lands in the "
+            f"Lessons tab when it finishes; press Refresh status to reload.",
+            "info",
+        )
+
+    @work
+    async def apply_lessons(self) -> None:
+        """gymHarvestApply: the owner's hand writes the accepted lessons.
+
+        No provider is called; the confirmation is still explicit because this
+        writes into the repo's brain and reindexes it.
+        """
+        notice = self.query_one("#gym-notice", Banner)
+        repo = getattr(self.app, "selected_repo", None)
+        if not repo:
+            notice.set_notice("No repo selected. Press 1 for the repo home and pick one.", "warn")
+            return
+        table = self.query_one("#harvest-table", DataTable)
+        row_key = None
+        if table.row_count:
+            try:
+                row_key = table.coordinate_to_cell_key(table.cursor_coordinate).row_key.value
+            except Exception:  # noqa: BLE001 - no selection is a normal state
+                row_key = None
+        if row_key is None:
+            notice.set_notice("Select a lesson batch row first, in the Lessons tab.", "warn")
+            return
+        batch = getattr(self, "harvest_rows", {}).get(int(row_key)) or {}
+        if batch.get("applied"):
+            notice.set_notice(f"Batch {row_key} is already written into the brain.", "info")
+            return
+        if batch.get("mode") != "evaluation":
+            notice.set_notice(
+                f"Batch {row_key} came from a {batch.get('mode')} run, which never writes "
+                f"the brain. Its lessons are advice to read; only an evaluation run's "
+                f"lessons can be written.",
+                "warn",
+            )
+            return
+        if not batch.get("accepted"):
+            notice.set_notice(
+                f"Batch {row_key} kept no lessons, so there is nothing to write. "
+                f"A zero is a recorded outcome, not a failure.",
+                "info",
+            )
+            return
+        confirmed = await self.app.push_screen_wait(
+            ConfirmScreen(
+                title=f"Write batch {row_key} into the brain",
+                body=(
+                    f"{batch.get('accepted')} lesson(s) will be written into this repo's "
+                    f"brain as durable markdown, and the index will be rebuilt so "
+                    f"retrieval serves them. This is the step that makes the gym teach."
+                ),
+                confirm_label="Write the lessons",
+            )
+        )
+        if not confirmed:
+            notice.set_notice("Nothing written. The batch stays reviewable.", "info")
+            return
+        try:
+            result = await self.client.call(
+                "gymHarvestApply", {"repoPath": repo, "batchId": int(row_key), "confirm": True}
+            )
+        except RpcError as error:
+            self.report_rpc_error(error)
+            notice.set_notice(error.hint, "error")
+            return
+        self.job_id = result.get("jobId")
+        notice.set_notice(
+            f"Writing lessons, job {self.job_id}. Press Refresh status when it "
+            f"finishes to see the batch marked as written.",
+            "info",
+        )
 
     async def cancel_cycle(self) -> None:
         notice = self.query_one("#gym-notice", Banner)
@@ -435,14 +620,23 @@ class GymScreen(DaijinScreen):
         # for, so the client says so on the wire rather than sending a
         # training cohort the engine must refuse. The reserved split stays
         # honest: nothing is auto-drawn into it, and the dialog says which
-        # cohort the run is.
-        chosen = getattr(self, "exam_rows", {}).get(exam_id) or {}
+        # cohort the run is. The all-exams pick draws the whole ready bank
+        # (the engine skips reserved exams itself) and is always training.
+        run_all = exam_id == ALL_EXAMS
+        runnable = [e for e in getattr(self, "exam_rows", {}).values() if e.get("status") == "promoted"]
+        chosen = {} if run_all else (getattr(self, "exam_rows", {}).get(exam_id) or {})
         cohort = "held-out" if chosen.get("heldOut") else "training"
+        what = (
+            f"every ready exam ({len(runnable)} of them), one attempt each,"
+            if run_all
+            else f"exam {exam_id},"
+        )
         confirmed = await self.confirm_spend(
             method="gymStart",
             summary=(
-                f"One certification cycle on {repo}, exam {exam_id}, in mode {mode}, "
-                f"cohort {cohort}. "
+                f"One certification cycle on {repo}, {what} in mode {mode}. "
+                + ("This exam is reserved (held out), so the run is recorded as a reserved draw. "
+                   if cohort == "held-out" else "")
                 + (
                     "The engineer works the exam and the TEACHER role grades each "
                     "applied attempt in this mode."
@@ -465,11 +659,16 @@ class GymScreen(DaijinScreen):
         result = None
         for attempt in range(2):
             try:
+                config: dict[str, Any] = {"mode": mode, "cohort": cohort}
+                if run_all:
+                    config["cohortSize"] = max(1, len(runnable))
+                else:
+                    config["examId"] = exam_id
                 result = await self.client.call(
                     "gymStart",
                     {
                         "repoPath": repo,
-                        "config": {"examId": exam_id, "mode": mode, "cohort": cohort},
+                        "config": config,
                         "confirm": True,
                         # Every spend-confirmed call whose dialog showed an estimate
                         # echoes it, so the run record holds what the user actually

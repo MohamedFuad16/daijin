@@ -393,6 +393,46 @@ test('the gold-provenance exclusion reaches retrieval and rides in the artifact'
   });
 });
 
+test('what the student was shown is recorded in the artifact, and a bare-string seam records nothing', async () => {
+  // The grading packet's shown list and the harvest's absent list both read
+  // provenance.shownDocumentIds. Before the seam carried it, the list was permanently
+  // empty: a teacher could never cite a document, and a retrieval-miss had nothing to
+  // check against.
+  await withGym(async (context) => {
+    await openGate(context.gateFile);
+    const attempt = () => runExamAttempt({
+      exam: exam('exam-0011', context.baseCommit, context.goldCommit),
+      mode: 'harness-debug',
+      gates: GATES,
+      engineer: fileEngineer([
+        { kind: 'edit', tokens: 10, write: { file: 'app.js', content: 'const value = 1;\nexport const wired = true;\n' } },
+        { kind: 'submit', tokens: 10, explanation: 'CRITERIA AUDIT: MET at app.js:2.' },
+      ]),
+      rules: context.rules,
+      documents: [],
+      retrieveContext: context.retrieveContext,
+      repoPath: context.repoPath,
+      sourceRepo: context.repo,
+      engineRoot: context.root,
+      sandboxesRoot: context.sandboxesRoot,
+      resultDir: context.resultDir,
+    }, { gateFile: context.gateFile });
+
+    context.retrieveContext = async () => ({
+      context: '<brain-context>the shown material</brain-context>',
+      shownDocumentIds: ['web.decision.adr-0001', 'std.docs-first'],
+    });
+    const shown = await attempt();
+    assert.deepEqual(shown.provenance.shownDocumentIds, ['web.decision.adr-0001', 'std.docs-first']);
+
+    await openGate(context.gateFile);
+    context.retrieveContext = async () => '<brain-context>a bare string</brain-context>';
+    const bare = await attempt();
+    assert.deepEqual(bare.provenance.shownDocumentIds, [],
+      'a seam that never said what it showed records an empty list, not an invented one');
+  });
+});
+
 test('a run with no brain is runnable and NOT certifiable', async () => {
   // A repo whose brain does not exist yet must still be able to run the gym; what it cannot
   // do is earn a certification, because there is no exclusion record behind the claim.

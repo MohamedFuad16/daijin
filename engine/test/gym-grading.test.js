@@ -230,6 +230,25 @@ test('gaps are validated: known tags, a real note, and a retrieval-miss that mea
   );
 });
 
+test('a sub-passing verdict with empty gaps is refused; attribution never forces invention', () => {
+  // The platform's cycle 32: empty gaps on failed exams, teaching nothing while looking
+  // complete. A pass may carry empty gaps; partial and fail must say what went wrong, and
+  // model-limit or harness-defect satisfy that without writing a word to the brain.
+  const packet = buildGradingPacket({ artifact: artifact() });
+  for (const verdict of ['partial', 'fail']) {
+    assert.throws(
+      () => validateRubric(rubric(packet, { verdict, gaps: [] }), packet, { grader: TEACHER, exam: exam() }),
+      /teaches nothing while looking complete/,
+      `${verdict} with no gaps must be refused`,
+    );
+    assert.doesNotThrow(() => validateRubric(
+      rubric(packet, { verdict, gaps: [{ tag: 'model-limit', note: 'the shown convention was ignored' }] }),
+      packet, { grader: TEACHER, exam: exam() },
+    ));
+  }
+  assert.doesNotThrow(() => validateRubric(rubric(packet, { verdict: 'pass', gaps: [] }), packet, { grader: TEACHER, exam: exam() }));
+});
+
 test('clause 7: rubrics are filed by runId, and a transposed pair is refused', () => {
   const packetA = buildGradingPacket({ artifact: artifact() });
   const packetB = buildGradingPacket({

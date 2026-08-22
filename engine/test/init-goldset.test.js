@@ -204,12 +204,23 @@ test('longestSharedSpan measures a contiguous run of WORDS, not a bag and not pu
   assert.equal(longestSharedSpan('alpha beta gamma', 'the alpha beta gamma delta'), 3);
   assert.equal(longestSharedSpan('alpha gamma', 'alpha beta gamma'), 1, 'two separate single hits are not a quoted phrase');
   assert.equal(longestSharedSpan('createSqliteStore', 'exports createSqliteStore here'), 1, 'a bare identifier is one token, never a quote');
-  // Found live on the P3 target: a scoped package name is one identifier, and counting its
-  // punctuation as quoted prose failed the whole gold set on a case that leaks nothing.
+  // Found live on the P3 target, then again on TokaiHub: a scoped package name is ONE
+  // identifier however many hyphens and slashes it carries. The first fix stripped
+  // punctuation tokens and @aws-sdk/client-cognito-identity-provider still counted six
+  // words, blocking a whole gold set on a case that leaks nothing. The unit of prose is
+  // the whitespace-delimited word.
   assert.equal(
     longestSharedSpan('where is the @vitejs/plugin-react package used', 'External packages used here: @vitejs/plugin-react (1 files)'),
-    3,
-    'the package name contributes three WORD tokens, not the six the raw tokenizer sees',
+    1,
+    'the package name is one identifier, one token',
+  );
+  assert.equal(
+    longestSharedSpan(
+      'where is the @aws-sdk/client-cognito-identity-provider package used',
+      'Imported but not declared: @aws-sdk/client-cognito-identity-provider (1 files: lambdas/pre-signup.mjs)',
+    ),
+    1,
+    'a six-word package name is still one identifier',
   );
 });
 

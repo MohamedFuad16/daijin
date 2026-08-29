@@ -26,7 +26,7 @@ import { checkContentSurvival, collectDeliveries } from '../src/init/floor.js';
 import { chunkUnits, importRelationships, ingestUnits, servedIndexIdentity } from '../src/init/ingest.js';
 import { readBrainArtifacts, writeBrainArtifacts } from '../src/init/brain-artifacts.js';
 import { caseKey } from '../src/init/goldset.js';
-import { initBrain, mergeGoldset, reindexFromBrain, writeGoldset, writeRetiredGoldset } from '../src/init/pipeline.js';
+import { initBrain, mergeGoldset, readExistingGoldset, reindexFromBrain, writeGoldset, writeRetiredGoldset } from '../src/init/pipeline.js';
 
 const DIMENSION = 64;
 const EMBEDDER = { provider: 'ollama', model: 'fixture-embed', digest: 'sha256-fixture', dimension: DIMENSION };
@@ -702,6 +702,46 @@ test('a carried-forward case whose module was deleted is RETIRED, not scored for
     globalThis.fetch = originalFetch;
     await store.close();
     rmSync(directory, { recursive: true, force: true });
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('a DAMAGED gold set refuses rather than reading as an empty one', async () => {
+  // The file this reads is OVERWRITTEN with the freshly mined cases a few lines later in
+  // the pipeline, so swallowing a parse error is not a soft failure - it is a silent
+  // delete of every case a user hand-wrote or the auditor demanded, reported as
+  // `carried: 0`, which reads exactly like a repo that never had any. readManifest already
+  // refuses this trade for the manifest; the gauge a user edits gets the same refusal.
+  const { mkdtemp: makeTemp, mkdir: makeDir, writeFile: write } = await import('node:fs/promises');
+  const root = await makeTemp(path.join(tmpdir(), 'goldset-damaged-'));
+  try {
+    // The control: a repo that has never been initialised carries nothing, and that is not
+    // an error. Without this the refusal below could be a function that throws on anything.
+    assert.deepEqual(await readExistingGoldset(root), [], 'never written carries nothing');
+
+    await makeDir(path.join(root, '.daijin'), { recursive: true });
+    const file = path.join(root, '.daijin', 'goldset.yaml');
+
+    // An empty file is still a legitimate "no cases yet".
+    await write(file, '');
+    assert.deepEqual(await readExistingGoldset(root), [], 'an empty file is empty, not damaged');
+
+    // A real gold set round-trips.
+    await write(file, '- id: g001\n  query: a question\n  must_return: [x]\n  provenance: structural:a\n');
+    assert.equal((await readExistingGoldset(root)).length, 1);
+
+    // A YAML syntax error: one bad indent in a file a human edits.
+    await write(file, '- id: g001\n   query: a question\n  must_return: [x]\n');
+    await assert.rejects(() => readExistingGoldset(root), (error) => {
+      assert.match(error.message, /not valid YAML/);
+      assert.match(error.message, /replaces every case/, 'the refusal says what the next write would have cost');
+      return true;
+    });
+
+    // A mapping where a list belongs loses the same cases just as silently.
+    await write(file, 'cases:\n  - id: g001\n');
+    await assert.rejects(() => readExistingGoldset(root), /rather than a list of cases/);
+  } finally {
     rmSync(root, { recursive: true, force: true });
   }
 });

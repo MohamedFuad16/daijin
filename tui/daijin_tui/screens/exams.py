@@ -13,11 +13,12 @@ from typing import Any, Iterable
 from textual import work
 from textual.containers import Horizontal
 from rich.text import Text
+from textual.content import Content
 from textual.widgets import Button, DataTable, Select, Static
 
 from ..concurrency import gather_all
 from ..rpc import RpcError
-from ..widgets import Banner, DitherBars, RadarChart, SectionTitle, StippleLine
+from ..widgets import Banner, DitherBars, RadarChart, SectionTitle, StippleLine, cells
 from ..widgets.texture import texture_for_verdict
 from .base import DaijinScreen
 from .dialogs import TextPromptScreen
@@ -226,7 +227,7 @@ class ExamsScreen(DaijinScreen):
         self.exams = rows if isinstance(rows, list) else rows.get("exams", [])
         table.clear()
         for exam in self.exams:
-            table.add_row(
+            table.add_row(*cells(
                 exam.get("examId", ""),
                 exam.get("title", ""),
                 exam.get("tier", ""),
@@ -234,8 +235,7 @@ class ExamsScreen(DaijinScreen):
                 BENCHMARK_LABELS.get(exam.get("benchmarkStatus", ""), exam.get("benchmarkStatus", "")),
                 "yes" if exam.get("heldOut") else "no",
                 exam.get("quarantineReason") or "-",
-                key=exam.get("examId"),
-            )
+            ), key=exam.get("examId"))
         quarantined = [e for e in self.exams if e.get("benchmarkStatus") == "quarantined"]
         drafts = [e for e in self.exams if e.get("status") == "draft"]
         if self.exams:
@@ -399,21 +399,40 @@ class ExamsScreen(DaijinScreen):
         provenance = detail.get("provenance") or {}
         row = self._selected() or {}
         quarantine = row.get("quarantineReason")
-        lines = [
-            f"[b]{exam_id}[/b]  {row.get('title', '')}",
-            f"base {provenance.get('baseCommit', '?')}  gold {provenance.get('goldCommit', '?')}",
-            f"source {provenance.get('source', '?')}, selected by {provenance.get('selectedBy', '?')}, "
-            f"supersedes {provenance.get('supersedes') or 'nothing'}",
-            str(provenance.get("note", "")),
+        # The title is AUTHORED BY THE AUDITOR and the note, veto and
+        # quarantine reasons are written by a model or by hand. A "[/...]"
+        # token in any of them is a closing markup tag with nothing open,
+        # which is a MarkupError that kills the app, so they substitute as
+        # plain $variables instead of being interpolated into markup.
+        lines: list[Content] = [
+            Content.from_markup(
+                "[b]$exam[/b]  $title", exam=str(exam_id), title=str(row.get("title", ""))
+            ),
+            Content.from_markup(
+                "base $base  gold $gold",
+                base=str(provenance.get("baseCommit", "?")),
+                gold=str(provenance.get("goldCommit", "?")),
+            ),
+            Content.from_markup(
+                "source $source, selected by $by, supersedes $supersedes",
+                source=str(provenance.get("source", "?")),
+                by=str(provenance.get("selectedBy", "?")),
+                supersedes=str(provenance.get("supersedes") or "nothing"),
+            ),
+            Content(str(provenance.get("note", ""))),
         ]
         # Read off the BANK ROW, which is where the approved change puts it,
         # beside quarantineReason and with the same shape: present exactly when
         # its precondition is true.
         if row.get("vetoReason"):
-            lines.append(f"[yellow]rejected because: {row['vetoReason']}[/yellow]")
+            lines.append(Content.from_markup(
+                "[yellow]rejected because: $reason[/yellow]", reason=str(row["vetoReason"])
+            ))
         if quarantine:
-            lines.append(f"[yellow]excluded from scoring: {quarantine}[/yellow]")
-        self.query_one("#exam-provenance", Static).update("\n".join(lines))
+            lines.append(Content.from_markup(
+                "[yellow]excluded from scoring: $reason[/yellow]", reason=str(quarantine)
+            ))
+        self.query_one("#exam-provenance", Static).update(Content("\n").join(lines))
 
     async def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         key = event.row_key.value if event.row_key else None

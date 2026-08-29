@@ -14,6 +14,7 @@ whatever screen they happen to be looking at.
 from __future__ import annotations
 
 import argparse
+import shlex
 import sys
 from pathlib import Path
 from typing import Any
@@ -228,6 +229,10 @@ class DaijinApp(App):
             title="critical finding",
             severity="error",
             timeout=15,
+            # A finding's summary is the watcher's or auditor's own sentence
+            # and its target is a path: markup off, or a "[/...]" token in
+            # either kills the toast render and the app with it.
+            markup=False,
         )
 
     def action_help_panel(self) -> None:
@@ -239,7 +244,12 @@ def build_client(args: argparse.Namespace) -> tuple[RpcClient, bool]:
         # Attach to a running daemon, or start one and attach to that. Several
         # windows then share one engine, which is the whole point: stdio is
         # parent-child and a second window cannot share the pipe.
-        command = (args.engine or ENGINE_COMMAND).split() + [
+        # shlex, not str.split: --engine arrives as ONE shell-quoted string
+        # and the installer's shim builds it from the install prefix, so a
+        # path with a space in it ("/Users/My Name/...", an ordinary macOS
+        # home) split into two argv entries and the installed daijin could
+        # not start its own engine.
+        command = shlex.split(args.engine or ENGINE_COMMAND) + [
             f"--state-root={args.state_root}",
             "--socket",
         ]
@@ -250,7 +260,7 @@ def build_client(args: argparse.Namespace) -> tuple[RpcClient, bool]:
             False,
         )
     if args.engine:
-        return StdioRpcClient(args.engine.split()), False
+        return StdioRpcClient(shlex.split(args.engine)), False
     engine = MockEngine(
         speed=args.mock_speed,
         gate_open=args.mock_gate == "open",

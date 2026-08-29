@@ -20,6 +20,7 @@ from textual import work
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
+from textual.content import Content
 from textual.screen import ModalScreen
 from textual.widgets import Button, DataTable, Input, Static, TabbedContent, TabPane
 
@@ -33,6 +34,7 @@ from ..discovery import (
     mark_already_local,
     scan_roots,
 )
+from ..widgets import cells
 
 DISCOVERED_COLUMNS = ("repo", "git", "path")
 GITHUB_COLUMNS = ("repo", "state", "url")
@@ -133,9 +135,10 @@ class AttachRepoScreen(ModalScreen[dict[str, Any] | None]):
             )
         self._rescan()
         if not self.clone_available:
-            self.query_one("#attach-url-note", Static).update(
-                f"[yellow]{self.clone_unavailable_reason or 'This engine cannot clone yet.'}[/yellow]"
-            )
+            self.query_one("#attach-url-note", Static).update(Content.from_markup(
+                "[yellow]$reason[/yellow]",
+                reason=str(self.clone_unavailable_reason or "This engine cannot clone yet."),
+            ))
 
     def _rescan(self) -> None:
         note = self.query_one("#attach-scan-note", Static)
@@ -149,13 +152,15 @@ class AttachRepoScreen(ModalScreen[dict[str, Any] | None]):
         table = self.query_one("#attach-table", DataTable)
         table.clear()
         for item in self.discovered:
-            table.add_row(item.name, "yes" if item.is_git else "no", item.path, key=item.path)
-        note.update(
-            f"[dim]{len(self.discovered)} found under {', '.join(self.roots)}. "
-            f"The scan stops at each repository and does not look inside it.[/dim]"
+            table.add_row(*cells(item.name, "yes" if item.is_git else "no", item.path), key=item.path)
+        note.update(Content.from_markup(
+            "[dim]$count found under $roots. "
+            "The scan stops at each repository and does not look inside it.[/dim]"
             if self.discovered
-            else f"[dim]Nothing found under {', '.join(self.roots)}.[/dim]"
-        )
+            else "[dim]Nothing found under $roots.[/dim]",
+            count=str(len(self.discovered)),
+            roots=", ".join(self.roots),
+        ))
 
     # Validation ----------------------------------------------------------
 
@@ -166,9 +171,16 @@ class AttachRepoScreen(ModalScreen[dict[str, Any] | None]):
             if not event.value.strip():
                 note.update("")
             elif not ok:
-                note.update(f"[red]{reason}[/red]")
+                # reason ECHOES THE PATH THE USER IS TYPING, so this fired on a
+                # keystroke: "/tmp/[/x] does not exist" is a closing markup tag
+                # with nothing open, and the MarkupError killed the app mid
+                # keypress. The same applies to the warning branch.
+                note.update(Content.from_markup("[red]$reason[/red]", reason=reason))
             else:
-                note.update(f"[yellow]{reason}[/yellow]" if reason else "[green]Ready.[/green]")
+                note.update(
+                    Content.from_markup("[yellow]$reason[/yellow]", reason=reason)
+                    if reason else "[green]Ready.[/green]"
+                )
         elif event.input.id == "attach-url":
             note = self.query_one("#attach-url-note", Static)
             if not event.value.strip():
@@ -202,7 +214,9 @@ class AttachRepoScreen(ModalScreen[dict[str, Any] | None]):
             value = self.query_one("#attach-path", Input).value.strip()
             ok, reason = describe_path(value)
             if not ok:
-                self.query_one("#attach-path-note", Static).update(f"[red]{reason}[/red]")
+                self.query_one("#attach-path-note", Static).update(
+                    Content.from_markup("[red]$reason[/red]", reason=reason)
+                )
                 return
             self.dismiss({"kind": "path", "value": value})
         elif button == "attach-url-go":
@@ -225,22 +239,23 @@ class AttachRepoScreen(ModalScreen[dict[str, Any] | None]):
         if error:
             # gh's own words. It explains "not logged in" better than a
             # paraphrase, and a rewrite drifts from whatever gh says next.
-            note.update(f"[red]{error}[/red]")
+            note.update(Content.from_markup("[red]$error[/red]", error=str(error)))
             return
         self.remotes = mark_already_local(repos, self.discovered)
         for remote in self.remotes:
-            table.add_row(
+            table.add_row(*cells(
                 remote.name_with_owner,
                 "clone" if remote.needs_clone else "already local",
                 remote.url,
-                key=remote.name_with_owner,
-            )
+            ), key=remote.name_with_owner)
         already = sum(1 for r in self.remotes if not r.needs_clone)
-        note.update(
-            f"[dim]{len(self.remotes)} from GitHub, {already} already on this machine. "
-            f"Matching is by folder name, so it marks a row rather than choosing a "
-            f"path.[/dim]"
-        )
+        note.update(Content.from_markup(
+            "[dim]$count from GitHub, $already already on this machine. "
+            "Matching is by folder name, so it marks a row rather than choosing a "
+            "path.[/dim]",
+            count=str(len(self.remotes)),
+            already=str(already),
+        ))
 
     def _pick_remote(self) -> None:
         table = self.query_one("#attach-gh-table", DataTable)
@@ -261,9 +276,10 @@ class AttachRepoScreen(ModalScreen[dict[str, Any] | None]):
             self.dismiss({"kind": "path", "value": remote.local_path})
             return
         if not self.clone_available:
-            self.query_one("#attach-gh-note", Static).update(
-                f"[yellow]{self.clone_unavailable_reason or 'This engine cannot clone yet.'}[/yellow]"
-            )
+            self.query_one("#attach-gh-note", Static).update(Content.from_markup(
+                "[yellow]$reason[/yellow]",
+                reason=str(self.clone_unavailable_reason or "This engine cannot clone yet."),
+            ))
             return
         self.dismiss({"kind": "url", "value": remote.url})
 

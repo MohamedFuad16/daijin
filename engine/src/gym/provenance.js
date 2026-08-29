@@ -182,7 +182,20 @@ export async function computeGoldProvenanceExclusions({
 
   for (const document of documents) {
     if (ids.has(document.id) || !document.path) continue;
-    const introduced = await run(['log', '--diff-filter=A', '-1', '--format=%H', '--', document.path], { allowFailure: true });
+    // WALKED FROM THE GOLD COMMIT, not from HEAD. `git log` with no revision defaults to
+    // HEAD, so this asked "was this file added on the branch that happens to be checked
+    // out?" when the question is "did GOLD add it?". Whenever the gold commit is not
+    // reachable from the working tree's HEAD - the user is on a feature branch, HEAD is
+    // detached, or the gold SHA became unreachable after a squash-merge - the walk never
+    // sees gold, rule 3 finds nothing, and the exclusion record still stamps `computed:
+    // true` with a count of zero. Retrieval then hands the student the very lesson the gold
+    // commit wrote, and certify()'s hasExclusionRecord gate passes, so the run certifies
+    // "the student never saw gold" about a run in which it did. An authoritative zero
+    // derived from an unfit input.
+    //
+    // Naming the commit also fixes the delete-and-re-add case: commits after gold are no
+    // longer in the walk, so a later re-add cannot mask an add BY gold.
+    const introduced = await run(['log', '--diff-filter=A', '-1', '--format=%H', exam.goldCommit, '--', document.path], { allowFailure: true });
     if (introduced && introduced === exam.goldCommit) exclude(document, 'brain-commit-introduced-by-gold');
   }
 

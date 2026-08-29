@@ -505,6 +505,37 @@ export function runStoreConformance({ label, createStore, seed = loadFixture }) 
     });
   });
 
+  test(`${label}: a chunk with NO vector still answers the lexical arm, scored null`, async () => {
+    // A MIXED CORPUS - some chunks embedded, some not - is not exotic: init's A/B mirror
+    // writes exactly that (it counts `embedded` separately from the chunk total), and the
+    // mixed store is the corpus the two backends are compared over.
+    //
+    // sqlite's lexical arm LEFT JOINs the vector table and handed v.embedding straight to
+    // vec_distance_cosine, which treats NULL as an INPUT ERROR rather than as NULL. One
+    // FTS-matching vectorless chunk therefore aborted the whole query - "Error reading 1st
+    // vector ... found NULL" - taking down retrieve() rather than one arm, while pgvector
+    // returned NULL for the same row. A backend-specific crash on the axis the two are
+    // measured over is the defect; a null score is already the contract (fusion falls back
+    // to rank alone when there is no similarity to use).
+    await seeded(async (store) => {
+      await store.upsertDocument(documentOf('store.unembedded', 'note', { area: 'store' },
+        'A note about ranking candidates that was never embedded.'));
+      await store.replaceChunks('store.unembedded', [
+        { ordinal: 0, content: 'The ranking candidates note has no vector at all.', vector: null },
+      ]);
+
+      const query = topic({ 3: 1 });
+      const rows = await store.lexicalCandidates('the ranking candidates', query, scope, 40);
+      const unembedded = rows.filter((row) => row.id === 'store.unembedded');
+      assert.equal(unembedded.length, 1, 'the vectorless chunk is a lexical hit like any other');
+      assert.equal(unembedded[0].score, null, 'and carries no similarity, rather than a wrong one');
+      // The control: the arm still scores everything that DOES have a vector, so the guard
+      // did not simply null the column out.
+      assert.ok(rows.some((row) => typeof row.score === 'number' && row.score > 0),
+        'embedded chunks in the same result set still carry a real cosine');
+    });
+  });
+
   // ---- inventory, graph, standing, identity --------------------------------------------
 
   test(`${label}: allDocuments filters and caps the gold-provenance exclusion`, async () => {

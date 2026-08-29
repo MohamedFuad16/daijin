@@ -154,12 +154,38 @@ export async function writeRetiredGoldset(artifactRoot, retired) {
  * earlier run mined against a module that has since been deleted.
  */
 export async function readExistingGoldset(artifactRoot) {
+  const file = path.join(artifactRoot, GOLDSET_FILE);
+  let raw;
   try {
-    const parsed = YAML.parse(await readFile(path.join(artifactRoot, GOLDSET_FILE), 'utf8'));
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
+    raw = await readFile(file, 'utf8');
+  } catch (error) {
+    // Never written is the ordinary first-run case and carries nothing. Anything else -
+    // a directory in its place, a permission error - is a real problem and is not one of
+    // them, so it travels rather than being read as "no cases".
+    if (error.code === 'ENOENT') return [];
+    throw error;
   }
+  // A DAMAGED GOLD SET IS NOT AN EMPTY ONE. This file is OVERWRITTEN with the freshly
+  // mined cases a few lines after it is read, so reading a parse failure as "nothing to
+  // carry" deletes every case a user hand-wrote or the auditor demanded - and reports
+  // `carried: 0`, which reads exactly like a repo that had none. readManifest already
+  // refuses this trade for the manifest, on the same reasoning: treating a damaged file as
+  // a fresh one turns a recoverable problem into a lost one.
+  let parsed;
+  try {
+    parsed = YAML.parse(raw);
+  } catch (error) {
+    throw new Error(`The gold set at ${file} is not valid YAML (${error.message}). Refusing to re-mine over it: `
+      + 'the next write replaces every case the file holds. Fix the YAML, or move the file aside to start a fresh gauge.');
+  }
+  // An empty file is a legitimate "no cases yet"; a mapping or a scalar is not, and
+  // dropping it silently loses the same cases a parse error would.
+  if (parsed === null || parsed === undefined) return [];
+  if (!Array.isArray(parsed)) {
+    throw new Error(`The gold set at ${file} parsed as ${typeof parsed} rather than a list of cases. Refusing to `
+      + 're-mine over it: the next write replaces every case the file holds.');
+  }
+  return parsed;
 }
 
 /**
@@ -847,4 +873,26 @@ export async function writeReport(artifactRoot, report) {
   await mkdir(path.dirname(file), { recursive: true });
   await writeFile(file, `${JSON.stringify(report, null, 2)}\n`);
   return file;
+}
+
+/**
+ * The block the LAST init recorded, or null when it certified a floor.
+ *
+ * Read from the report init already writes rather than from a second record, because a
+ * block that lives only in the job's event stream is unreachable to anything that runs
+ * later - and every caller that has to respect a block (mcpUnlock) runs later. A
+ * successful run rebuilds the report without a `blocked` key, so a cleared block clears
+ * itself.
+ *
+ * A missing or unparseable report reads as NO BLOCK. Failing closed here would lock MCP
+ * for a repo that was initialised before this file existed, with a reason its owner has no
+ * way to act on; the floor's own thresholds still stand underneath.
+ */
+export async function readInitBlock(artifactRoot) {
+  try {
+    const report = JSON.parse(await readFile(path.join(artifactRoot, REPORT_FILE), 'utf8'));
+    return report?.blocked ?? null;
+  } catch {
+    return null;
+  }
 }

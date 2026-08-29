@@ -101,7 +101,13 @@ async function main() {
     name: 'daijin-brain',
     brainRoot,
     stateRoot: layout.repoStateRoot,
-    engineRulesPath: argument('--engineer-rules'),
+    // engineerRulesPath, not engineRulesPath. createBrainServer destructures a fixed key
+    // set, so the misspelling was DROPPED rather than rejected: `engineerRules ||
+    // engineerRulesPath` stayed false and the server started with zero prompts and no
+    // error. This is the entry mcpSnippet pastes into a coding agent's config, so the
+    // effect was that no real user ever got the engineer prompts; brain-mcp.js, the P1-era
+    // entry nobody pastes, spelled it correctly.
+    engineerRulesPath: argument('--engineer-rules'),
     // Bound to this repo's store. The MCP tools take a project from the caller, so the
     // default is supplied here and a caller that names one still wins.
     retrieve: (input) => retrieve({ project: store.project, ...input }, { store, environment }),

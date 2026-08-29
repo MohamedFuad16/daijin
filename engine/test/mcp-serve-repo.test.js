@@ -184,6 +184,34 @@ test('the brain files are exposed as read-only resources', async () => {
   }
 });
 
+test('--engineer-rules actually registers the prompts it names', async () => {
+  // A ONE-WORD TYPO, invisible by construction: the entry passed `engineRulesPath` while
+  // createBrainServer destructures `engineerRulesPath`, so the key was DROPPED rather than
+  // refused, the guard `engineerRules || engineerRulesPath` stayed false, and the server
+  // started with zero prompts and no error at all. This is the entry mcpSnippet pastes into
+  // a coding agent's config, so no real user ever received the engineer prompts.
+  //
+  // The test above proves nothing about this: it accepts `result || error` from
+  // prompts/list because it supplies no rules. Naming the file is what makes the assertion
+  // able to fail.
+  const { writeFile } = await import('node:fs/promises');
+  const { repoPath, stateRoot } = await brainRepo();
+  const rulesPath = path.join(repoPath, '.daijin', 'agents', 'student.md');
+  await mkdir(path.dirname(rulesPath), { recursive: true });
+  await writeFile(rulesPath, '# Engineer rules\n\nCite every claim.\n', 'utf8');
+  const client = mcpClient([repoPath, `--state-root=${stateRoot}`, `--engineer-rules=${rulesPath}`]);
+  try {
+    await client.request('initialize', { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 't', version: '1' } });
+    client.notify('notifications/initialized');
+    const prompts = await client.request('prompts/list', {});
+    assert.ok(prompts.result, `prompts/list must succeed once rules are supplied: ${JSON.stringify(prompts.error)}`);
+    assert.ok(prompts.result.prompts.length > 0, 'the rules file registers at least one prompt');
+  } finally {
+    client.stop();
+    await rm(repoPath, { recursive: true, force: true });
+  }
+});
+
 test('stdout carries MCP framing only', async () => {
   // The entry redirects console.log to stderr before loading the server, because one stray
   // log line into stdout desynchronises an MCP session for the rest of its life. The client
@@ -245,6 +273,59 @@ test('the snippet the daemon hands out names THIS entry, and the file exists', a
     // open an empty index, and answer every search with nothing found.
     assert.equal(stateRootArgument, `--state-root=${stateRoot}`);
     await access(entry);
+  } finally {
+    await rm(stateRoot, { recursive: true, force: true });
+    await rm(repoPath, { recursive: true, force: true });
+  }
+});
+
+test('a blocked init keeps the snippet locked, however good the history row looks', async () => {
+  // THE HALF-LANDED WIRING, pinned. mcpUnlock grew a `blocked` parameter with no caller,
+  // so the guard existed and never fired. The failure it closes is real and was measured:
+  // init blocks (gold set unfit), retrievalScore measures the same unfit gold set and
+  // writes "2 of 2" to history, and mcpSnippet - which reads only history - hands out a
+  // paste-ready config for a brain the pipeline just refused to certify.
+  const { createMethods } = await import('../src/rpc/methods.js');
+  const { JobRunner } = await import('../src/rpc/jobs.js');
+  const { EngineState } = await import('../src/rpc/state.js');
+  const { writeFile } = await import('node:fs/promises');
+  const { REPORT_FILE } = await import('../src/init/pipeline.js');
+
+  const { repoPath, stateRoot } = await brainRepo();
+  try {
+    const state = new EngineState({ stateRoot });
+    await state.attachRepo(repoPath);
+    const layout = await repoLayout(repoPath, { stateRoot });
+    await mkdir(layout.recordsRoot, { recursive: true });
+    // A rate that clears the threshold outright, written by retrievalScore.
+    await writeFile(layout.scoreHistoryPath, JSON.stringify([
+      { at: new Date().toISOString(), caseRate: { exact: 1, cases: '2 of 2' }, chosenBudget: 4000, violations: 0 },
+    ]), 'utf8');
+
+    const methods = createMethods({ state, jobs: new JobRunner({ notify: () => {} }) });
+    const before = await methods.mcpSnippet({ repoPath });
+    assert.equal(before.unlocked, true, 'baseline: with no block recorded the rate alone unlocks');
+
+    // The report the pipeline writes when it refuses to certify a floor.
+    const reportPath = path.join(repoPath, REPORT_FILE);
+    await mkdir(path.dirname(reportPath), { recursive: true });
+    await writeFile(reportPath, JSON.stringify({
+      floor: null,
+      blocked: {
+        at: 'goldset-gates',
+        reason: 'The gold set did not pass its own integrity gates, so it is not fit to measure.',
+        failed: ['size: 2 case(s), minimum 8'],
+        action: 'Mine more material, or attach a repository with more code and history; the gates above name what is short.',
+        actionCode: 'gold-set-too-thin',
+      },
+    }), 'utf8');
+
+    const locked = await methods.mcpSnippet({ repoPath });
+    assert.equal(locked.unlocked, false, 'the refusal outranks the rate measured by the gauge it refused');
+    assert.equal(locked.snippet, null, 'and no config is handed out');
+    assert.match(locked.reason, /did not pass its own integrity gates/);
+    assert.match(locked.reason, /2 of 2 is not a floor/);
+    assert.match(locked.reason, /Mine more material/, 'the action that clears it travels with the refusal');
   } finally {
     await rm(stateRoot, { recursive: true, force: true });
     await rm(repoPath, { recursive: true, force: true });

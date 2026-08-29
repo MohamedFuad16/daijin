@@ -86,6 +86,41 @@ test('a superseded decision is replaced by its current successor', () => {
   assert.deepEqual(result.decisions[0].superseded.map((item) => item.id), ['old']);
 });
 
+test('the replacement boost survives the order the documents arrive in', () => {
+  // THE BOOST WAS ORDER-DEPENDENT, and the shipped order was the losing one. The
+  // supersession pass walked a SNAPSHOT of the candidates while deleting from and merging
+  // into the live map, so when the superseded decision resolved onto a current decision
+  // that was itself in the snapshot, the current decision's own iteration deleted the
+  // freshly merged entry and rebuilt it from the stale pre-merge object. The replacement
+  // boost and the merged reasons went with it.
+  //
+  // allDocuments sorts by id and a superseded ADR almost always carries the LOWER number,
+  // so the superseded document is visited first on every real query: the boost was
+  // effectively dead for normal ADR numbering.
+  //
+  // Both orders are asserted, and asserted EQUAL rather than against a literal, because
+  // the defect is precisely that the two disagree - a test pinning only one order passes
+  // against the bug half the time depending on which one it picked.
+  const older = document({ id: 'd-0010', tags: ['caching', 'redis'], title: 'Caching policy redis' });
+  const current = document({ id: 'd-0065', tags: ['caching'], title: 'Something else entirely' });
+  const semanticRows = [
+    { id: 'd-0010', chunk_id: 1, ordinal: 0, chunk_content: 'c', score: 0.9 },
+    { id: 'd-0065', chunk_id: 2, ordinal: 0, chunk_content: 'c', score: 0.6 },
+  ];
+  const relationships = [{ src: 'doc:d-0065', dst: 'doc:d-0010', kind: 'supersedes' }];
+  const scoreOf = (documents) => {
+    const result = rankRetrieval({ query: 'caching policy redis', documents, semanticRows, relationships });
+    return result.decisions.find((row) => row.id === 'd-0065')?.score ?? null;
+  };
+
+  const byId = scoreOf([older, current]);      // the order a store actually returns
+  const reversed = scoreOf([current, older]);
+  assert.equal(byId, reversed, 'the same corpus and query must score the same either way');
+  // And the surviving value is the BOOSTED one, not the unboosted one the id order used to
+  // produce: equality alone would also be satisfied by losing the boost in both orders.
+  assert.ok(byId > 5, `the replacement boost is applied, got ${byId}`);
+});
+
 test('the token budget caps each candidate and stops at k', () => {
   const long = 'word '.repeat(5_000);
   const documents = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'].map((id) => document({ id, content: long }));

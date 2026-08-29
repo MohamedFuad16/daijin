@@ -104,6 +104,33 @@ test('violations LOCK the unlock whatever the case rate says; null is said, neve
   assert.match(unknown.reason, /did not record violations/);
 });
 
+test('a blocked init outranks the case rate: the block quotes its own reason and action', () => {
+  // The live multi-repo drive: an empty repo's gold set failed its integrity gates, so the
+  // pipeline certified no floor - but retrievalScore measured that same gold set, wrote
+  // "2 of 2" into history, and the snippet unlocked off the history row alone. A rate
+  // measured with an unfit gauge is not a floor, whatever it reads.
+  const caseRate = { exact: 1, cases: '2 of 2', hits: 2, total: 2 };
+  const blocked = mcpUnlock(caseRate, {
+    violations: 0,
+    blocked: {
+      at: 'goldset-gates',
+      reason: 'The gold set did not pass its own integrity gates, so it is not fit to measure.',
+      failed: ['size: 2 case(s), minimum 8'],
+      action: 'Mine more material, or attach a repository with more code and history.',
+    },
+  });
+  assert.equal(blocked.unlocked, false, 'a perfect rate off an unfit gauge does not unlock');
+  assert.match(blocked.reason, /did not pass its own integrity gates/, "the block's own reason, not a paraphrase");
+  assert.match(blocked.reason, /2 of 2 is not a floor/, 'the reader is told what the number they saw actually is');
+  assert.match(blocked.reason, /Mine more material/, "and the block's own action, which names how to clear it");
+  assert.equal(blocked.saturation, null);
+
+  // The block is the ONLY thing that changes: a null block leaves the decision exactly
+  // where it was, so a repo that never blocked is unaffected by this path existing.
+  const unaffected = mcpUnlock(caseRate, { violations: 0, blocked: null });
+  assert.equal(unaffected.unlocked, true);
+});
+
 test('finding 80: the unlock carries the range, and the THRESHOLD is untouched', () => {
   const caseRate = { exact: 1, cases: '25 of 25', hits: 25, total: 25 };
 

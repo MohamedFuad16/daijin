@@ -23,6 +23,7 @@ export async function startDaemon({ stateRoot, probe = false, extraArgs = [] } =
 
   const pending = new Map();
   const notifications = [];
+  const strayFrames = [];
   const notificationWaiters = [];
   let stderr = '';
   let buffer = '';
@@ -53,7 +54,14 @@ export async function startDaemon({ stateRoot, probe = false, extraArgs = [] } =
         continue;
       }
       const entry = pending.get(message.id);
-      if (!entry) continue;
+      if (!entry) {
+        // A frame that is neither a notification nor an answer to anything outstanding.
+        // Dropping it silently is what let the daemon answer NOTIFICATIONS with error
+        // envelopes unnoticed: a real client would face the same frame with the same two
+        // bad options, drop it or mis-attribute it. Recorded so a test can assert none.
+        strayFrames.push(message);
+        continue;
+      }
       pending.delete(message.id);
       entry.resolve(message);
     }
@@ -63,6 +71,7 @@ export async function startDaemon({ stateRoot, probe = false, extraArgs = [] } =
     stateRoot: root,
     child,
     notifications,
+    strayFrames,
     get stderr() { return stderr; },
 
     /// Send a request and await its full envelope, error included. Tests assert on the

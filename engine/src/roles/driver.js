@@ -42,14 +42,22 @@ async function cliGenerate({ role, system, prompt, execFileImpl, timeoutMs }) {
   const args = ['-p', prompt, '--model', role.model, '--output-format', 'json', '--max-turns', '1'];
   if (system) args.push('--append-system-prompt', system);
   return new Promise((resolve, reject) => {
-    // stdin IGNORED, not inherited and not left open: the CLI waits three
+    // stdin CLOSED, not inherited and not left open: the CLI waits three
     // seconds for stdin data before proceeding, so every call paid a silent
     // three-second tax and printed a warning that read like a defect. The
     // daemon's own stdin is the RPC pipe and must never be handed to a child.
-    execFileImpl('claude', args, {
+    //
+    // Closed on the returned handle rather than through `stdio`, because
+    // execFile does not accept that option - it forwards a fixed list (cwd,
+    // env, encoding, timeout, maxBuffer, killSignal, uid, gid, windowsHide,
+    // windowsVerbatimArguments, shell, signal) and DROPS anything else in
+    // silence. https://nodejs.org/api/child_process.html - so the option sat
+    // here reading as the fix while the child kept an open pipe and the tax
+    // was still paid on every call. gym/gates.js spells the same intent
+    // through spawn, which does honour it; this path cannot.
+    const child = execFileImpl('claude', args, {
       timeout: timeoutMs,
       maxBuffer: 32 * 1024 * 1024,
-      stdio: ['ignore', 'pipe', 'pipe'],
     }, (error, stdout) => {
       // THE CLI'S OWN SENTENCE WINS over the exec wrapper's. A non-zero exit
       // still carries a JSON body, and that body is where the reason lives:
@@ -92,6 +100,9 @@ async function cliGenerate({ role, system, prompt, execFileImpl, timeoutMs }) {
         reject(new Error('The claude CLI answered with a body that is not JSON.'));
       }
     });
+    // The actual close. An injected execFileImpl (every unit test) returns no handle, so
+    // this is optional-chained on the handle rather than on the stream alone.
+    child?.stdin?.end();
   });
 }
 

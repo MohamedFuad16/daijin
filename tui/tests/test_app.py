@@ -34,6 +34,31 @@ def test_engine_flag_selects_the_stdio_client():
     assert is_mock is False
 
 
+def test_an_engine_path_with_a_space_survives_as_one_argument():
+    """--engine arrives as ONE shell-quoted string, so it needs shell parsing.
+
+    The installer's shim builds it from the install prefix, and a home
+    directory with a space in it ("/Users/My Name/...") is ordinary on macOS.
+    str.split() made that two argv entries, so the installed daijin could not
+    start its own engine and failed at launch with a path error, long after
+    the install had reported success.
+    """
+    quoted = 'node "/tmp/My Dir/daemon.js"'
+    client, _ = build_client(parse_args([".", "--engine", quoted]))
+    assert client.command == ["node", "/tmp/My Dir/daemon.js"], client.command
+
+    # The socket route builds its own argv from the same string, and the two
+    # were separate call sites: fixing one and not the other leaves the shared
+    # daemon broken on exactly the machines the stdio route now works on.
+    from daijin_tui.rpc import SocketRpcClient
+
+    shared, _ = build_client(
+        parse_args([".", "--socket", "--state-root", "/tmp/dj", "--engine", quoted])
+    )
+    assert isinstance(shared, SocketRpcClient)
+    assert shared.spawn_command[:2] == ["node", "/tmp/My Dir/daemon.js"], shared.spawn_command
+
+
 def test_the_mock_spend_gate_is_blocked_by_default():
     """Blocked by default matches the product rule: the owner opens the gate."""
     client, _ = build_client(parse_args([".", "--mock"]))

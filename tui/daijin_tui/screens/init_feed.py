@@ -32,6 +32,20 @@ MODE_NOTES = {
 }
 
 
+def _kept(panel: Static) -> Content:
+    """What the panel already shows, kept as content rather than as markup.
+
+    Static has no `renderable` attribute on Textual 8 - reading one raised
+    AttributeError inside the worker, and a worker error exits the app, so
+    the auditor's answer died after the owner had already paid for it.
+    `content` is the accessor, and keeping it as Content preserves the block's
+    styling AND stops the engine's prose being re-parsed as markup on the way
+    back in.
+    """
+    kept = panel.content
+    return kept if isinstance(kept, Content) else Content(str(kept))
+
+
 class InitFeedScreen(DaijinScreen):
     mode_name = "init"
     notice_id = "#init-notice"
@@ -203,9 +217,15 @@ class InitFeedScreen(DaijinScreen):
         button = self.query_one("#init-attach-root", Button)
         detail = str(event.get("detail") or "").strip()
         panel.display = True
-        panel.update(
-            f"[b][yellow]{event.get('phase', 'a phase')} blocked.[/yellow][/b]\n{detail}"
-        )
+        # The prose is the engine's, shown verbatim - and a block detail names
+        # paths and quotes the repo's own text, so a "[/...]" token in it is a
+        # closing markup tag with nothing open. That MarkupError killed the app
+        # on the one screen a blocked init leaves the user looking at.
+        panel.update(Content.from_markup(
+            "[b][yellow]$phase blocked.[/yellow][/b]\n$detail",
+            phase=str(event.get("phase") or "a phase"),
+            detail=detail,
+        ))
         # A block happened, so the offers are worth making: the root when one
         # exists, and the auditor always - a blocked run is exactly when a
         # person wants a judgment call about what to do next.
@@ -337,11 +357,12 @@ class InitFeedScreen(DaijinScreen):
             result = await self.client.call("diagnoseNarrate", {"repoPath": repo, "confirm": True})
         except RpcError as error:
             self.report_rpc_error(error)
-            panel.update(f"{panel.renderable}\n\n[red]{error.hint}[/red]")
+            panel.update(_kept(panel) + Content.from_markup(
+                "\n\n[red]$hint[/red]", hint=error.hint
+            ))
             return
-        panel.update(Content.from_markup(
-            "$existing\n\n[b]The auditor:[/b] $advice",
-            existing=str(panel.renderable),
+        panel.update(_kept(panel) + Content.from_markup(
+            "\n\n[b]The auditor:[/b] $advice",
             advice=str(result.get("recommendation", "")),
         ))
 

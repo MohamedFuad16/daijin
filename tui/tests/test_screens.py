@@ -2071,14 +2071,14 @@ def test_engine_status_speaks_plain_words():
                    "version": "0.32.1", "digest": "ab12cd", "hint": None},
         "db": {"backend": "sqlite", "repos": 4, "stateRoot": "~/.daijin"},
         "spendGate": {"open": True, "path": ".daijin/GATE"},
-    })
+    }).plain
     assert "Engine ready" in up
     assert "bge-m3" in up
     assert "0.32.1" in up
     for noise in ("digest", "sqlite", "stateRoot", "~/.daijin", "spend gate", ".daijin/GATE"):
         assert noise not in up, f"operator detail leaked to the front door: {noise}"
 
-    down = RepoHomeScreen._engine_markup({"ollama": {"reachable": False, "model": "bge-m3"}})
+    down = RepoHomeScreen._engine_markup({"ollama": {"reachable": False, "model": "bge-m3"}}).plain
     assert "not running" in down
     assert "Ollama" in down
 
@@ -2100,7 +2100,7 @@ def test_engine_status_never_shows_a_bare_question_mark():
          "db": {"backend": None, "repos": None, "stateRoot": None},
          "spendGate": {"open": False, "path": None}},
     ):
-        markup = RepoHomeScreen._engine_markup(status)
+        markup = RepoHomeScreen._engine_markup(status).plain
         assert "?" not in markup, f"a bare question mark reached the user: {markup!r}"
         assert "None" not in markup, f"a null printed as the word None: {markup!r}"
         assert "no model configured" in markup or "not running" in markup
@@ -3084,7 +3084,7 @@ def test_an_unreachable_reading_says_it_may_be_cached():
                    "hint": "not reachable at http://gpu:11434"},
         "db": {"backend": "sqlite", "repos": 0, "stateRoot": "~/.daijin"},
         "spendGate": {"open": False, "path": ".daijin/GATE"},
-    })
+    }).plain
     assert "may be cached" in down, "an unreachable reading does not admit it may be stale"
     assert "ctrl+r" in down, "the caveat does not say how to get a fresh reading"
 
@@ -3095,7 +3095,7 @@ def test_an_unreachable_reading_says_it_may_be_cached():
                    "dimension": 1024, "version": "0.32.1", "digest": "ab", "hint": None},
         "db": {"backend": "sqlite", "repos": 1, "stateRoot": "~/.daijin"},
         "spendGate": {"open": False, "path": ".daijin/GATE"},
-    })
+    }).plain
     assert "may be cached" not in up
 
 
@@ -3167,7 +3167,7 @@ async def test_the_cache_caveat_points_at_the_way_out():
                    "dimension": 1024, "version": None, "digest": None, "hint": "not reachable"},
         "db": {"backend": "sqlite", "repos": 0, "stateRoot": "~/.daijin"},
         "spendGate": {"open": False, "path": ".daijin/GATE"},
-    })
+    }).plain
     assert "may be cached" in down
     assert "ctrl+r" in down, "the caveat does not say how to get a fresh reading"
 

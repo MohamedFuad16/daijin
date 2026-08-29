@@ -1246,3 +1246,98 @@ async def test_gym_start_refuses_for_spend_before_it_ever_reaches_the_ledger():
     )
     assert "no gym ledger yet" not in caught.value.hint
     await client.aclose()
+
+
+# One raising subscriber must not be able to stop the others or the read loop.
+# The loop is how the whole app talks to the engine, so an exception escaping
+# it leaves every screen on its last frame with nothing to say why.
+
+
+class _Pipe(asyncio.StreamReader):
+    """A StreamReader preloaded with whole lines, then EOF."""
+
+    def __init__(self, lines: list[str]) -> None:
+        super().__init__()
+        for line in lines:
+            self.feed_data((line + "\n").encode())
+        self.feed_eof()
+
+
+@run_async
+async def test_one_raising_handler_stops_neither_its_siblings_nor_the_loop():
+    seen_before: list[dict] = []
+    seen_after: list[dict] = []
+
+    def raises(event):
+        raise ValueError("a subscriber with a bug in it")
+
+    client = StdioRpcClient(["true"])
+    client.on_event(lambda e: seen_before.append(e))
+    client.on_event(raises)
+    client.on_event(lambda e: seen_after.append(e))
+
+    # Two notifications, then a RESPONSE: the response is the proof the loop
+    # was still reading after the handler blew up, not merely that _pump
+    # returned. A dead loop leaves this future pending forever.
+    pending = asyncio.get_running_loop().create_future()
+    client._pending[1] = pending
+    await client._pump(_Pipe([
+        '{"jsonrpc":"2.0","method":"step","params":{"phase":"ingest"}}',
+        '{"jsonrpc":"2.0","method":"step","params":{"phase":"done"}}',
+        '{"jsonrpc":"2.0","id":1,"result":{"ok":true}}',
+    ]))
+
+    # (a) The siblings ran, both of them, for BOTH events. A guard that only
+    # protected the loop would still let one bad handler eat the ones after it.
+    assert len(seen_before) == 2, seen_before
+    assert len(seen_after) == 2, seen_after
+    # (b) The loop survived and went on delivering.
+    assert pending.done() and pending.result() == {"ok": True}
+
+    # NOT SWALLOWED: the failure is kept, and it names the handler.
+    failures = client.handler_failures
+    assert len(failures) == 2, failures
+    assert "raises" in failures[0], failures[0]
+    assert "ValueError" in failures[0] and "a subscriber with a bug in it" in failures[0]
+
+
+@run_async
+async def test_a_raising_board_finding_handler_is_guarded_too():
+    """boardFinding is the other fan-out and had the identical hole."""
+    seen: list[dict] = []
+    client = StdioRpcClient(["true"])
+    client.on_board_finding(lambda f: (_ for _ in ()).throw(RuntimeError("boom")))
+    client.on_board_finding(lambda f: seen.append(f))
+
+    await client._pump(_Pipe([
+        '{"jsonrpc":"2.0","method":"boardFinding","params":{"severity":"critical"}}',
+    ]))
+
+    assert seen == [{"severity": "critical"}]
+    assert any("boardFinding handler" in line for line in client.handler_failures)
+
+
+@run_async
+async def test_the_handler_failure_tail_is_bounded_and_stderr_is_not_spammed(capsys):
+    """A broken handler fails once per event, and a stream is hundreds.
+
+    An unbounded tail is a leak and an unguarded print into a terminal a TUI
+    is drawing in trades a visible crash for an unusable screen, so the tail
+    is capped and each distinct failure reaches stderr exactly once.
+    """
+    from daijin_tui.rpc import HANDLER_FAILURE_TAIL_LINES
+
+    client = StdioRpcClient(["true"])
+    client.on_event(lambda e: (_ for _ in ()).throw(ValueError("same every time")))
+    for _ in range(HANDLER_FAILURE_TAIL_LINES + 25):
+        client.dispatch_event({"phase": "ingest"})
+
+    assert len(client.handler_failures) == HANDLER_FAILURE_TAIL_LINES
+    reported = capsys.readouterr().err
+    # Count REPORTS, not occurrences of the message: one report also quotes
+    # the failing source line in its traceback, so counting the message text
+    # would have counted the same report four times and passed by accident.
+    assert reported.count("step handler ") == 1, (
+        f"one broken handler on a busy stream must not spam the terminal: {reported!r}"
+    )
+    assert "ValueError: same every time" in reported, "the one report must carry the cause"

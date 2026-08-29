@@ -20,6 +20,7 @@ from ..widgets import (
     PhaseChecklist,
     PlotextLine,
     SectionTitle,
+    cells,
     format_count,
     format_duration,
 )
@@ -217,7 +218,7 @@ class GymScreen(DaijinScreen):
         table = self.query_one(selector, DataTable)
         table.clear()
         for row in rows:
-            table.add_row(*mapper(row))
+            table.add_row(*cells(*mapper(row)))
 
     @staticmethod
     def _cycle_number(row: dict[str, Any], position: int) -> int:
@@ -241,14 +242,14 @@ class GymScreen(DaijinScreen):
         table = self.query_one("#cycle-table", DataTable)
         table.clear()
         for number, row in numbered:
-            table.add_row(
+            table.add_row(*cells(
                 format_count(number),
                 row.get("examId") or row.get("exam_id") or "-",
                 row.get("verdict") or "not graded",
                 format_count(self._cycle_tokens(row)),
                 format_count(row.get("rounds")),
                 format_duration(row.get("durationS")),
-            )
+            ))
         if numbered:
             self.query_one("#cycle-trend", PlotextLine).set_data(
                 [n for n, _ in numbered],
@@ -269,7 +270,7 @@ class GymScreen(DaijinScreen):
         table = self.query_one("#harvest-table", DataTable)
         table.clear()
         for row in batches:
-            table.add_row(
+            table.add_row(*cells(
                 str(row.get("id", "-")),
                 str(row.get("cycleId", "-")),
                 str(row.get("mode", "-")),
@@ -279,8 +280,7 @@ class GymScreen(DaijinScreen):
                 # "no" for an unapplied batch, never blank: an unapplied batch
                 # being visibly unapplied is the whole point of the column.
                 f"yes, {row.get('written')} lesson(s)" if row.get("applied") else "no",
-                key=str(row.get("id")),
-            )
+            ), key=str(row.get("id")))
 
     # Stream ---------------------------------------------------------------
 

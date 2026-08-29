@@ -19,7 +19,7 @@ from .. import mock_data
 from ..rpc import RpcError
 from ..stream import FLUSH_INTERVAL, StreamCoalescer
 from ..widgets.activity import IDLE_UNTIL_INFERRED, TERMINAL_PHASES
-from ..widgets import Banner, EventLog, PhaseChecklist, SectionTitle
+from ..widgets import Banner, EventLog, PhaseChecklist, SectionTitle, cells
 from .base import DaijinScreen
 from .dialogs import GatesFileEditScreen
 
@@ -180,15 +180,14 @@ class GatesScreen(DaijinScreen):
             # until it runs these keys are ABSENT rather than false, and a
             # blank cell would read as a verdict nobody reached.
             classification = gate.get("classification")
-            table.add_row(
+            table.add_row(*cells(
                 gate.get("id", ""),
                 gate.get("role") or "-",
                 CLASSIFICATION_LABELS.get(classification, classification or "not checked yet"),
                 "yes" if gate.get("enabled") else ("no" if "enabled" in gate else "-"),
                 baseline.get("status") or "not run",
                 gate.get("command", ""),
-                key=gate.get("id"),
-            )
+            ), key=gate.get("id"))
         dead = [g for g in self.gates if g.get("classification") in ("pre-broken", "unavailable")]
         # The engine counts carryingSignal itself. Preferring its number over a
         # recount here means the screen and the ledger cannot drift; a summary
@@ -253,13 +252,24 @@ class GatesScreen(DaijinScreen):
                 evidence.append(f"{stream}: {tail.splitlines()[-1][:100]}")
         # source is written by discovery too, so a hand-typed row has none and
         # "from None" is the word None leaking into copy.
-        origin = f"  [dim]found in {gate['source']}[/dim]" if gate.get("source") else "  [dim]added by hand[/dim]"
-        self.query_one("#gate-evidence", Static).update(
-            f"[b]{gate.get('id')}[/b]  {gate.get('command')}{origin}\n"
-            f"[b]{CLASSIFICATION_LABELS.get(classification, classification or 'not checked yet')}[/b]  "
-            f"[dim]{CLASSIFICATION_NOTE.get(classification, '')}[/dim]\n"
-            + "\n".join(evidence)
-        )
+        origin = "  [dim]found in $source[/dim]" if gate.get("source") else "  [dim]added by hand[/dim]"
+        # Every value below is the REPO'S or the ENGINE'S text, not ours: the
+        # shell command out of gates.yaml, the engine's unavailable reason and
+        # hint, and the tails of the check's own stdout and stderr. A pytest
+        # parametrised id ("test_read[/tmp/x]") or any bracketed path in that
+        # output is a closing markup tag with nothing open, which is a
+        # MarkupError that kills the app. $variables substitute as plain text.
+        self.query_one("#gate-evidence", Static).update(Content.from_markup(
+            "[b]$gate_id[/b]  $command" + origin + "\n"
+            "[b]$label[/b]  [dim]$note[/dim]\n"
+            "$evidence",
+            gate_id=str(gate.get("id") or ""),
+            command=str(gate.get("command") or ""),
+            source=str(gate.get("source") or ""),
+            label=CLASSIFICATION_LABELS.get(classification, classification or "not checked yet"),
+            note=CLASSIFICATION_NOTE.get(classification, ""),
+            evidence="\n".join(evidence),
+        ))
 
     def _selected_gate(self) -> dict[str, Any] | None:
         table = self.query_one("#gates-table", DataTable)

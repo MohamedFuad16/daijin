@@ -6,6 +6,7 @@ from typing import Any, Iterable, Sequence
 
 from textual.app import ComposeResult
 from textual.containers import Horizontal, VerticalScroll
+from textual.content import Content
 from textual.screen import Screen
 from textual.widgets import Button, Footer, Header, Static
 
@@ -92,7 +93,7 @@ class DaijinScreen(Screen):
         # wordmark lives here so it sits at the very top, never mid-content.
         yield from self.brand()
         yield NavBar(self.mode_name)
-        yield Static(self._heading_markup(), markup=True, id="screen-heading")
+        yield Static(self._heading_markup(), id="screen-heading")
         with VerticalScroll(id="screen-body"):
             yield from self.content()
         yield Footer()
@@ -182,20 +183,26 @@ class DaijinScreen(Screen):
     def _say(self, text: str, tone: str = "info") -> None:
         """Put a line in this screen's banner, if it has one."""
         if not self.notice_id:
-            self.app.notify(text)
+            # markup off: the text here is usually the engine's own hint, and
+            # a hint carrying a "[/...]" token is a MarkupError inside the
+            # toast's render, which takes the app down with it.
+            self.app.notify(text, markup=False)
             return
         for banner in self.query(self.notice_id):
             banner.set_notice(text, tone)
 
-    def _heading_markup(self) -> str:
-        line = f"[b]{self.heading}[/b]"
+    def _heading_markup(self) -> Content:
+        line = Content.from_markup("[b]$heading[/b]", heading=self.heading)
         if self.subheading:
-            line += f"  [dim]{self.subheading}[/dim]"
+            line += Content.from_markup("  [dim]$sub[/dim]", sub=self.subheading)
         repo = getattr(self.app, "selected_repo", None)
         if repo:
-            line += f"  [dim]repo {repo}[/dim]"
+            # The repo path is whatever the owner attached, so it is their
+            # text: a bracketed segment in it is a closing markup tag with
+            # nothing open, and this heading sits on EVERY screen.
+            line += Content.from_markup("  [dim]repo $repo[/dim]", repo=str(repo))
         if getattr(self.app, "is_mock", False):
-            line += "  [reverse] MOCK ENGINE [/reverse]"
+            line += Content.from_markup("  [reverse] MOCK ENGINE [/reverse]")
         return line
 
     def brand(self) -> Iterable[Any]:
@@ -306,12 +313,16 @@ class DaijinScreen(Screen):
                 title=f"not built yet{f' ({error.phase})' if error.phase else ''}",
                 severity="information",
                 timeout=8,
+                markup=False,
             )
             return
         title = f"engine error {error.code}"
         if error.is_spend_gate:
             title = f"spend refused ({error.gate})"
-        self.app.notify(error.hint, title=title, severity="error", timeout=10)
+        # The hint is the engine's sentence, shown verbatim: markup off, so a
+        # bracketed path or a quoted markup tag in it cannot become a
+        # MarkupError in the toast's own render.
+        self.app.notify(error.hint, title=title, severity="error", timeout=10, markup=False)
 
     def show_rpc_error(self, error: RpcError, banner_id: str) -> None:
         """Report an error AND leave it on screen, so nothing reads as empty."""

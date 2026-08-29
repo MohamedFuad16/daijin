@@ -43,21 +43,43 @@ export function createRpcServer({ stateRoot, write, deps = {} } = {}) {
         hint: 'The request carried no method name.',
       }).toResponse(id ?? null);
     }
+    // A well-formed message with no id is a NOTIFICATION, and the spec is unconditional
+    // about it: "The Server MUST NOT reply to a Notification", and "Notifications are not
+    // confirmable by definition ... the Client would not be aware of any errors (like e.g.
+    // 'Invalid params','Internal error')" - https://www.jsonrpc.org/specification, sections
+    // 4.1 and 5. Only the success path honoured that. Both failure paths below answered a
+    // notification with a full error envelope carrying `id: null`, which on the socket
+    // transport lands on the connection as a frame matching no pending request: the client
+    // must either drop it or mis-attribute it to another call.
+    //
+    // The two branches ABOVE deliberately keep replying, and are not the same case. A
+    // non-object, or an object with no method, is an Invalid Request rather than a
+    // notification - there is no valid method to have been notified of - and the spec's own
+    // rule for those is the opposite one: "If there was an error in detecting the id in the
+    // Request object (e.g. Parse error/Invalid Request), it MUST be Null."
+    const isNotification = id === undefined || id === null;
     const handler = Object.hasOwn(methods, method) ? methods[method] : null;
     if (!handler) {
       // Reached only by a method that is NOT in the contract. Every contracted method has
       // a handler, including the ones whose capability has not shipped; those answer with
       // a structured not-implemented instead.
+      if (isNotification) return null;
       return new RpcError(ERR_METHOD_NOT_FOUND, `unknown method ${method}`, {
         hint: `The engine has no method named ${method}. The frozen surface is in engine/src/rpc/methods.md.`,
-      }).toResponse(id ?? null);
+      }).toResponse(id);
     }
     try {
       const result = await handler(params || {});
       // A request without an id is a notification: the client wants no answer.
-      return id === undefined || id === null ? null : { jsonrpc: '2.0', id, result: result ?? null };
+      return isNotification ? null : { jsonrpc: '2.0', id, result: result ?? null };
     } catch (error) {
-      return toErrorResponse(error, id ?? null, method);
+      // The work already ran; only the ANSWER is suppressed. A notification that failed is
+      // still worth a stderr line, because it is the one shape no client can see.
+      if (isNotification) {
+        console.error(`notification ${method} failed: ${error.message}`);
+        return null;
+      }
+      return toErrorResponse(error, id, method);
     }
   }
 

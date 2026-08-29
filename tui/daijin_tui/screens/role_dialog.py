@@ -28,6 +28,7 @@ from typing import Any, Iterable, Sequence
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.content import Content
 from textual.screen import ModalScreen
 from textual.widgets import Button, Checkbox, Input, Select, Static
 
@@ -362,13 +363,18 @@ class RoleConfigScreen(ModalScreen[dict[str, Any] | None]):
             new = str(default or "")
             endpoint_field.value = new
             if old and old != new:
-                endpoint_note.update(
-                    f"[yellow]Endpoint moved to the {provider.get('label', provider_id)} "
-                    f"default[/yellow] [dim](was {old})[/dim]"
-                )
+                # label comes from the engine's catalog and `old` is what the
+                # user typed into the field, so neither is ours to parse as
+                # markup.
+                endpoint_note.update(Content.from_markup(
+                    "[yellow]Endpoint moved to the $label "
+                    "default[/yellow] [dim](was $old)[/dim]",
+                    label=str(provider.get("label", provider_id)),
+                    old=old,
+                ))
             else:
                 endpoint_note.update(
-                    f"[dim]{new}[/dim]" if new else ""
+                    Content.from_markup("[dim]$endpoint[/dim]", endpoint=new) if new else ""
                 )
         show_endpoint = provider_id != "claude-code"
         endpoint_field.display = show_endpoint
@@ -404,7 +410,10 @@ class RoleConfigScreen(ModalScreen[dict[str, Any] | None]):
             note = next(
                 (tool.get("note") for tool in offered if tool.get("id") == "web_search"), None
             )
-            tools_note.update(f"[dim]{note}[/dim]" if note else "")
+            # The catalog's own note, written by the engine.
+            tools_note.update(
+                Content.from_markup("[dim]$note[/dim]", note=str(note)) if note else ""
+            )
             tools_box.value = bool(self.role.get("tools")) and "web_search" in (
                 self.role.get("tools") or []
             )
@@ -450,7 +459,10 @@ class RoleConfigScreen(ModalScreen[dict[str, Any] | None]):
                 "registry. It will be sent as written.[/yellow]"
             )
             return
-        note.update(f"[dim]{model.get('note')}[/dim]" if model.get("note") else "")
+        note.update(
+            Content.from_markup("[dim]$note[/dim]", note=str(model.get("note")))
+            if model.get("note") else ""
+        )
 
     def on_select_changed(self, event: Select.Changed) -> None:
         event.stop()
@@ -496,7 +508,7 @@ class RoleConfigScreen(ModalScreen[dict[str, Any] | None]):
             # reads both. It never quotes the value: the likeliest wrong input
             # at this field is a pasted key, and a warning that echoes it puts
             # it on screen and into any log that captures rendered output.
-            note.update(f"[red]{refusal}[/red]")
+            note.update(Content.from_markup("[red]$refusal[/red]", refusal=str(refusal)))
             return
         note.update(f"[green]{KEY_REF_OK}[/green]")
 

@@ -379,3 +379,38 @@ test('an initialised repo keeps its index across a move; an uninitialised one ca
   const bareAfter = await repoLayout(bareMoved, { stateRoot: state });
   assert.notEqual(bareAfter.repoId, bareBefore.repoId, 'and a moved path is a different key');
 });
+
+test('a failed init closes the handle it opened, instead of leaking it forever', async () => {
+  // The migration ledger and both identity asserts throw AFTER openDatabase has run, and
+  // createSqliteStore discards the half-built instance on a throw. `#database` is private,
+  // so nothing could ever close it again: three failed inits left eight file handles (db,
+  // -wal, -shm) open and unreachable.
+  //
+  // The trigger is ordinary rather than exotic - a user who changes their Ollama embedding
+  // model hits the identity assert on every attempt - and the daemon is long-lived, so each
+  // retry from the TUI burns more descriptors until EMFILE.
+  const { execFileSync } = await import('node:child_process');
+  const directory = mkdtempSync(join(tmpdir(), 'daijin-init-leak-'));
+  const file = join(directory, 'brain.sqlite');
+  try {
+    const open = (model, digest) => createSqliteStore({
+      path: file,
+      repoPath: directory,
+      project: 'default',
+      embedder: { provider: 'ollama', model, digest, dimension: 4 },
+    });
+    (await open('bge-m3', 'sha256:aaa')).close();
+
+    const handles = () => execFileSync('lsof', ['-p', String(process.pid)], { encoding: 'utf8' })
+      .split('\n').filter((line) => line.includes('brain.sqlite')).length;
+    const before = handles();
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      await assert.rejects(() => open('a-different-model', 'sha256:bbb'), /rebuild the index/,
+        'the identity assert still refuses; the close must not swallow it');
+    }
+    assert.equal(handles(), before, 'a refused init leaves no handle behind');
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});

@@ -29,7 +29,7 @@ import YAML from 'yaml';
 import { analyze as analyzeRepo } from '../init/analyze.js';
 import { discoverGates, gatesFilePath, renderGatesYaml } from '../init/gate-discovery.js';
 import { embedderFromOllama, servedIndexIdentity } from '../init/ingest.js';
-import { artifactPaths, initBrain as runInitPipeline, reindexFromBrain } from '../init/pipeline.js';
+import { artifactPaths, initBrain as runInitPipeline, readInitBlock, reindexFromBrain } from '../init/pipeline.js';
 import { writeLessonUnit } from '../init/brain-artifacts.js';
 import { caseRateOf, MCP_UNLOCK_THRESHOLD, mcpUnlock } from '../init/floor.js';
 import { discriminatingRange, permuteAnswers } from '../init/rerank-ab.js';
@@ -913,6 +913,16 @@ export function createMethods({
   /// spends (D-0060): an authorization lives exactly as long as the run it
   /// authorized. Best-effort by design - a reblock failure must not turn a
   /// finished run into a failed one, but it is worth a stderr line.
+  ///
+  /// ORDERING: a job that announces its OWN done-phase event must re-block
+  /// BEFORE that emit, not only in its finally. The finally runs after the
+  /// emit, so a client acting on `done` - and the engine's own test suite,
+  /// which is where this surfaced as an intermittent empty read of the gate
+  /// file - can observe the gate still open, or mid-rewrite, on a run that
+  /// has already reported it ended. gymStart is the shape that is correct by
+  /// construction: it announces nothing, so the runner's `finished` is emitted
+  /// after the finally has already closed the gate. Idempotent, so the finally
+  /// stays as the failure-path backstop and the double call costs one write.
   const reblockGate = async (repoPath) => {
     try {
       // Named gatePath, not file: the mutation guard's alias rule flags any
@@ -1144,17 +1154,32 @@ export function createMethods({
       for (const repo of repos) {
         const history = await readHistory(repo.path);
         const floorScore = history[0]?.caseRate?.exact ?? null;
+        // ONE AUTHORITY FOR ONE DECISION. This compared the rate to the threshold by hand,
+        // which quietly re-decided a question floor.js already answers and answers with
+        // more than the rate: mcpUnlock also enforces the must-not violations floor and the
+        // last init's refusal to certify one. So a repo whose snippet is LOCKED - because a
+        // wrong answer is being served, or because the gold set failed its own integrity
+        // gates - still rendered `ok` on the home screen, which is the half of the live
+        // multi-repo drive that the snippet fix alone did not close. Two places deciding one
+        // thing is the drift this codebase keeps finding; the threshold constant is still
+        // imported for the wire field below, but nothing decides with it here.
+        const fitness = history[0]?.caseRate
+          ? mcpUnlock(history[0].caseRate, {
+            violations: history[0]?.violations ?? null,
+            blocked: await readInitBlock(repo.path),
+          })
+          : null;
         const [NO_BRAIN, WARN, OK, CRITICAL] = HEALTH_STATES;
         let health = NO_BRAIN;
         try {
           health = await withStore(repo.path, async (store) => {
             const identity = await store.indexedEmbeddingIdentity();
             if (!identity?.indexed && !identity?.provider) return NO_BRAIN;
-            // Never measured and measured-below-threshold are both WARN on the wire, and a
-            // client tells them apart by floorScore being null or a number. Two values
-            // where the discriminator is already on the row would be redundant.
+            // Never measured and measured-unfit are both WARN on the wire, and a client
+            // tells them apart by floorScore being null or a number. Two values where the
+            // discriminator is already on the row would be redundant.
             if (floorScore === null) return WARN;
-            return floorScore >= MCP_UNLOCK_THRESHOLD ? OK : WARN;
+            return fitness?.unlocked ? OK : WARN;
           });
         } catch {
           // An unopenable brain is a real state the home screen must show, not a crash.
@@ -1521,7 +1546,13 @@ export function createMethods({
       // The decision AND its sentence come from floor.js, so the lock reason a user reads is
       // the one the measurement wrote rather than a paraphrase of it. Violations ride from
       // the same history row; null (a pre-field row) is said in the reason, never zeroed.
-      const decision = mcpUnlock(caseRate, { violations: history[0]?.violations ?? null });
+      // THE LAST INIT'S REFUSAL OUTRANKS THE HISTORY ROW. init writes no floor when it
+      // blocks, but retrievalScore measures the same unfit gold set and DOES write a
+      // history row, so reading history alone hands a snippet to a brain the pipeline just
+      // refused to certify. The multi-repo drive caught it: an empty repo scored 2 of 2,
+      // cleared 0.75, and was offered the config.
+      const blocked = await readInitBlock(repoPath);
+      const decision = mcpUnlock(caseRate, { violations: history[0]?.violations ?? null, blocked });
       if (!decision.unlocked) return { unlocked: false, threshold: decision.threshold, snippet: null, reason: decision.reason };
       // Points at serve-repo.js, the per-repo entry, NOT at brain-mcp.js. The latter is the
       // P1-era entry that takes a corpus descriptor and opens Postgres; pointed at a user's
@@ -2119,6 +2150,8 @@ export function createMethods({
           });
           const batchId = ledger.recordHarvestBatch(batch);
           const accepted = proposals.filter((proposal) => proposal.accepted).length;
+          // Closed BEFORE the ending is announced (see reblockGate).
+          await reblockGate(repoPath);
           emit('done', 'harvested',
             `Batch ${batchId}: ${questions.length} question(s) asked, ${accepted} lesson proposal(s) kept, ${proposals.length - accepted} dropped. `
             + (cycle.mode === 'evaluation'
@@ -2575,6 +2608,8 @@ export function createMethods({
             }
           }
           const open = [...seen.values()];
+          // Closed BEFORE the ending is announced (see reblockGate).
+          if (triage) await reblockGate(repoPath);
           emit('done', 'goal',
             clean >= cleanSweepsToStop
               ? `Clean: ${cleanSweepsToStop} consecutive sweep(s) found nothing open after ${sweep} sweep(s)${fixed ? `, ${fixed} fix(es) applied` : ''}.`
@@ -2629,6 +2664,8 @@ export function createMethods({
           { counts: { candidates: mined.candidates.length, dropped: mined.dropped.length } });
         if (cancelled()) return;
         if (mined.candidates.length === 0) {
+          // Closed BEFORE the ending is announced (see reblockGate).
+          await reblockGate(repoPath);
           emit('done', 'empty', 'No commit survived the deterministic filter, so there is nothing for the committee to read.', { level: 'warn' });
           return;
         }
@@ -2727,6 +2764,8 @@ export function createMethods({
           }
         });
         const validated = written.filter((row) => row.ok).length;
+        // Closed BEFORE the ending is announced (see reblockGate).
+        await reblockGate(repoPath);
         emit('done', 'mined',
           `${written.length} exam(s) written: ${validated} validated, ${written.length - validated} draft(s). `
           + 'Promote the ones you accept; only promoted exams can run.',

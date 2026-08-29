@@ -42,7 +42,7 @@ async function fixtureRepo() {
   return { repo, goldCommit: stdout.trim() };
 }
 
-async function fixture({ gate = 'authorized', auditorRole = true, deps = {} } = {}) {
+async function fixture({ gate = 'authorized', auditorRole = true, deps = {}, onNotify = null } = {}) {
   const { repo, goldCommit } = await fixtureRepo();
   const stateRoot = await mkdtemp(path.join(tmpdir(), 'mine-state-'));
   const state = new EngineState({ stateRoot });
@@ -55,7 +55,7 @@ async function fixture({ gate = 'authorized', auditorRole = true, deps = {} } = 
       JSON.stringify({ status: 'authorized', scope: 'exam-mining', reason: 'Test-run mining authorization.' }));
   }
   const events = [];
-  const jobs = new JobRunner({ notify: (method, params) => events.push(params) });
+  const jobs = new JobRunner({ notify: (method, params) => { events.push(params); onNotify?.(params); } });
   const methods = createMethods({
     state,
     jobs,
@@ -206,4 +206,46 @@ test('spendGateSet: blocked always works; authorized needs scope, reason and con
   assert.equal(opened.status, 'authorized');
   assert.equal(opened.scope, 'exam-mining');
   assert.equal(opened.open, true);
+});
+
+test('the gate is already re-blocked at the instant the job announces it ended', async () => {
+  // AN ORDERING DEFECT, caught as an intermittent failure of the test above: that one reads
+  // the GATE file right after `done` and got "Unexpected end of JSON input", because the
+  // re-block ran in the job's finally - AFTER the ending was announced - and the read
+  // landed inside the truncate-then-write window.
+  //
+  // The window is the bug, not the empty read. D-0060's rule is that an authorization
+  // lives exactly as long as the run it authorized, and a run that has told every client
+  // it is over while its gate is still open has outlived it. gymStart is correct by
+  // construction (it announces nothing, so the runner's `finished` fires after the
+  // finally); the jobs that announce their own ending had to be made correct on purpose.
+  //
+  // Read SYNCHRONOUSLY inside the notify handler, because that is the only moment that
+  // proves the ordering: emit is synchronous, so readFileSync here sees exactly the bytes
+  // a client reacting to `done` would see. An await anywhere in this assertion would let
+  // the finally run first and the test would pass against the defect.
+  const { readFileSync } = await import('node:fs');
+  let gateAtAnnounce = 'never read';
+  let gatePath = null;
+  const { methods, repo, events } = await fixture({
+    deps: { createRoleGenerate: promptReadingGenerate({}) },
+    onNotify: (event) => {
+      if (event.phase !== 'done' || !gatePath) return;
+      try {
+        gateAtAnnounce = JSON.parse(readFileSync(gatePath, 'utf8')).status;
+      } catch (error) {
+        gateAtAnnounce = `unreadable: ${error.message}`;
+      }
+    },
+  });
+  gatePath = path.join(repo, '.daijin', 'GATE');
+  // The control: the gate really is open going in, so a 'blocked' reading below is the
+  // re-block having happened rather than an authorization that never existed.
+  assert.equal(JSON.parse(readFileSync(gatePath, 'utf8')).status, 'authorized');
+
+  const { jobId } = await methods.examMine({ repoPath: repo, confirm: true });
+  const done = await waitForDone(events, jobId);
+  assert.equal(done.step, 'mined', `expected the mined ending, got ${done.step}: ${done.detail}`);
+  assert.equal(gateAtAnnounce, 'blocked',
+    'the spend gate must be closed and fully written before the run announces it ended');
 });

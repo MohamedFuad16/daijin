@@ -11,6 +11,7 @@ from typing import Any
 
 from textual.app import ComposeResult
 from textual.containers import Vertical
+from textual.content import Content
 from textual.screen import Screen
 from textual.widgets import Footer, Header, Static
 
@@ -45,7 +46,11 @@ class UpgradeScreen(Screen):
                 # read. Reporting a mismatch here would name the wrong problem
                 # and hide the stderr tail the transport preserved.
                 yield Static("[b]Could not reach the engine[/b]", markup=True, id="upgrade-title")
-                yield Static(self.connection_error, id="upgrade-detail")
+                # The transport's preserved stderr tail: a node stack trace or
+                # an installer's output, never ours. This screen is all the
+                # user has when the engine will not start, so it is the last
+                # place that can afford a MarkupError.
+                yield Static(Content(str(self.connection_error)), id="upgrade-detail")
                 yield Static(
                     "The handshake never completed, so this client has not read a contract "
                     "version and is not claiming one is wrong. Fix the connection above and "
@@ -55,11 +60,15 @@ class UpgradeScreen(Screen):
             else:
                 yield Static("[b]Contract version mismatch[/b]", markup=True, id="upgrade-title")
                 yield Static(
-                    f"This client is built against contract version "
-                    f"[b]{SUPPORTED_CONTRACT_VERSION}[/b].\n"
-                    f"The engine reports contract version [b]{self.contract_version or 'none'}[/b], "
-                    f"engine version {self.engine_version or 'unknown'}.",
-                    markup=True,
+                    Content.from_markup(
+                        "This client is built against contract version "
+                        "[b]$supported[/b].\n"
+                        "The engine reports contract version [b]$reported[/b], "
+                        "engine version $engine.",
+                        supported=SUPPORTED_CONTRACT_VERSION,
+                        reported=str(self.contract_version or "none"),
+                        engine=str(self.engine_version or "unknown"),
+                    ),
                     id="upgrade-detail",
                 )
                 yield Static(

@@ -178,12 +178,27 @@ DAIJIN_ARGV_FILE="$WORK/argv-explicit.txt" "$PREFIX/bin/daijin" . --engine 'node
 
 check "a bare invocation gets an engine command" grep -q -- '--engine' "$WORK/argv-default.txt"
 check "and it points at the installed prefix" grep -q "$PREFIX" "$WORK/argv-default.txt"
+# The precondition matters: check_fails treats ANY non-zero status as a genuine negative,
+# and grep exits 2 when the file is absent. Without asserting the stand in actually ran,
+# "--mock got no engine" and "the shim died before writing anything" are the same result.
+check "the --mock invocation reached the stand in at all" test -s "$WORK/argv-mock.txt"
 check_fails "--mock is left alone, since the client's own engine must win" \
   grep -q -- '--engine' "$WORK/argv-mock.txt"
 check "an explicit --engine is passed through untouched" \
   grep -q '/somewhere/else.js' "$WORK/argv-explicit.txt"
+# grep -c on a missing file prints nothing, so this became `test "" -gt 1`, which exits 2
+# and reads to check_fails as "correctly not doubled". Defaulting to a sentinel that is
+# greater than 1 makes an unreadable file FAIL the check instead of quietly passing it.
+engine_flag_count() {
+  local count
+  count="$(grep -c -- '--engine' "$WORK/argv-explicit.txt" 2>/dev/null)" || true
+  case "$count" in
+    ''|*[!0-9]*) echo 99 ;;
+    *) printf '%s\n' "$count" ;;
+  esac
+}
 check_fails "and is not doubled" \
-  test "$(grep -c -- '--engine' "$WORK/argv-explicit.txt")" -gt 1
+  test "$(engine_flag_count)" -gt 1
 
 step "(a) MUTATION: an install with no engine refuses instead of pretending"
 # The strongest way for an installer to lie is to look finished while the thing it
@@ -345,29 +360,86 @@ step "(c) no secret, no provider call, no network beyond package registries"
 # it contains those very patterns as search terms, and it is never installed. It is still
 # covered by the dash sweep below, which has no such problem.
 SHIPPED=("$HERE/install.sh" "$HERE/uninstall.sh" "$HERE/smoke.mjs" "$HERE/probe-ollama.mjs" "$HERE/README.md")
+# `! grep ...` is NOT a safe sweep, for the same reason the em dash slipped through the
+# first dash sweep: grep exits 0 on a match, 1 on a clean file and 2 on an ERROR, and `!`
+# turns BOTH 1 and 2 into a pass. A renamed or missing file therefore reads exactly like a
+# clean one, and the sweep silently measures nothing. absent_from() splits the three cases
+# apart so only a real, completed, empty search passes.
+absent_from() {
+  local pattern="$1"; shift
+  local output status
+  output="$(grep -nEi "$pattern" "$@")"
+  status=$?
+  case "$status" in
+    0) printf 'MATCHED (the sweep found what it forbids):\n%s\n' "$output"; return 1 ;;
+    1) return 0 ;;
+    *) printf 'grep exited %s: the sweep could not read its inputs and measured NOTHING.\n' "$status"; return 1 ;;
+  esac
+}
 no_provider_hosts() {
-  ! grep -niE 'api\.openai\.com|api\.anthropic\.com|voyageai|generativelanguage|api\.deepseek|api\.x\.ai' "${SHIPPED[@]}"
+  absent_from 'api\.openai\.com|api\.anthropic\.com|voyageai|generativelanguage|api\.deepseek|api\.x\.ai' "${SHIPPED[@]}"
 }
 no_credentials() {
-  ! grep -niE '(OPENAI|ANTHROPIC|VOYAGE|DEEPSEEK|GROK|GLM)_API_KEY|Authorization:|Bearer ' "${SHIPPED[@]}"
+  absent_from '(OPENAI|ANTHROPIC|VOYAGE|DEEPSEEK|GROK|GLM)_API_KEY|Authorization:|Bearer ' "${SHIPPED[@]}"
 }
 no_ad_hoc_downloads() {
   # npm and pip may reach their registries. Nothing else may reach anything.
-  ! grep -nE '^[^#]*(curl|wget|nc|ssh|scp) ' "$HERE/install.sh" "$HERE/uninstall.sh"
+  absent_from '^[^#]*(curl|wget|nc|ssh|scp) ' "$HERE/install.sh" "$HERE/uninstall.sh"
 }
 # Scoped to what the installer itself wrote. node_modules and site-packages carry third
 # party test fixtures (certificates, sample credential files) that are not ours to judge,
 # and sweeping them would turn this into a check nobody could keep green.
+# Piping find into `grep -q .` had the same defect: under pipefail a CRASHED find and a
+# clean tree both produce status 1, which `!` turns into a pass, so the sweep could not
+# tell "there are no credential files" from "find never ran". The output is captured
+# instead, and find's own status is judged separately from whether it found anything.
+# Takes a root so the check can be proven to fire before it is trusted.
 no_credential_files() {
-  ! find "$PREFIX" \
+  local root="$1"
+  local found status
+  found="$(find "$root" \
     -name node_modules -prune -o \
     -name venv -prune -o \
-    \( -name '.env*' -o -name '*.pem' -o -name 'credentials*' \) -print | grep -q .
+    \( -name '.env*' -o -name '*.pem' -o -name 'credentials*' \) -print)"
+  status=$?
+  if [ "$status" -ne 0 ]; then
+    printf 'find exited %s while sweeping %s: this sweep measured NOTHING.\n' "$status" "$root"
+    return 1
+  fi
+  if [ -n "$found" ]; then
+    printf 'credential shaped files under %s:\n%s\n' "$root" "$found"
+    return 1
+  fi
+  return 0
 }
+
+# Every sweep above is proven able to FIRE before it is trusted, the same way the dash
+# sweep is. Without this they are four functions that have only ever returned 0, which is
+# indistinguishable from four functions that cannot fail.
+SWEEP_PLANT="$WORK/sweep-plant"
+mkdir -p "$SWEEP_PLANT"
+printf 'Authorization: Bearer planted\n' >"$SWEEP_PLANT/planted.txt"
+check_fails "the credential sweep fires on a planted auth header" \
+  absent_from '(OPENAI|ANTHROPIC|VOYAGE|DEEPSEEK|GROK|GLM)_API_KEY|Authorization:|Bearer ' "$SWEEP_PLANT/planted.txt"
+printf 'https://api.openai.com/v1\n' >"$SWEEP_PLANT/planted.txt"
+check_fails "the provider sweep fires on a planted hostname" \
+  absent_from 'api\.openai\.com|api\.anthropic\.com|voyageai|generativelanguage|api\.deepseek|api\.x\.ai' "$SWEEP_PLANT/planted.txt"
+printf 'nothing banned here\n' >"$SWEEP_PLANT/planted.txt"
+check "and both pass on a clean file" \
+  absent_from 'api\.openai\.com|Authorization:|Bearer ' "$SWEEP_PLANT/planted.txt"
+check_fails "a sweep whose input cannot be read FAILS rather than passing empty" \
+  absent_from 'anything' "$SWEEP_PLANT/no-such-file"
+printf 'KEY=planted\n' >"$SWEEP_PLANT/.env"
+check_fails "the credential FILE sweep fires on a planted .env" no_credential_files "$SWEEP_PLANT"
+rm -f "$SWEEP_PLANT/.env"
+check "and passes on a directory with none" no_credential_files "$SWEEP_PLANT"
+check_fails "and FAILS when find cannot run, rather than reporting a clean tree" \
+  no_credential_files "$WORK/no-such-directory"
+
 check "no provider hostname appears in any shipped install file" no_provider_hosts
 check "no credential name or auth header appears in any shipped install file" no_credentials
 check "the installer runs no downloader of its own" no_ad_hoc_downloads
-check "the installed tree carries no .env and no credential file of ours" no_credential_files
+check "the installed tree carries no .env and no credential file of ours" no_credential_files "$PREFIX"
 
 step "(f) dash sweep"
 # Written in python rather than grep on purpose. The grep on this machine is ugrep, on CI

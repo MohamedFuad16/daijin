@@ -203,7 +203,13 @@ export async function autoBlockSpendGate({
 // (writeFile(resultPath, ...) must stay clean, or nobody can write a file in this engine),
 // and prose is not a reference (an unquoted mention of the gate in a comment is not a path).
 
-const WRITE_CALL = /\b(writeFile|writeFileSync|appendFile|appendFileSync|createWriteStream|outputFile|write)\s*\(/g;
+// Any identifier CONTAINING write, not a closed list of spellings. The closed list was
+// blind to the two spellings this codebase actually uses - writeFileNative( (the alias
+// THIS FILE imports and writes the gate with) and writeJsonAtomic( - so the owner file
+// matched zero writes and the licence apparatus below never ran on the one module it
+// exists to audit. The comment beside the blocked write claimed the regex "must SEE this
+// call"; it did not. Demonstrated with two bypass strings before widening.
+const WRITE_CALL = /\b[\w$]*[wW]rite[\w$]*\s*\(|\b(?:appendFile|appendFileSync|outputFile)\s*\(/g;
 
 /** Naming the gate: the helper, a quoted or template path that ends at a GATE segment, or a
  *  shell command redirecting into one. Quotes are required so prose stays prose. */
@@ -282,6 +288,24 @@ function matchesAllowlist(file, allowlist) {
   return allowlist.some((entry) => file === entry.path || file.endsWith(`/${entry.path}`));
 }
 
+/** Names imported un-aliased from the owner module, with the laundering routes closed.
+ *  A name is disqualified by an `as` binding anywhere in the file (import { opener as
+ *  closer } is the obvious plant) and by any local rebinding, because after either the
+ *  text no longer proves the call reaches the audited module. */
+const OWNER_MODULE_IMPORT = /import\s*\{([^}]*)\}\s*from\s*['"][^'"]*spend-gate(?:\.js)?['"]/g;
+
+function ownerModuleImports(text) {
+  const names = [];
+  for (const match of text.matchAll(OWNER_MODULE_IMPORT)) {
+    for (const piece of match[1].split(',')) {
+      const token = piece.trim();
+      if (token && !/\sas\s/.test(token)) names.push(token);
+    }
+  }
+  return names.filter((name) => !new RegExp(`\\bas\\s+${name}\\b`).test(text)
+    && !new RegExp(`\\b(?:function|const|let|var)\\s+${name}\\b`).test(text));
+}
+
 /**
  * @param {{path: string, source: string}[]} files
  * @param {{ownerFile?: string, allowlist?: {path: string, reason: string}[]}} options
@@ -293,8 +317,22 @@ export function gateWriterOffenders(files, { ownerFile = 'spend-gate.js', allowl
 
   for (const { path: file, source } of files) {
     const text = stripCommentLines(source);
-    const writes = [...text.matchAll(WRITE_CALL)];
     const isOwner = file === ownerFile || file.endsWith(`/${ownerFile}`);
+    const blessed = isOwner ? [] : ownerModuleImports(text);
+    // Two exclusions from the widened net, each an argument rather than a convenience:
+    //  - A DEFINITION is not a call. `function gateWriterOffenders(` and `function
+    //    writeBlockedSpendGate(` match the net and write nothing; without this the scanner
+    //    flags itself.
+    //  - A call to a name imported UN-ALIASED from the owner module is safe by
+    //    construction: that module's own writes are fully audited below, so its exported
+    //    closer can only write a blocked gate. The exemption dies the moment the text
+    //    stops proving what the call reaches - an `as` laundering the name or a local
+    //    rebinding disqualifies it (ownerModuleImports enforces both).
+    const writes = [...text.matchAll(WRITE_CALL)].filter((match) => {
+      if (/function\s+$/.test(text.slice(Math.max(0, match.index - 40), match.index))) return false;
+      const identifier = /^[\w$]+/.exec(match[0])?.[0];
+      return !(identifier && blessed.includes(identifier));
+    });
 
     // A shell redirection into the gate is a write no file-write regex would see, and it is
     // checked before anything else because it needs no write call at all.
@@ -366,8 +404,11 @@ export function gateWriterOffenders(files, { ownerFile = 'spend-gate.js', allowl
 /** Write a BLOCKED gate. Callable from anywhere through this module: closing is always safe,
  *  and the spend jobs re-block through this in their finally (D-0060). */
 export async function writeBlockedSpendGate(file, reason = 'Blocked.') {
-  // writeFile DIRECTLY, not writeJsonAtomic: the mutation guard's write regex
-  // must SEE this call, or the licence below guards nothing.
+  // Corrected 2026-08-29: this comment used to claim the mutation guard's write regex
+  // "must SEE this call" - it did not. The call is spelled writeFileNative, and the old
+  // closed-list WRITE_CALL required a `(` straight after `writeFile`, so the owner file
+  // matched zero writes and the licence audit below never ran. The widened net sees this
+  // spelling now, and the blocked-status payload in this window is what licences it.
   await writeFileNative(file, `${JSON.stringify({ status: 'blocked', reason }, null, 2)}\n`, 'utf8');
   return readSpendGate({ file });
 }

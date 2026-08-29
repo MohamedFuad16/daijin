@@ -132,11 +132,11 @@ export function judgeRerank(control, treatment) {
 }
 
 /** One measurement, with its arm disclosed exactly as the harness recorded it. */
-async function measure({ corpus, store, environment, fetchImpl, k, tokenBudget, reranker, rerank, score }) {
+async function measure({ corpus, store, environment, fetchImpl, k, tokenBudget, reranker, rerank, score, now }) {
   // D-0025 requires the knob's COST to be displayed next to it, so the A/B measures it
   // rather than leaving a later reader to guess. Wall time over the whole arm divided by
   // the case count: the per-query number a user pays on every retrieval.
-  const started = performance.now();
+  const started = now();
   const { summary, results, record } = await score({
     corpus,
     store,
@@ -148,7 +148,7 @@ async function measure({ corpus, store, environment, fetchImpl, k, tokenBudget, 
     ...(environment ? { environment } : {}),
     ...(fetchImpl ? { fetchImpl } : {}),
   });
-  const elapsedMs = Math.round(performance.now() - started);
+  const elapsedMs = Math.round(now() - started);
   return {
     tokenBudget,
     rerank: record.rerank ?? { enabled: false },
@@ -185,6 +185,10 @@ export async function rerankAB({
   score = scoreGoldset,
   controlCorpus = null,
   onStep = null,
+  // Injectable time source, same idiom as pipeline.js's `clock`. The cold/warm cost
+  // comparison is a claim about MEASURED durations, and a test asserting it on the real
+  // scheduler is racing the machine's load - the 1-in-5 flake this closes.
+  now = () => performance.now(),
 } = {}) {
   if (!reranker?.rerank) throw new Error('rerankAB requires a reranker with a rerank(query, documents) method.');
   const pairs = [];
@@ -192,7 +196,7 @@ export async function rerankAB({
 
   for (const tokenBudget of [...budgets].sort((left, right) => left - right)) {
     const control = await measure({
-      corpus, store, environment, fetchImpl, k, tokenBudget, reranker, rerank: null, score,
+      corpus, store, environment, fetchImpl, k, tokenBudget, reranker, rerank: null, score, now,
     });
     if (control.rerank.enabled) {
       // The one thing that would invalidate every pair silently: an arm labelled off that
@@ -202,7 +206,7 @@ export async function rerankAB({
     }
     for (const topK of topKs) {
       const treatment = await measure({
-        corpus, store, environment, fetchImpl, k, tokenBudget, reranker, rerank: { enabled: true, topK }, score,
+        corpus, store, environment, fetchImpl, k, tokenBudget, reranker, rerank: { enabled: true, topK }, score, now,
       });
       if (!treatment.rerank.enabled || treatment.rerank.topK !== topK) {
         throw new Error(`The treatment arm at topK ${topK} did not report reranking; the option did not reach the stage.`);
@@ -240,7 +244,7 @@ export async function rerankAB({
   if (controlCorpus) {
     const candidateArm = pairs[0].control;
     const permuted = await measure({
-      corpus: controlCorpus, store, environment, fetchImpl, k, tokenBudget: pairs[0].tokenBudget, reranker, rerank: null, score,
+      corpus: controlCorpus, store, environment, fetchImpl, k, tokenBudget: pairs[0].tokenBudget, reranker, rerank: null, score, now,
     });
     resolution = discriminatingRange(candidateArm, permuted);
   }

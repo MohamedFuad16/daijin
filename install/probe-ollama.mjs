@@ -61,7 +61,13 @@ try {
 // on the served list rather than on a catalogue, because what is installed is the only
 // thing that matters here.
 const installed = (tags.models || []).map((entry) => entry.model || entry.name || '');
-const present = installed.some((entry) => entry === model || entry.split(':')[0] === model);
+// A bare name resolves to that model's `latest` tag and to nothing else, which is why this
+// matches `${model}:latest` rather than every tag sharing the name before the colon.
+// Splitting on the colon accepted any tag: a machine serving only bge-m3:q4_0 was reported
+// READY for bge-m3, and the install's closing line promised retrieval that the adapter then
+// refused (adapters/ollama/client.js servedIdentity, which matches exactly these two forms).
+// A probe that is looser than the client it predicts is worse than no probe.
+const present = installed.some((entry) => entry === model || entry === `${model}:latest`);
 
 if (!present) {
   process.stdout.write(`probe: ${base} is reachable but is not serving ${model}`

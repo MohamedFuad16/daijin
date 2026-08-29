@@ -6,6 +6,7 @@ from typing import Any
 
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
+from textual.content import Content
 from textual.message import Message
 from textual.widgets import Button, Static
 
@@ -170,7 +171,11 @@ class RepoCard(Vertical):
         """
         self.stalled = reason
         for child in self.query(".card-floor"):
-            child.update(f"[red]{reason}[/red]")
+            # reason carries the exception's own text ("could not be read:
+            # ..."), which is engine and transport prose: a "[/...]" token in
+            # it is a MarkupError, so a card that failed to read would take
+            # the whole screen down instead of rendering as an error.
+            child.update(Content.from_markup("[red]$reason[/red]", reason=str(reason)))
         for child in self.query(".card-mcp"):
             child.update("[dim]not read, because the calls above did not answer[/dim]")
 

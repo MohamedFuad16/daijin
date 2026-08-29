@@ -236,7 +236,24 @@ export async function measureResolution({
  * scrambled one, and the report says so in a sentence rather than leaving a green tick to
  * speak for itself.
  */
-export function mcpUnlock(caseRate, { threshold = MCP_UNLOCK_THRESHOLD, resolution = null, violations = null } = {}) {
+export function mcpUnlock(caseRate, { threshold = MCP_UNLOCK_THRESHOLD, resolution = null, violations = null, blocked = null } = {}) {
+  // AN UNFIT GAUGE OUTRANKS WHATEVER IT READ. When the last init blocked (the gold set
+  // failed its own integrity gates, or the gauge cannot discriminate), the pipeline
+  // refused to certify a floor - but a bare retrievalScore can still measure that same
+  // gold set and write its rate into history. The live multi-repo drive caught the
+  // consequence: an empty repo scored "2 of 2", cleared 0.75, and was offered the
+  // snippet with health "ok". The block's own reason and action are quoted rather than
+  // paraphrased, because they already name what is short and how to clear it.
+  if (blocked) {
+    return {
+      unlocked: false,
+      threshold,
+      caseRate,
+      resolution,
+      saturation: null,
+      reason: `${blocked.reason} The measured ${caseRate.cases} is not a floor, so MCP stays locked. ${blocked.action}`,
+    };
+  }
   // VIOLATIONS ARE AN ENFORCED FLOOR, not a footnote. A must-not pair
   // surfacing means a wrong answer is being served, and a brain doing that is
   // not fit to serve whatever its case rate says. The dogfood run caught this

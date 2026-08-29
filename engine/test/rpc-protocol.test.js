@@ -60,6 +60,29 @@ test('a notification gets no response', async () => {
   assert.ok(envelope.result, 'the next request still matches its own id');
 });
 
+test('a notification that FAILS is still not answered', async () => {
+  // The spec is unconditional: "The Server MUST NOT reply to a Notification", and
+  // "Notifications are not confirmable by definition ... the Client would not be aware of
+  // any errors (like e.g. 'Invalid params','Internal error')".
+  // https://www.jsonrpc.org/specification
+  //
+  // Only the SUCCESS path honoured that. A notification for an unknown method, or for a
+  // real method that threw, came back as a full error envelope with `id: null` - a frame
+  // matching no pending request, which a client can only drop or mis-attribute. The test
+  // above could not see it: it notifies `hello`, which succeeds.
+  const before = daemon.strayFrames.length;
+
+  daemon.notify('noSuchMethod', {});                       // method-not-found
+  daemon.notify('repoDetach', { repoPath: '/nowhere/at/all' }); // a real method that throws
+
+  // Round-trip after them: the daemon reads lines in order, so once this answers, any
+  // reply to the two above has already been written.
+  const envelope = await daemon.request('hello', {});
+  assert.ok(envelope.result, 'the next request still matches its own id');
+  assert.deepEqual(daemon.strayFrames.slice(before), [],
+    'a notification, failing or not, must draw no frame at all');
+});
+
 test('blank lines are ignored rather than answered', async () => {
   daemon.sendRaw('');
   daemon.sendRaw('   ');

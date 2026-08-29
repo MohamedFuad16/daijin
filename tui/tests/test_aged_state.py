@@ -95,7 +95,7 @@ async def test_an_aged_settings_file_renders_without_the_word_none():
 
     # And the engine status block, which reads a different section of the same
     # aged file.
-    markup = RepoHomeScreen._engine_markup(status)
+    markup = RepoHomeScreen._engine_markup(status).plain
     assert "None" not in markup, f"a null reached the status line: {markup!r}"
     assert "?" not in markup
 

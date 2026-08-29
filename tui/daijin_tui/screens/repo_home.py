@@ -8,6 +8,7 @@ from typing import Any, Iterable
 
 from textual import work
 from textual.containers import Horizontal, HorizontalScroll
+from textual.content import Content
 from textual.widgets import Button, Input, Static
 
 from ..concurrency import gather_all, gather_iter
@@ -101,11 +102,11 @@ class RepoHomeScreen(DaijinScreen):
                 status = await pending
             except RpcError as error:
                 self.show_rpc_error(error, "#home-notice")
-                status_block.update(f"[red]{error.hint}[/red]")
+                status_block.update(Content.from_markup("[red]$hint[/red]", hint=error.hint))
                 return
         except RpcError as error:
             self.show_rpc_error(error, "#home-notice")
-            status_block.update(f"[red]{error.hint}[/red]")
+            status_block.update(Content.from_markup("[red]$hint[/red]", hint=error.hint))
             return
 
         for repo in status.get("repos", []):
@@ -233,7 +234,7 @@ class RepoHomeScreen(DaijinScreen):
         return str(value)
 
     @classmethod
-    def _engine_markup(cls, status: dict[str, Any]) -> str:
+    def _engine_markup(cls, status: dict[str, Any]) -> Content:
         """Render serveStatus in the words the engine used.
 
         Shape verified against the daemon on 2026-08-17. The key set is FIXED:
@@ -250,32 +251,44 @@ class RepoHomeScreen(DaijinScreen):
         reachable = bool(ollama.get("reachable"))
         model = cls._said(ollama.get("model"), "no model configured")
         version = ollama.get("version")
+        # model and version are configuration the engine echoes back and hint
+        # is its own sentence naming the host it probed: all three are
+        # $variables rather than interpolations, because a "[/...]" token in
+        # any of them is a closing markup tag with nothing open and the
+        # MarkupError takes the front door down with the app.
         if reachable:
             lines = [
-                f"[green]Engine ready.[/green] Embeddings by [b]{model}[/b] via Ollama"
-                + (f" [dim]v{version}[/dim]" if version else ""),
+                Content.from_markup(
+                    "[green]Engine ready.[/green] Embeddings by [b]$model[/b] via Ollama"
+                    + (" [dim]v$version[/dim]" if version else ""),
+                    model=model,
+                    version=str(version),
+                ),
             ]
         else:
             lines = [
-                f"[red]Embedding engine not running.[/red] Start Ollama to serve "
-                f"[b]{model}[/b]; brains cannot be built or searched without it.",
+                Content.from_markup(
+                    "[red]Embedding engine not running.[/red] Start Ollama to serve "
+                    "[b]$model[/b]; brains cannot be built or searched without it.",
+                    model=model,
+                ),
             ]
         if not reachable:
             # The engine caches its probe for a few seconds, failures included,
             # so a check made immediately after starting ollama can still read
             # unreachable. That is the cache rather than a lie, and saying so
             # stops a user concluding the button is broken when they retry.
-            lines.append(
+            lines.append(Content.from_markup(
                 "[dim]this reading may be cached; ctrl+r re-checks without the "
                 "cache[/dim]"
-            )
+            ))
         hint = ollama.get("hint")
         if hint:
             # The engine's own sentence, and it names the host it actually
             # probed. Paraphrasing it here would let this line contradict the
             # endpoint printed directly above it.
-            lines.insert(1, f"[yellow]{hint}[/yellow]")
-        return "\n".join(lines)
+            lines.insert(1, Content.from_markup("[yellow]$hint[/yellow]", hint=str(hint)))
+        return Content("\n").join(lines)
 
     async def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "attach-browse":

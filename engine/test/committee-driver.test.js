@@ -98,14 +98,24 @@ test('a CLI refusal surfaces the CLI\'s own sentence, not the exec wrapper\'s co
     stop_reason: 'stop_sequence',
     result: "You've reached your Fable 5 limit. Switch to another model, or manage usage credits.",
   });
+  let stdinClosed = false;
   const generate = createRoleGenerate(
     { provider: 'claude-code', model: 'claude-fable-5' },
     {
       execFileImpl: (command, args, options, callback) => {
-        // stdin must be IGNORED: the CLI otherwise waits three seconds for it
-        // on every single call and warns in a way that reads like a defect.
-        assert.deepEqual(options.stdio, ['ignore', 'pipe', 'pipe']);
+        // stdin must be CLOSED: the CLI otherwise waits three seconds for it on every
+        // single call and warns in a way that reads like a defect.
+        //
+        // This asserted `options.stdio` deep-equalled ['ignore','pipe','pipe'], which was a
+        // DEAD GATE - it pinned the option rather than the effect, and execFile does not
+        // accept a `stdio` option at all. It forwards a fixed list and drops the rest in
+        // silence (https://nodejs.org/api/child_process.html), so the assertion passed on
+        // every run while every real child kept an open stdin pipe and paid the tax the
+        // comment says it avoids. The handle is the only thing that can close it, so the
+        // handle is what this now checks.
+        assert.equal(options.stdio, undefined, 'execFile has no stdio option; passing one only reads as a fix');
         callback(Object.assign(new Error('Command failed: claude -p <a very long prompt>'), { code: 1 }), limitBody, '');
+        return { stdin: { end: () => { stdinClosed = true; } } };
       },
     },
   );
@@ -114,4 +124,5 @@ test('a CLI refusal surfaces the CLI\'s own sentence, not the exec wrapper\'s co
     assert.doesNotMatch(error.message, /Command failed/, 'the wrapper message is noise beside the real reason');
     return true;
   });
+  assert.equal(stdinClosed, true, "the child's stdin is closed on the handle, which is the only thing that closes it");
 });

@@ -137,6 +137,36 @@ test('rule 3: a document whose file the gold commit ADDED cannot be legitimate c
   });
 });
 
+test('rule 3 answers about the GOLD commit, not about whatever branch is checked out', async () => {
+  // THE EXCLUSION WAS SCOPED TO HEAD. `git log` with no revision walks from HEAD, so rule 3
+  // asked "was this file added on the branch that happens to be checked out?" instead of
+  // "did gold add it?". Whenever the gold commit is not reachable from HEAD - a feature
+  // branch, a detached HEAD, a squash-merge that orphaned the SHA - rule 3 found nothing,
+  // the record still stamped `computed: true` with count 0, and the student was handed the
+  // document the gold commit wrote while certify()'s hasExclusionRecord gate passed. The
+  // run then certifies "the student never saw gold" about a run in which it did.
+  //
+  // The control is the SAME repo, the SAME exam and the SAME documents, differing only in
+  // which branch HEAD points at: without it, a passing assertion proves nothing about
+  // scoping, because the fixture's HEAD sits on gold.
+  await withRepo(async (root, { repo, baseCommit, goldCommit }) => {
+    const documents = [{ id: 'new-decision', path: 'docs/decision-0007.md', meta: {}, content: '' }];
+    const onGold = await computeGoldProvenanceExclusions({
+      exam: exam(baseCommit, goldCommit), documents, sourceRepo: repo,
+    });
+    assert.deepEqual(onGold.ids, ['new-decision'], 'control: reachable from HEAD, the rule fires');
+
+    // Move HEAD to a branch forked from BASE, so gold is no longer an ancestor of HEAD.
+    await git(repo, ['checkout', '-q', '-b', 'feature', baseCommit]);
+    const offGold = await computeGoldProvenanceExclusions({
+      exam: exam(baseCommit, goldCommit), documents, sourceRepo: repo,
+    });
+    assert.deepEqual(offGold.ids, ['new-decision'],
+      'the gold commit introduced this file whatever branch the working tree is on');
+    assert.equal(offGold.reasons['new-decision'], 'brain-commit-introduced-by-gold');
+  });
+});
+
 test('all three rules together, and each id records the rule that caught it', async () => {
   await withRepo(async (root, { repo, baseCommit, goldCommit }) => {
     const documents = [

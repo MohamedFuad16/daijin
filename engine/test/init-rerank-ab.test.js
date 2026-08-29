@@ -226,15 +226,25 @@ test('only the arm that actually paid the price reports one; the rest carry the 
     '4000:off': { hits: 10, total: 20, mrr: 0.5 },
     '4000:40': { hits: 10, total: 20, mrr: 0.5 },
   });
+  // A virtual clock the stub advances, injected through rerankAB's `now`. The first
+  // version slept 60ms cold and 1ms warm on the REAL scheduler and asserted warm < cold on
+  // measured wall time - which raced the machine's load and flaked about 1 run in 5 under
+  // a busy suite. The property under test is how the harness PRICES the arms, not how the
+  // OS schedules timers, so the arms' durations are stated exactly instead of approximated
+  // with sleeps.
+  let virtualMs = 0;
   let seen = 0;
   const caching = async (options) => {
     if (options.retrieveOptions?.rerank?.enabled) {
       seen += 1;
-      await new Promise((resolve) => setTimeout(resolve, seen === 1 ? 60 : 1));
+      virtualMs += seen === 1 ? 60 : 1;
     }
     return score(options);
   };
-  const result = await rerankAB({ corpus: {}, store: {}, reranker: stubReranker, budgets: [3000, 4000], topKs: [40], score: caching });
+  const result = await rerankAB({
+    corpus: {}, store: {}, reranker: stubReranker, budgets: [3000, 4000], topKs: [40], score: caching,
+    now: () => virtualMs,
+  });
   const [first, second] = result.pairs;
   assert.equal(first.cost.cold, true, 'the first arm to score this topK paid full price');
   assert.equal(first.cost.caveat, null);

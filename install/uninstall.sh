@@ -40,6 +40,17 @@ if [ ! -d "$PREFIX" ]; then
   exit 0
 fi
 
+# The stamp is the proof that install.sh built this directory, and this script ends in an
+# `rm -rf` of it. DAIJIN_PREFIX is a documented knob and DAIJIN_YES=1 removes the prompt,
+# so a stale or mistyped value is a plain `rm -rf` of whatever it names. Requiring the
+# marker is what makes "removes what install.sh created and nothing else" true rather than
+# merely intended: a directory this installer did not create is refused, not deleted.
+if [ ! -f "$PREFIX/VERSION" ]; then
+  printf 'uninstall: %s has no VERSION stamp, so it was not created by install.sh.\n' "$PREFIX" >&2
+  printf 'Refusing to remove a directory this installer did not build.\n' >&2
+  exit 1
+fi
+
 printf 'This will remove:\n'
 printf '  %s\n' "$PREFIX"
 if [ -L "$LINK" ]; then

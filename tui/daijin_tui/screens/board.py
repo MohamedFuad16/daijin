@@ -14,10 +14,11 @@ from typing import Any, Iterable
 
 from textual import work
 from textual.containers import Horizontal
+from textual.content import Content
 from textual.widgets import Button, Checkbox, DataTable, Select, Static
 
 from ..rpc import RpcError
-from ..widgets import Banner, SectionTitle
+from ..widgets import Banner, SectionTitle, cells
 from .base import DaijinScreen
 from .dialogs import ConfirmScreen
 
@@ -158,7 +159,7 @@ class BoardScreen(DaijinScreen):
 
     @staticmethod
     def _add_row(table: DataTable, row: dict[str, Any]) -> None:
-        table.add_row(
+        table.add_row(*cells(
             row.get("ts", ""),
             row.get("source", ""),
             row.get("severity", ""),
@@ -166,35 +167,54 @@ class BoardScreen(DaijinScreen):
             row.get("target", ""),
             row.get("evidence", ""),
             row.get("status", ""),
-            key=row.get("id"),
-        )
+        ), key=row.get("id"))
 
     def _show_row(self, row: dict[str, Any]) -> None:
         self.selected_row = row
         action = row.get("action") or {}
-        lines = [
-            f"[b]{row.get('id')}[/b]  {row.get('summary', '')}",
+        # EVERY value on this panel is somebody else's prose: the summary and
+        # detail come off the wire, the thread carries the watcher's and the
+        # auditor's own sentences, and the fix label comes from the engine's
+        # catalog. A "[/...]" token in any of them - a bracketed path, a
+        # sentence quoting a markup tag, which is exactly what an auditor
+        # writing about this screen would produce - is a closing tag with
+        # nothing open, and that MarkupError kills the app. $variables
+        # substitute as plain text; the styling stays ours.
+        lines: list[Content] = [
+            Content.from_markup(
+                "[b]$finding[/b]  $summary",
+                finding=str(row.get("id")),
+                summary=str(row.get("summary", "")),
+            ),
         ]
         if row.get("detail"):
-            lines.append(str(row["detail"]))
+            lines.append(Content(str(row["detail"])))
         if row.get("evidence") == "systemCheck":
-            lines.append("[dim]live watcher sweep, computed this load, not stored[/dim]")
+            lines.append(Content.from_markup("[dim]live watcher sweep, computed this load, not stored[/dim]"))
         else:
-            lines.append(
-                f"[dim]evidence {row.get('evidence')} into the jsonl stream, status {row.get('status')}[/dim]"
-            )
+            lines.append(Content.from_markup(
+                "[dim]evidence $evidence into the jsonl stream, status $status[/dim]",
+                evidence=str(row.get("evidence")),
+                status=str(row.get("status")),
+            ))
         voice_tone = {"watcher": "cyan", "auditor": "magenta"}
-        thread = "\n".join(
-            f"  [{voice_tone.get(entry.get('by'), 'white')} b]{entry.get('by', '')}[/{voice_tone.get(entry.get('by'), 'white')} b]"
-            f" [dim]{str(entry.get('at', ''))[:16].replace('T', ' ')}[/dim]\n"
-            f"    {entry.get('text', '')}"
-            for entry in row.get("thread", [])
-        )
+        thread = []
+        for entry in row.get("thread", []):
+            tone = voice_tone.get(entry.get("by"), "white")
+            thread.append(Content.from_markup(
+                f"  [{tone} b]$by[/{tone} b] [dim]$at[/dim]\n    $text",
+                by=str(entry.get("by", "")),
+                at=str(entry.get("at", ""))[:16].replace("T", " "),
+                text=str(entry.get("text", "")),
+            ))
         if thread:
-            lines.append(thread)
+            lines.append(Content("\n").join(thread))
         if action:
-            lines.append(f"[yellow]Auditor fix available:[/yellow] {action.get('label')}")
-        self.query_one("#board-detail", Static).update("\n".join(lines))
+            lines.append(Content.from_markup(
+                "[yellow]Auditor fix available:[/yellow] $label",
+                label=str(action.get("label")),
+            ))
+        self.query_one("#board-detail", Static).update(Content("\n").join(lines))
         # The button exists exactly when a fix does; a control keyed on the
         # selection cannot be pressed against the wrong row.
         self.query_one("#board-fix", Button).display = bool(action)

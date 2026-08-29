@@ -293,7 +293,23 @@ export function rankRetrieval({
     }
   }
 
-  for (const candidate of [...candidates.values()].filter((item) => item.type === 'decision')) {
+  // ITERATE IDS, READ THE LIVE ENTRY. This walked a SNAPSHOT while deleting from and
+  // merging into the live map, so when a superseded decision resolved onto a current one
+  // that was ITSELF in the snapshot, the later iteration deleted the merged entry and
+  // rebuilt it from the stale pre-merge object - discarding the replacement boost and the
+  // reasons the resolution had just merged in.
+  //
+  // It is order-dependent, and the shipped order is the losing one: allDocuments sorts by
+  // id and a superseded ADR almost always has the LOWER number, so the superseded document
+  // is visited first and its boost is then thrown away by the current document's own
+  // iteration. Measured on d-0010 superseded by d-0065, both tag-and-semantic hits: the
+  // current decision scores 3.5 in id order and 5.7 reversed, same corpus and same query.
+  // A 2.2-point error against bucket priorities of 0.35 to 0.75 reorders the current
+  // decision against every other pin, and under a tight tokenBudget decides what is funded.
+  for (const { id: candidateId } of [...candidates.values()].filter((item) => item.type === 'decision')) {
+    const candidate = candidates.get(candidateId);
+    // Already consumed by an earlier resolution in this same pass.
+    if (!candidate) continue;
     const component = supersessionComponent(candidate.id, relationships);
     candidates.delete(candidate.id);
     for (const currentId of component.currentIds) {

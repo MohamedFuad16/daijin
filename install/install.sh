@@ -156,13 +156,29 @@ copy_tree() {
 # Both halves are stamped from their own manifests, and hello's engineVersion is checked
 # against this file rather than against a literal, so a stale install is detectable.
 
+# Both readers normalize their EMPTY and their absent-field answers to the same "unknown"
+# that write_stamp refuses on. The `|| echo unknown` alone did not: node prints the string
+# "undefined" and exits 0 for a package.json with no version field, and awk prints nothing
+# and exits 0 when no version line matches. Neither is the literal "unknown", so the
+# refusal below never fired and the installer stamped `"tuiVersion": ""` on an install it
+# had just declared it could not identify. A guard that cannot fire is not a guard.
 read_engine_version() {
-  node -p "require('$PREFIX/engine/package.json').version" 2>/dev/null || echo "unknown"
+  local value
+  value="$(node -p "require('$PREFIX/engine/package.json').version" 2>/dev/null || true)"
+  case "$value" in
+    '' | undefined | null) echo "unknown" ;;
+    *) printf '%s\n' "$value" ;;
+  esac
 }
 
 read_tui_version() {
   # tomllib is 3.11+, and the floor is 3.10, so this reads the line rather than the file.
-  awk -F'"' '/^version *=/ { print $2; exit }' "$PREFIX/tui/pyproject.toml" 2>/dev/null || echo "unknown"
+  local value
+  value="$(awk -F'"' '/^version *=/ { print $2; exit }' "$PREFIX/tui/pyproject.toml" 2>/dev/null || true)"
+  case "$value" in
+    '') echo "unknown" ;;
+    *) printf '%s\n' "$value" ;;
+  esac
 }
 
 write_stamp() {
@@ -271,7 +287,9 @@ fi
 exec "$PREFIX/venv/bin/daijin" "$@"
 SHIM
   # A literal placeholder rather than expansion inside the heredoc, so the shim body stays
-  # readable here and a prefix containing spaces cannot break the quoting.
+  # readable here. It keeps the SHIM's own quoting correct for any prefix; the engine
+  # command the shim builds is a separate matter, and check_paths refuses the prefixes
+  # that would break it.
   python3 - "$PREFIX/bin/daijin" "$PREFIX" <<'PY'
 import sys
 path, prefix = sys.argv[1], sys.argv[2]
@@ -355,7 +373,26 @@ report() {
   printf '\nUninstall:  %s/install/uninstall.sh\n' "$PREFIX"
 }
 
+# The client splits its --engine value on whitespace (tui/daijin_tui/app.py:242 and :253
+# use str.split(), not shlex.split), and write_shim hands it "node $PREFIX/.../daemon.js".
+# A prefix containing a space therefore produces an engine command that is split into the
+# wrong argv, and the installed daijin fails at launch with a confusing path error long
+# after the install reported success. Refused here, where the message can name the knob,
+# rather than quoted here and broken there.
+check_paths() {
+  case "$PREFIX" in
+    *[[:space:]]*) die "the install prefix contains whitespace: '$PREFIX'.
+  The client splits the engine command on whitespace, so this install would build a
+  daijin that cannot start its own engine. Choose a path without spaces:
+    DAIJIN_PREFIX=\$HOME/.local/share/daijin bash install/install.sh" ;;
+  esac
+  case "$BIN_DIR" in
+    *[[:space:]]*) die "the bin directory contains whitespace: '$BIN_DIR'. Choose a path without spaces." ;;
+  esac
+}
+
 main() {
+  check_paths
   mkdir -p "$PREFIX"
   LOG_FILE="$PREFIX/install.log"
   : >"$LOG_FILE"

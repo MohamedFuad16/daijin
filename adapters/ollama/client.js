@@ -21,7 +21,14 @@ async function requestJson(url, options, { retries = 2, fetchImpl = fetch } = {}
     try {
       const { timeoutMs = 60_000, ...requestOptions } = options;
       const response = await fetchImpl(url, { ...requestOptions, signal: AbortSignal.timeout(timeoutMs) });
-      if (!response.ok) throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+      if (!response.ok) {
+        // Tagged with the status so callers can tell "the server answered badly" from "no
+        // server answered". Untagged, a 404 for a model that was deleted mid run is
+        // indistinguishable from a closed port, and the caller reports the wrong one.
+        const httpError = new Error(`HTTP ${response.status}: ${await response.text()}`);
+        httpError.status = response.status;
+        throw httpError;
+      }
       return await response.json();
     } catch (error) {
       lastError = error;
@@ -64,6 +71,12 @@ export function createOllamaClient({
   if (!Number.isInteger(dimension) || dimension < 1) {
     throw new Error('createOllamaClient requires an integer dimension.');
   }
+  // A batch size below 1 never advances embed's offset, so the loop reissues the same
+  // request forever against a live server rather than failing. Refused at construction,
+  // where the caller can still see which knob it set.
+  if (!Number.isInteger(batchSize) || batchSize < 1) {
+    throw new Error(`createOllamaClient requires a batch size of at least 1; received ${batchSize}.`);
+  }
   const root = normalizeBaseUrl(baseUrl);
 
   /** Served identity, not the catalogue's claim. The health gate compares this to meta. */
@@ -75,8 +88,15 @@ export function createOllamaClient({
         requestJson(`${root}/api/version`, { timeoutMs: 5_000 }, { retries: 0, fetchImpl }),
         requestJson(`${root}/api/tags`, { timeoutMs: 5_000 }, { retries: 0, fetchImpl }),
       ]);
-    } catch {
-      throw new Error(OLLAMA_DOWN);
+    } catch (error) {
+      // Same rule as embed: OLLAMA_DOWN is a claim about REACHABILITY, so a server that
+      // answered keeps its own message. Only an unanswered request is "down", and it is
+      // tagged as such so health() can report the difference rather than guess from the
+      // message string.
+      if (error?.status !== undefined) throw error;
+      const unreachable = new Error(OLLAMA_DOWN, { cause: error });
+      unreachable.unreachable = true;
+      throw unreachable;
     }
     const installed = (tags.models || []).find(
       (item) => item.name === model || item.name === `${model}:latest` || item.model === model,
@@ -102,7 +122,18 @@ export function createOllamaClient({
       const identity = await servedIdentity();
       return { reachable: true, ...identity };
     } catch (error) {
-      return { reachable: false, error: error.message, provider: 'ollama', model, dimension };
+      // reachable is a claim about the SERVER, not about the model. A missing model and an
+      // HTTP error both mean Ollama answered, so both report reachable with the real
+      // reason; only a request that got no answer at all is unreachable. Reporting a
+      // running server as down sends someone to restart the one thing that was working,
+      // and it is the distinction probe-ollama.mjs already draws (exit 3 vs exit 4).
+      return {
+        reachable: error?.unreachable !== true,
+        error: error.message,
+        provider: 'ollama',
+        model,
+        dimension,
+      };
     }
   }
 
@@ -117,8 +148,15 @@ export function createOllamaClient({
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ model, input: batch }),
         timeoutMs,
-      }, { retries, fetchImpl }).catch(() => {
-        throw new Error(OLLAMA_DOWN);
+      }, { retries, fetchImpl }).catch((error) => {
+        // OLLAMA_DOWN is a claim about REACHABILITY, so only an unanswered request may
+        // make it. A server that answered and refused (a model pulled out from under a
+        // run is the common one) keeps its own message and its cause: the difference
+        // between telling someone to start Ollama and telling them to pull a model is
+        // the difference between a fixed run and an afternoon spent restarting a server
+        // that was never down.
+        if (error?.status !== undefined) throw error;
+        throw new Error(OLLAMA_DOWN, { cause: error });
       });
       assertBatchAlignment(result.embeddings, batch.length);
       assertDimensions(result.embeddings, dimension);

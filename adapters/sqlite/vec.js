@@ -9,7 +9,14 @@
 //
 // The contract asks semanticQuery for "raw cosine scores, descending". vec0's cosine
 // distance is 1 - cosine similarity, so cosineFromDistance is an identity conversion and
-// not an approximation; store-conformance asserts it against a JS-computed cosine.
+// not an approximation.
+//
+// Corrected 2026-08-29: this header used to add "store-conformance asserts it against a
+// JS-computed cosine". It does not. store-conformance.test.js defines its own local
+// cosine() and asserts the SQL expression sqlite.js inlines (1 - v.distance), which is a
+// different arm of code; cosineFromDistance itself has no call site in the repo. The
+// identity above is measured (vec0 cosine distance matches a JS cosine to 1.4e-8 on a
+// scaled-vector fixture), but this FUNCTION was never the thing under test.
 
 /** Dimension ceiling guard. sqlite-vec accepts far more; this catches a wrong argument. */
 const MAX_DIMENSION = 65_536;
@@ -48,6 +55,14 @@ export function decodeEmbedding(blob) {
 
 /** vec0 cosine distance to raw cosine similarity. */
 export function cosineFromDistance(distance) {
+  // vec0 returns a NULL distance rather than an error when a stored vector has zero
+  // magnitude, because cosine is undefined there. In JavaScript `1 - null` is 1, so an
+  // unguarded conversion turns "this row has no comparable distance" into a PERFECT
+  // similarity, and the row outranks every real match instead of being reported. The
+  // absent distance has to be louder than the best possible score, not equal to it.
+  if (typeof distance !== 'number' || !Number.isFinite(distance)) {
+    throw new Error(`Cosine distance must be a finite number; received ${distance}.`);
+  }
   return 1 - distance;
 }
 

@@ -4,6 +4,12 @@ The spend dialog is the important one. The contract enumerates four
 spend-touching methods, and every one of them reaches the engine only after
 the user has seen what it costs and said yes on that call. The dialog returns
 False on escape, so the default outcome of walking away is not spending.
+
+THE BODY TEXT OF EVERY DIALOG HERE IS LITERAL, PERMANENTLY. summary, body and
+prompt carry repo paths, engine estimates and finding summaries, so they are
+rendered as characters rather than markup. No caller styles them and none
+should start: a styled-text escape hatch would serve nobody today and would
+put a MarkupError back on a spend path the first time one was used.
 """
 
 from __future__ import annotations
@@ -13,6 +19,7 @@ from typing import Any, Iterable, Sequence
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
+from textual.content import Content
 from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Static, TextArea
 
@@ -40,9 +47,13 @@ class SpendConfirmScreen(ModalScreen[bool]):
     def compose(self) -> ComposeResult:
         with Vertical(id="spend-dialog", classes="dialog"):
             yield Static(f"[b]This call spends money[/b]  [dim]{self.method}[/dim]", markup=True, id="spend-title")
-            yield Static(self.summary, id="spend-summary")
+            # The summary names the repo path and the engine's own estimate
+            # lines, so it is not ours to parse as markup: no caller styles
+            # these and a bracketed path in one would raise while the dialog
+            # composed, on a spend path.
+            yield Static(Content(self.summary), id="spend-summary")
             if self.estimate_lines:
-                yield Static("\n".join(self.estimate_lines), id="spend-estimate")
+                yield Static(Content("\n".join(self.estimate_lines)), id="spend-estimate")
             yield Static(
                 "[dim]Nothing is sent to a provider unless you confirm. Escape cancels.[/dim]",
                 markup=True,
@@ -77,7 +88,7 @@ class ConfirmScreen(ModalScreen[bool]):
     def compose(self) -> ComposeResult:
         with Vertical(id="confirm-dialog", classes="dialog"):
             yield Static(f"[b]{self.title_text}[/b]", markup=True)
-            yield Static(self.body, id="confirm-body")
+            yield Static(Content(self.body), id="confirm-body")
             with Horizontal(classes="dialog-actions"):
                 yield Button(self.confirm_label, id="confirm-yes", variant="warning")
                 yield Button("Cancel", id="confirm-no", variant="primary")
@@ -113,7 +124,7 @@ class TextPromptScreen(ModalScreen[str | None]):
     def compose(self) -> ComposeResult:
         with Vertical(id="prompt-dialog", classes="dialog"):
             yield Static(f"[b]{self.title_text}[/b]", markup=True)
-            yield Static(self.prompt, id="prompt-text")
+            yield Static(Content(self.prompt), id="prompt-text")
             yield Input(placeholder=self.placeholder, id="prompt-input")
             yield Static("", id="prompt-error", markup=True)
             with Horizontal(classes="dialog-actions"):
@@ -166,9 +177,15 @@ class GatesFileEditScreen(ModalScreen[str | None]):
 
     def compose(self) -> ComposeResult:
         with Vertical(id="gates-file-dialog", classes="dialog"):
-            yield Static(f"[b]{self.path}[/b]", markup=True)
+            yield Static(Content.from_markup("[b]$path[/b]", path=str(self.path)))
             if self.parse_error:
-                yield Static(f"[red]{self.parse_error}[/red]", markup=True, id="gates-file-error")
+                # The engine's YAML error quotes the offending line, brackets
+                # and all; interpolated into markup a flow sequence in it is a
+                # MarkupError that kills the app instead of showing the error.
+                yield Static(
+                    Content.from_markup("[red]$reason[/red]", reason=str(self.parse_error)),
+                    id="gates-file-error",
+                )
             yield Static(
                 "[dim]Saving replaces the whole document. Classification and baseline "
                 "evidence are written by discovery, not by this editor, so a row you "

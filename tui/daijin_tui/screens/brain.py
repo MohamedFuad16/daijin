@@ -18,6 +18,7 @@ from ..widgets import (
     MCP_THRESHOLD,
     SectionTitle,
     case_rate_value,
+    cells,
     format_case_rate,
     format_ratio,
 )
@@ -40,6 +41,16 @@ def _token_cell(chunk: dict[str, Any]) -> str:
     if tokens is None:
         return "outside budget"
     return f"{int(tokens):,}"
+
+
+def _hint(template: str, hint: str) -> Content:
+    """The engine's hint inside our styling, as plain characters.
+
+    The hint is written by the engine to be shown verbatim and routinely
+    names paths and ids. Interpolated into markup, a "[/...]" token in it is
+    a closing tag with nothing open, and the MarkupError takes the app down.
+    """
+    return Content.from_markup(template, hint=hint)
 
 
 class BrainScreen(DaijinScreen):
@@ -158,7 +169,7 @@ class BrainScreen(DaijinScreen):
             # measuring is the explicit Re-measure button now.
             score = await self.client.call("retrievalScore", {"repoPath": repo, "sweep": True, "recall": True})
         except RpcError as error:
-            self.query_one("#brain-hero", Static).update(f"[yellow]{error.hint}[/yellow]")
+            self.query_one("#brain-hero", Static).update(_hint("[yellow]$hint[/yellow]", error.hint))
             return
         self.score = score
         case_rate = score.get("caseRate")
@@ -169,14 +180,14 @@ class BrainScreen(DaijinScreen):
         table = self.query_one("#percase-table", DataTable)
         table.clear()
         for row in score.get("perCase", []):
-            table.add_row(
+            table.add_row(*cells(
                 row.get("caseId", ""),
                 "hit" if row.get("hit") else "MISS",
                 str(row.get("rank") if row.get("rank") is not None else "-"),
                 row.get("arm", ""),
                 row.get("type", ""),
                 row.get("area") or "-",
-            )
+            ))
         # One readable line per measured budget, recommendation marked. The dithered
         # bar chart this replaces read as broken UI to the owner (field, 2026-08-22):
         # four near-identical bars carry less than four labelled numbers.
@@ -206,7 +217,8 @@ class BrainScreen(DaijinScreen):
         ])
         if chosen in budgets:
             select.value = chosen
-        note.update(f"[dim]{score.get('rationale', '')}[/dim]" if score.get("rationale") else "")
+        rationale = str(score.get("rationale") or "")
+        note.update(Content.from_markup("[dim]$text[/dim]", text=rationale) if rationale else "")
 
     @work
     async def remeasure_at_budget(self) -> None:
@@ -296,7 +308,7 @@ class BrainScreen(DaijinScreen):
         try:
             result = await self.client.call("mcpSnippet", {"repoPath": repo})
         except RpcError as error:
-            panel.update(f"[yellow]{error.hint}[/yellow]")
+            panel.update(_hint("[yellow]$hint[/yellow]", error.hint))
             button.disabled = True
             return
         self.mcp_result = result
@@ -305,12 +317,16 @@ class BrainScreen(DaijinScreen):
             button.disabled = True
             button.variant = "default"
             detail = reason or "The retrieval rate is under the bar, so connecting is not offered yet."
-            panel.update(
-                f"[yellow]Not available yet.[/yellow] {detail}\n"
+            # The engine's own reason sentence, and it names paths and gold
+            # case ids: the same untrusted-as-markup text as the snippet
+            # below, so it substitutes as a plain $variable too.
+            panel.update(Content.from_markup(
+                "[yellow]Not available yet.[/yellow] $detail\n"
                 f"[dim]The button turns green when this brain answers well enough "
                 f"({MCP_THRESHOLD:.0%} of its gold cases). The Diagnosis tab says what is "
-                f"missing.[/dim]"
-            )
+                f"missing.[/dim]",
+                detail=detail,
+            ))
             return
         button.disabled = False
         button.variant = "success"
@@ -345,7 +361,7 @@ class BrainScreen(DaijinScreen):
             # recall: clusters over the stored measurement, no embedding sweep on load.
             diagnosis = await self.client.call("diagnose", {"repoPath": repo, "recall": True})
         except RpcError as error:
-            headline.update(f"[yellow]{error.hint}[/yellow]")
+            headline.update(_hint("[yellow]$hint[/yellow]", error.hint))
             return
         # The v5 contract row for diagnose: misses is a LIST of case ids, cases is the
         # denominator, clusters come keyed byType/byArea/byArm with {value, count} rows,
@@ -384,18 +400,18 @@ class BrainScreen(DaijinScreen):
             for row in clusters.get(wire_key, []):
                 count = row.get("count", 0)
                 share = f"{count} of {len(miss_ids)} misses" if miss_ids else "-"
-                table.add_row(axis, str(row.get("value", "")), str(count), share)
+                table.add_row(*cells(axis, row.get("value", ""), count, share))
         missed = self.query_one("#missed-table", DataTable)
         missed.clear()
         for row in diagnosis.get("perCase") or []:
             if row.get("hit"):
                 continue
-            missed.add_row(
+            missed.add_row(*cells(
                 row.get("caseId", ""),
                 row.get("arm") or "-",
                 row.get("type") or "-",
                 row.get("area") or "-",
-            )
+            ))
 
     async def _load_inventory(self, repo: str) -> None:
         summary = self.query_one("#inventory-summary", Static)
@@ -409,7 +425,7 @@ class BrainScreen(DaijinScreen):
         try:
             rows = await self.client.call("documents", {"repoPath": repo, "filters": filters})
         except RpcError as error:
-            summary.update(f"[yellow]{error.hint}[/yellow]")
+            summary.update(_hint("[yellow]$hint[/yellow]", error.hint))
             self.documents = []
             self.query_one("#inventory-table", DataTable).clear()
             return
@@ -417,14 +433,13 @@ class BrainScreen(DaijinScreen):
         table = self.query_one("#inventory-table", DataTable)
         table.clear()
         for row in self.documents:
-            table.add_row(
+            table.add_row(*cells(
                 row.get("id", ""),
                 row.get("type", ""),
                 row.get("area") or "-",
                 row.get("title", ""),
                 ", ".join(row.get("tags") or []),
-                key=row.get("id"),
-            )
+            ), key=row.get("id"))
         if not filters:
             self._refresh_type_options()
         by_type: dict[str, int] = {}
@@ -444,12 +459,21 @@ class BrainScreen(DaijinScreen):
         select.value = current if current in {"all", *types} else "all"
 
     def _show_document(self, document: dict[str, Any]) -> None:
-        self.query_one("#inventory-detail", Static).update(
-            f"[b]{document.get('id')}[/b]  {document.get('title', '')}\n"
-            f"[dim]{document.get('type')} / {document.get('area') or 'no area'} / "
-            f"{document.get('path', '')}[/dim]\n"
-            f"tags: {', '.join(document.get('tags') or []) or 'none'}"
-        )
+        # A brain document's title, path and tags come out of the indexed
+        # repo. This repo's own brain indexes this file, whose text contains
+        # "[/dim]", so a title or tag quoting a markup tag is not a
+        # hypothetical: it is a MarkupError that kills the app.
+        self.query_one("#inventory-detail", Static).update(Content.from_markup(
+            "[b]$doc_id[/b]  $title\n"
+            "[dim]$doc_type / $area / $path[/dim]\n"
+            "tags: $tags",
+            doc_id=str(document.get("id")),
+            title=str(document.get("title", "")),
+            doc_type=str(document.get("type")),
+            area=str(document.get("area") or "no area"),
+            path=str(document.get("path", "")),
+            tags=", ".join(document.get("tags") or []) or "none",
+        ))
 
     async def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "search-go":
@@ -507,7 +531,7 @@ class BrainScreen(DaijinScreen):
             result = await self.client.call("diagnoseNarrate", {"repoPath": repo, "confirm": True})
         except RpcError as error:
             self.report_rpc_error(error)
-            panel.update(f"[red]{error.hint}[/red]")
+            panel.update(_hint("[red]$hint[/red]", error.hint))
             return
         panel.update(Content.from_markup("$text", text=str(result.get("recommendation", ""))))
 
@@ -525,7 +549,7 @@ class BrainScreen(DaijinScreen):
             result = await self.client.call("search", {"repoPath": repo, "query": query})
         except RpcError as error:
             self.report_rpc_error(error)
-            summary.update(f"[red]{error.hint}[/red]")
+            summary.update(_hint("[red]$hint[/red]", error.hint))
             return
         self.chunks = result.get("chunks", [])
         table = self.query_one("#chunk-table", DataTable)
@@ -548,7 +572,7 @@ class BrainScreen(DaijinScreen):
 
     @staticmethod
     def _add_chunk_row(table: DataTable, index: int, chunk: dict[str, Any]) -> None:
-        table.add_row(
+        table.add_row(*cells(
             str(index),
             chunk.get("id", ""),
             chunk.get("documentId", ""),
@@ -561,8 +585,7 @@ class BrainScreen(DaijinScreen):
             # column, which reads as a value rather than as "not counted".
             _token_cell(chunk),
             "yes" if chunk.get("standing") else "no",
-            key=chunk.get("id"),
-        )
+        ), key=chunk.get("id"))
 
     def _show_chunk(self, chunk: dict[str, Any]) -> None:
         detail = self.query_one("#chunk-detail", Static)

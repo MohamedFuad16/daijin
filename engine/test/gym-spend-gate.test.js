@@ -329,6 +329,70 @@ test('ACCEPTANCE (D-0023): the verifier plants are caught and its control stays 
   assert.deepEqual(gateWriterOffenders([VERIFIER_CONTROL]), [], 'the innocent writer must never be flagged');
 });
 
+/**
+ * The 2026-08-29 bypass finding. WRITE_CALL was a closed list of spellings that required a
+ * `(` straight after each name, so writeFileNative( - the alias spend-gate.js itself
+ * writes the gate with - and writeJsonAtomic( were invisible, and the owner file matched
+ * ZERO writes: the licence apparatus never ran on the one module it exists to audit. The
+ * plants are the demonstrated bypass strings; the controls pin the two legitimate shapes
+ * the widened net must NOT flag, because a scanner that flags the sanctioned re-block is
+ * the same silence with extra steps.
+ */
+const WIDENED_NET_PLANTS = [
+  {
+    name: 'foreign gate-opening write spelled writeFileNative',
+    path: 'src/gym/cycle-plant.js',
+    source: 'await writeFileNative(gymSpendGatePath(repoPath), JSON.stringify({ status: "open", reason: "x" }));\n',
+  },
+  {
+    name: 'foreign gate-opening write spelled writeJsonAtomic',
+    path: 'src/gym/cycle-plant2.js',
+    source: 'await writeJsonAtomic(gymSpendGatePath(repoPath), { status: "open", reason: "x" });\n',
+  },
+  {
+    name: 'owner unmarked opening write spelled writeFileNative',
+    path: 'src/gym/spend-gate.js',
+    source: 'await writeFileNative(file, JSON.stringify({ status: "authorized", scope }));\n',
+  },
+  {
+    name: 'laundered closer: the opener imported under the closer name',
+    path: 'src/rpc/methods-plant.js',
+    source: 'import { ownerAuthorizeSpendGate as writeBlockedSpendGate } from "../gym/spend-gate.js";\n'
+      + 'await writeBlockedSpendGate(gymSpendGatePath(repoPath), { scope, reason });\n',
+  },
+  {
+    name: 'shadowed closer: a local rebinding under the closer name',
+    path: 'src/rpc/methods-plant2.js',
+    source: 'import { writeBlockedSpendGate } from "../gym/spend-gate.js";\n'
+      + 'const writeBlockedSpendGate = (p) => open(p);\n'
+      + 'await writeBlockedSpendGate(gymSpendGatePath(repoPath));\n',
+  },
+];
+
+const WIDENED_NET_CONTROLS = [
+  {
+    name: 'the blessed closer, imported un-aliased and called beside the gate path',
+    path: 'src/rpc/methods-like.js',
+    source: 'import { gymSpendGatePath, writeBlockedSpendGate } from "../gym/spend-gate.js";\n'
+      + 'const gatePath = gymSpendGatePath(repoPath);\n'
+      + 'await writeBlockedSpendGate(gatePath, "Re-blocked automatically when the authorized run ended.");\n',
+  },
+  {
+    name: 'a definition whose name matches the net, in a file that names the gate',
+    path: 'src/gym/scanner-like.js',
+    source: 'export function gateWriterHelper(files) { return files; }\n'
+      + 'export const read = (repo) => readFile(gymSpendGatePath(repo), "utf8");\n',
+  },
+];
+
+test('BYPASS (2026-08-29): identifier-embedded spellings are seen, and the blessed closer stays callable', () => {
+  const missed = WIDENED_NET_PLANTS.filter((plant) => gateWriterOffenders([plant]).length === 0);
+  assert.deepEqual(missed.map((plant) => plant.name), [], 'every bypass plant must be caught');
+  for (const control of WIDENED_NET_CONTROLS) {
+    assert.deepEqual(gateWriterOffenders([control]), [], `${control.name} must stay clean`);
+  }
+});
+
 test('MUTATION GUARD: the plant set, every shape of writing the gate, caught', () => {
   // D-0023: the acceptance instrument is the plants, not the argument. Each is scanned alone
   // so a single rule cannot mask another's miss, and the failure message names the shape.

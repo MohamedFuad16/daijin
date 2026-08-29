@@ -32,6 +32,7 @@ import inspect
 import json
 import sys
 import time
+import traceback
 from collections import deque
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Iterable, Sequence
@@ -58,6 +59,10 @@ EMBEDDING_BOUND = frozenset({"search", "retrievalScore", "diagnose"})
 MAX_EMBEDDING_IN_FLIGHT = 1
 # How much of a failing engine's stderr to carry into the error we raise.
 STDERR_TAIL_LINES = 20
+# How many handler failures to keep. Same shape and reason as the stderr tail:
+# bounded, retained, and readable after the fact rather than printed into a
+# running terminal UI.
+HANDLER_FAILURE_TAIL_LINES = 20
 # The contract version this client is built against. A mismatch is an upgrade
 # screen, not a method error.
 SUPPORTED_CONTRACT_VERSION = "5"
@@ -158,6 +163,9 @@ class RpcClient:
         # are measured properties rather than comments.
         self.peak_in_flight = 0
         self.peak_embedding_in_flight = 0
+        # Handler failures, kept rather than raised. See _dispatch_to.
+        self._handler_failures: deque[str] = deque(maxlen=HANDLER_FAILURE_TAIL_LINES)
+        self._reported_failures: set[str] = set()
 
     # Event fan out ------------------------------------------------------
 
@@ -177,13 +185,47 @@ class RpcClient:
         if handler in self._finding_handlers:
             self._finding_handlers.remove(handler)
 
+    @property
+    def handler_failures(self) -> list[str]:
+        """Subscribers that raised, newest last. Empty is the healthy state."""
+        return list(self._handler_failures)
+
+    def _dispatch_to(
+        self, handlers: list[EventHandler], payload: dict[str, Any], channel: str
+    ) -> None:
+        """Hand one notification to every subscriber, INDEPENDENTLY.
+
+        These are called from the transport's read loop. An unguarded handler
+        that raised took the rest of the subscribers with it AND killed the
+        loop, and the loop is how the whole app talks to the engine: the
+        screens keep their last frame, the stream stops, and nothing says why.
+        "Every handler is careful" is not a guard, it is a comment - which is
+        exactly what the markup sweep spent a day disproving elsewhere.
+
+        NOT SWALLOWED. Each failure is kept in a bounded tail with the
+        handler's identity, and the first of each distinct kind goes to
+        stderr. Deduplicated on purpose: a broken handler fails once per
+        event, and a stream of hundreds would spam the terminal a TUI is
+        drawing in, which trades a visible crash for an unusable screen.
+        """
+        for handler in list(handlers):
+            try:
+                handler(payload)
+            except Exception as error:  # noqa: BLE001 - one subscriber is not the loop
+                name = getattr(handler, "__qualname__", None) or repr(handler)
+                line = f"{channel} handler {name} raised {type(error).__name__}: {error}"
+                self._handler_failures.append(line)
+                key = f"{channel}:{name}:{type(error).__name__}"
+                if key not in self._reported_failures:
+                    self._reported_failures.add(key)
+                    print(line, file=sys.stderr)
+                    traceback.print_exception(error, file=sys.stderr)
+
     def dispatch_event(self, payload: dict[str, Any]) -> None:
-        for handler in list(self._handlers):
-            handler(payload)
+        self._dispatch_to(self._handlers, payload, "step")
 
     def dispatch_board_finding(self, payload: dict[str, Any]) -> None:
-        for handler in list(self._finding_handlers):
-            handler(payload)
+        self._dispatch_to(self._finding_handlers, payload, "boardFinding")
 
     def dispatch_notification(self, method: str, payload: dict[str, Any]) -> None:
         if method in BOARD_FINDING_ALIASES:

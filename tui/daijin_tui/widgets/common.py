@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from rich.text import Text
 from textual.app import ComposeResult
 from textual.containers import Horizontal
+from textual.content import Content
 from textual.widgets import Static
 
 # The floor at which MCP unlocks, per the contract's mcpSnippet threshold.
@@ -129,6 +131,23 @@ def format_duration(seconds: float | None) -> str:
     return f"{hours}h {minutes:02d}m"
 
 
+def cells(*values: Any) -> tuple[Text, ...]:
+    """Table cells as literal characters, never as markup.
+
+    DataTable renders a str cell through rich's Text.from_markup, so a cell
+    carrying a "[/...]" token raises MarkupError WHILE THE TABLE IS DRAWING
+    and takes the app down with it - and the strings in these tables are the
+    ones we do not write: an exam title the auditor authored, the shell
+    command out of a repo's gates.yaml, a path a finding names, a brain
+    document's own title. A Text instance is passed through untouched, which
+    is the same escape hatch Content's $variables give the panels.
+
+    None renders as the empty string rather than "None", matching what the
+    callers already write by hand for absent values.
+    """
+    return tuple(Text("" if value is None else str(value), end="") for value in values)
+
+
 class SectionTitle(Static):
     """A titled rule used to separate panels."""
 
@@ -141,7 +160,17 @@ class SectionTitle(Static):
 
 
 class Banner(Static):
-    """A one line notice. tone is info, warn, or error."""
+    """A one line notice. tone is info, warn, or error.
+
+    THE CONTRACT IS LITERAL TEXT, PERMANENTLY. A notice carries the engine's
+    own sentence far more often than one of ours, and markup rendering made
+    every bracketed path a MarkupError that killed the app. Colour comes from
+    the tone class, so there is nothing a caller needs markup for. Do not add
+    a styled-text escape hatch here: it would serve no current caller and
+    would make this site untrusted-capable again the first time somebody used
+    it. A genuine styling need gets added at ITS OWN site, deliberately, with
+    its own test.
+    """
 
     def __init__(self, text: str, tone: str = "info", **kwargs: Any) -> None:
         super().__init__(text, **kwargs)
@@ -153,7 +182,13 @@ class Banner(Static):
         self.remove_class(f"banner-{self.tone}")
         self.tone = tone
         self.add_class(f"banner-{tone}")
-        self.update(text)
+        # A notice is ONE SENTENCE, most often the engine's own hint, and no
+        # caller styles it - the tone class does the colouring. Rendering it
+        # as markup made every engine string carrying a "[/...]" token a
+        # MarkupError that killed the app (a path in brackets, a pytest
+        # parametrised id, a sentence quoting markup). Content() puts the
+        # characters on screen as themselves.
+        self.update(Content(text))
 
 
 class StubPanel(Static):

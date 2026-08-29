@@ -61,9 +61,25 @@ READS = [
     # and the status screen went on reading the old names and printing "not
     # reported" for fields that were present. A path that stops at an object
     # holds the engine to nothing about its contents.
+    # endpoint, dimension, hint and stateRoot were staged as PENDING on
+    # 2026-08-17 and the engine change landed: methods.md documents
+    # ollama {reachable, probedAt, endpoint, model, dimension, version,
+    # digest, hint} and db {backend, repos, stateRoot}, and a live probe
+    # answers with all of them. The pending list was self-clearing by design
+    # and it said so every run, so they are READS now: leaving them pending
+    # is a gate that has stopped gating something it could enforce.
+    #
+    # BOUND, stated rather than left invisible: _resolve checks PRESENCE, not
+    # value. That catches the regression that matters - a field disappearing
+    # from the contract - but it cannot catch one degrading to a permanent
+    # null while still being emitted. For ollama.hint that is not a weakness
+    # to fix: null IS the documented healthy value (it goes non-null only
+    # when the probe fails), so there is no value assertion to make here that
+    # would not be wrong. Presence-only by nature, and said so on purpose.
     ("serveStatus", lambda repo: {}, [
-        "repos", "db.backend", "db.repos",
+        "repos", "db.backend", "db.repos", "db.stateRoot",
         "ollama.reachable", "ollama.model", "ollama.version", "ollama.digest",
+        "ollama.endpoint", "ollama.dimension", "ollama.hint",
         "spendGate.open", "spendGate.path",
     ]),
     ("documents", lambda repo: {"repoPath": repo}, ["[].id", "[].type", "[].area", "[].title", "[].tags"]),
@@ -101,6 +117,30 @@ def _resolve(value, path: str) -> bool:
     if not isinstance(value, dict) or head not in value:
         return False
     return _resolve(value[head], rest) if rest else True
+
+
+# The two endings jobs.js reserves for "this did not work". Named here, not
+# inlined, so the rule that decides between a real wire check and a skip is a
+# function this file can test WITHOUT a working Ollama - otherwise the gate
+# that stops an environment failure masquerading as a wire defect is itself
+# only exercised on machines that do not need it.
+BAD_DONE_STEPS = ("failed", "cancelled")
+
+
+def ended_badly(done_events: list[dict]) -> dict | None:
+    """The done event that says the job did not succeed, if there is one.
+
+    jobs.js emits phase "done" for ALL three endings (RESERVED_DONE_STEPS is
+    finished / failed / cancelled) and puts WHICH in step, with level "error"
+    and the thrown message in detail on a failure. It also emits a SECOND done
+    event when a job announces completion and then throws, and says in as many
+    words that two done events is the honest report of a job that did two
+    things - so every event is examined, not just the first.
+    """
+    for event in done_events:
+        if event.get("level") == "error" or event.get("step") in BAD_DONE_STEPS:
+            return event
+    return None
 
 
 def _empty_at(value, prefix: str) -> bool:
@@ -151,9 +191,30 @@ async def test_every_field_a_screen_reads_exists_on_the_live_engine():
             assert job["jobId"]
             deadline = asyncio.get_running_loop().time() + 180
             done = asyncio.Event()
-            client.on_event(lambda e: done.set() if e.get("phase") == "done" else None)
+            # REACHING done IS NOT SUCCEEDING. jobs.js emits phase "done" for
+            # all three endings and puts WHICH in step and level:
+            # RESERVED_DONE_STEPS is ('finished', 'failed', 'cancelled') and a
+            # failure carries level "error" plus the thrown message in detail.
+            # Waiting on the phase alone let a FAILED init walk straight on to
+            # read a store nothing was ever ingested into, so `documents` came
+            # back [] and the vacuity check reported a broken Ollama on this
+            # machine as a field missing from the wire. The events are kept,
+            # not just counted, because that is where the real reason is.
+            done_events: list[dict] = []
+
+            def _watch_done(event: dict) -> None:
+                if event.get("phase") == "done":
+                    done_events.append(event)
+                    done.set()
+
+            client.on_event(_watch_done)
             while asyncio.get_running_loop().time() < deadline and not done.is_set():
                 await asyncio.sleep(0.5)
+            # A job that announced done and THEN threw emits a second done
+            # event (jobs.js says so in as many words), and the second one is
+            # the honest report. So the first is not read as the last.
+            await asyncio.sleep(1.0)
+            broken = ended_badly(done_events)
             if not done.is_set():
                 # Previously an assert. An environment that cannot finish an
                 # init has not found a defect in a screen's field list.
@@ -161,6 +222,16 @@ async def test_every_field_a_screen_reads_exists_on_the_live_engine():
                     "the fixture init did not reach a done phase within 180s, so "
                     "there is no indexed brain to read from. NOT CHECKED: "
                     + ", ".join(method for method, _, _ in READS)
+                )
+            elif broken is not None:
+                # The engine's own sentence, carried into the skip: a run that
+                # said "the wire lost a field" when the real answer was "this
+                # machine cannot embed" costs somebody an afternoon.
+                skip_reason = (
+                    "the fixture init ENDED IN FAILURE, so nothing was ingested and "
+                    "there is no indexed brain to read from. The engine said: "
+                    f"{broken.get('step')} / {broken.get('detail') or 'no detail given'}. "
+                    "NOT CHECKED: " + ", ".join(method for method, _, _ in READS)
                 )
             else:
                 subprocess.run(["node", str(SEED), str(repo)], capture_output=True, timeout=120)
@@ -207,12 +278,12 @@ async def test_every_field_a_screen_reads_exists_on_the_live_engine():
     # Paths a landing engine change will add. They are REPORTED every run and
     # not failed on, because failing would make this branch red for a change
     # on someone else's side; they are listed here rather than left out so the
-    # gap is visible instead of silent, and the list is meant to shrink to
-    # nothing when the change lands (staged 2026-08-17, serveStatus gaining
-    # endpoint, dimension, hint and stateRoot).
-    pending = {
-        "serveStatus": ["ollama.endpoint", "ollama.dimension", "ollama.hint", "db.stateRoot"],
-    }
+    # gap is visible instead of silent, and the list SHRINKS TO NOTHING when
+    # the change lands. It has: the four serveStatus paths staged 2026-08-17
+    # arrived, this block said so every run, and they now sit in READS where
+    # they are enforced. The mechanism is kept, empty, because the next
+    # staged change needs it and rebuilding it is how it gets forgotten.
+    pending: dict[str, list[str]] = {}
     still_missing, arrived = [], []
     for method, paths in pending.items():
         result = results.get(method)
@@ -308,3 +379,56 @@ async def test_every_field_a_screen_reads_exists_on_the_live_engine():
         print("NOT CHECKED, the engine refused (a legitimate answer, not a defect):")
         for line in refused:
             print(f"  {line}")
+
+
+def test_a_failed_init_is_not_read_as_a_finished_one():
+    """The gate that separates "the wire is broken" from "my fixture is".
+
+    This is the defect the run of 2026-08-29 exposed: the fixture waited on
+    phase == "done" alone, a FAILED init satisfies that, and the test walked
+    on to read a store nothing had been ingested into. documents came back
+    empty, the vacuity check fired, and a machine whose Ollama blobs were
+    missing was reported as a field missing from the wire.
+
+    Unit level on purpose: the integration path SKIPS wherever Ollama cannot
+    embed, which is exactly the machine this rule exists for, so testing it
+    only there would be a gate that never runs when it matters.
+    """
+    failed = {"phase": "done", "step": "failed", "level": "error", "detail": "HTTP 404"}
+    finished = {"phase": "done", "step": "finished", "detail": "job finished"}
+    cancelled = {"phase": "done", "step": "cancelled", "detail": "cancelled"}
+    # A job that announces its own ending: gatesDiscover ends done/written and
+    # jobs.js only fills in done/finished when the work announced nothing. So
+    # an unrecognised step is NOT read as a failure.
+    announced = {"phase": "done", "step": "written", "detail": "12 gates"}
+
+    # THE OLD RULE, shown accepting the thing it was supposed to catch. This
+    # is the cell the fix moved us out of, stated rather than implied: under
+    # "phase == done" a failed init and a finished one are indistinguishable.
+    old_rule = lambda event: event.get("phase") == "done"  # noqa: E731
+    assert old_rule(failed) and old_rule(finished), (
+        "the old gate passed both, which is why an environment failure was "
+        "reported as a wire defect"
+    )
+
+    assert ended_badly([failed]) is failed
+    assert ended_badly([cancelled]) is cancelled
+    assert ended_badly([finished]) is None
+    assert ended_badly([announced]) is None
+    assert ended_badly([]) is None
+    # The two-done-events case jobs.js documents: a job that said it finished
+    # and then threw. Reading only the first would call that a success.
+    assert ended_badly([finished, failed]) is failed
+    # level alone is enough, even under a step this file does not know.
+    assert ended_badly([{"phase": "done", "step": "written", "level": "error"}]) is not None
+    # RESERVED_DONE_STEPS is the engine's list; ours must not drift from it.
+    engine_jobs = (
+        Path(__file__).resolve().parents[2] / "engine" / "src" / "rpc" / "jobs.js"
+    )
+    if engine_jobs.exists():
+        line = next(
+            l for l in engine_jobs.read_text().splitlines() if "RESERVED_DONE_STEPS" in l and "=" in l
+        )
+        for step in BAD_DONE_STEPS:
+            assert f"'{step}'" in line, f"{step} is not in the engine's reserved list: {line}"
+        assert "'finished'" in line, f"the engine renamed its success step: {line}"

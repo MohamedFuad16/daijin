@@ -159,14 +159,16 @@ export function createCliEngineer({ role, agentPath }, {
     ];
     if (system) args.push('--append-system-prompt', system);
     return new Promise((resolve, reject) => {
-      // Same two rules as roles/driver.js: stdin is ignored (the CLI waits
+      // Same two rules as roles/driver.js: stdin is closed (the CLI waits
       // three seconds for it otherwise) and the CLI's own sentence wins over
       // the exec wrapper's "Command failed: <the entire prompt>".
-      execFileImpl('claude', args, {
+      //
+      // And the same correction: execFile silently drops a `stdio` option, so
+      // the handle is what closes stdin. See roles/driver.js for the citation.
+      const child = execFileImpl('claude', args, {
         cwd: context.sandbox,
         timeout: timeoutMs,
         maxBuffer: 64 * 1024 * 1024,
-        stdio: ['ignore', 'pipe', 'pipe'],
       }, (error, stdout) => {
         let reported = null;
         try {
@@ -192,6 +194,9 @@ export function createCliEngineer({ role, agentPath }, {
         }
         resolve({ text: String(parsed.result ?? ''), tokens: tokens || 1 });
       });
+      // The actual close; see roles/driver.js. Optional-chained because an injected
+      // execFileImpl returns no handle.
+      child?.stdin?.end();
     });
   };
 

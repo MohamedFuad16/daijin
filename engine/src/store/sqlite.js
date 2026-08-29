@@ -366,6 +366,27 @@ export class SqliteStore {
     if (!this.#path) this.#path = await indexPathFor(this.#repoPath, { stateRoot: this.#stateRoot });
     const database = openDatabase(this.#path, { Database, sqliteVec });
     this.#database = database;
+    // EVERY FAILURE AFTER THE OPEN CLOSES THE HANDLE. The migration ledger and the two
+    // identity asserts below all throw AFTER the database is open, and createSqliteStore
+    // discards the half-built instance on a throw - with `#database` private, nothing can
+    // ever close it again. Measured at 8 file handles (db, -wal, -shm) left behind by three
+    // failed inits, and the trigger is ordinary: a user who changes their Ollama embedding
+    // model gets the identity assert on every attempt, and the daemon is long-lived, so
+    // each retry from the TUI burns more until EMFILE. Two call sites in methods.js open the
+    // store OUTSIDE the try whose finally would have closed it, so the leak is reachable.
+    try {
+      this.#initOpened();
+    } catch (error) {
+      // Closed and forgotten, so a later init() on the same instance re-opens cleanly
+      // rather than short-circuiting on a handle that is already gone.
+      try { database.close(); } catch { /* a close failure must not mask the real error */ }
+      this.#database = null;
+      throw error;
+    }
+  }
+
+  /// Everything init() does once the handle is open, so init() can own the close-on-throw.
+  #initOpened() {
     this.#applyMigrations();
 
     const storedDimension = this.#readMeta(META_KEYS.dimension);
@@ -571,12 +592,20 @@ export class SqliteStore {
 
     const filter = candidateFilterSql(filters, 'd');
     const rank = bm25Expression(CHUNKS_FTS);
+    // THE LEFT JOIN CAN YIELD A NULL EMBEDDING, and vec_distance_cosine treats NULL as an
+    // input error rather than as NULL: an FTS hit on a chunk with has_vector = 0 aborted the
+    // whole query with "Error reading 1st vector ... found NULL", killing retrieve() rather
+    // than one arm. A mixed store is not exotic - ab-sqlite-pgvector's mirrorCorpus counts
+    // `embedded` separately precisely because it writes vectorless chunks - and it is the
+    // corpus the two backends are compared over. The pgvector twin returns NULL for the same
+    // row (`c.embedding <=> $1` is NULL-propagating), and a null score is already the
+    // contract downstream: fusion falls back to rank alone. The CASE restores that parity.
     const scored = vector != null && this.#hasVectorTable();
     const queryVector = scored ? toFloat32(vector, this.#dimension ?? undefined) : null;
 
     const rows = this.#db().prepare(`
       SELECT ${CANDIDATE_PROJECTION},
-             ${scored ? '1 - vec_distance_cosine(v.embedding, ?)' : 'NULL'} AS score,
+             ${scored ? 'CASE WHEN v.embedding IS NULL THEN NULL ELSE 1 - vec_distance_cosine(v.embedding, ?) END' : 'NULL'} AS score,
              ${rank} AS bm25_rank
         FROM ${CHUNKS_FTS}
         JOIN ${CHUNKS} AS c ON c.id = ${CHUNKS_FTS}.chunk_id

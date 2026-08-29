@@ -56,6 +56,31 @@ async def _wait_attached(client: SocketRpcClient, timeout: float = 25.0) -> None
     await asyncio.wait_for(client.start(), timeout=timeout)
 
 
+async def _close_and_stop(*clients: SocketRpcClient) -> None:
+    """aclose every client, then STOP the daemon the owning client spawned.
+
+    aclose deliberately leaves the daemon running - in the app that is the
+    point, MCP serving and the gym outlive any one window. In a test against a
+    throwaway state root it is a leak: the root is deleted, the socket with it,
+    and the daemon survives unreachable forever. Measured before this teardown
+    existed: 75 orphaned daemons, the oldest almost seven days old, three more
+    per suite run. The daemon exits 0 on SIGTERM (daemon.js wires it), so
+    terminate is the graceful path; kill is only the insurance.
+
+    The spawned handle is read BEFORE aclose, which nulls it.
+    """
+    spawned = [c._spawned for c in clients if c._spawned is not None]
+    for client in clients:
+        await client.aclose()
+    for proc in spawned:
+        proc.terminate()
+        try:
+            await asyncio.wait_for(proc.wait(), timeout=10)
+        except asyncio.TimeoutError:
+            proc.kill()
+            await proc.wait()
+
+
 @run_async
 async def test_it_spawns_a_daemon_and_attaches(short_root):
     """No daemon running: this client starts one and owns it."""
@@ -70,7 +95,7 @@ async def test_it_spawns_a_daemon_and_attaches(short_root):
         hello = await asyncio.wait_for(client.handshake(), timeout=20)
         assert hello["contractVersion"] == SUPPORTED_CONTRACT_VERSION
     finally:
-        await client.aclose()
+        await _close_and_stop(client)
 
 
 @run_async
@@ -100,8 +125,7 @@ async def test_a_second_client_attaches_rather_than_spawning(short_root):
         )
         assert "repos" in a and "repos" in b
     finally:
-        await second.aclose()
-        await first.aclose()
+        await _close_and_stop(second, first)
 
 
 @run_async
@@ -138,8 +162,7 @@ async def test_one_clients_job_streams_to_both(short_root):
         assert all(event.get("jobId") for event in seen_second)
         assert all(event["jobId"] == job["jobId"] for event in seen_second)
     finally:
-        await second.aclose()
-        await first.aclose()
+        await _close_and_stop(second, first)
 
 
 @run_async

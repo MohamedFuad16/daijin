@@ -13,11 +13,12 @@ from typing import Any, Iterable
 
 from textual import work
 from textual.containers import Horizontal
+from textual.content import Content
 from textual.widgets import Button, Checkbox, DataTable, Static
 
 from ..concurrency import gather_iter
 from ..rpc import RpcError
-from ..widgets import Banner, SectionTitle
+from ..widgets import Banner, SectionTitle, cells
 from .base import DaijinScreen
 from .dialogs import AgentFileEditScreen
 from .role_dialog import RoleConfigScreen
@@ -173,7 +174,7 @@ class SettingsScreen(DaijinScreen):
                 failing.append(role.get("role"))
             elif ping.get("servedModelId") and ping.get("servedModelId") != role.get("model"):
                 drift.append(role.get("role"))
-            table.add_row(
+            table.add_row(*cells(
                 role.get("role", ""),
                 _said(role.get("provider")),
                 _said(role.get("model")),
@@ -194,8 +195,7 @@ class SettingsScreen(DaijinScreen):
                 f"{ping.get('latencyMs')} ms" if ping.get("latencyMs") else "-",
                 str(ping.get("servedModelId") or "-"),
                 "never" if not verified else ("ok" if ok else "FAILED"),
-                key=role.get("role"),
-            )
+            ), key=role.get("role"))
         notice = self.query_one("#settings-notice", Banner)
         if failing:
             notice.set_notice(
@@ -225,13 +225,12 @@ class SettingsScreen(DaijinScreen):
             record = self.agent_files.get(role)
             if record is None:
                 continue
-            file_table.add_row(
+            file_table.add_row(*cells(
                 role,
                 record.get("currentHash", ""),
                 record.get("defaultHash", ""),
                 "MODIFIED" if record.get("modified") else "default",
-                key=role,
-            )
+            ), key=role)
         if self.agent_files:
             self._show_file(next(iter(self.agent_files)))
 
@@ -250,9 +249,18 @@ class SettingsScreen(DaijinScreen):
     def _show_role(self, role: dict[str, Any]) -> None:
         ping = role.get("ping") or {}
         name = str(role.get("role", ""))
-        lines = [
-            f"[b]{name}[/b]  {ROLE_NOTES.get(name, '')}",
-            f"key {role.get('keyRef', '?')}, masked {role.get('keyMasked', '?')}",
+        # keyRef is a POINTER THE OWNER TYPES - a file path or an env var
+        # name - so it is their text, not ours, and a bracketed path in it is
+        # a MarkupError on a row highlight.
+        lines: list[Any] = [
+            Content.from_markup(
+                "[b]$name[/b]  $note", name=name, note=str(ROLE_NOTES.get(name, ""))
+            ),
+            Content.from_markup(
+                "key $ref, masked $masked",
+                ref=str(role.get("keyRef", "?")),
+                masked=str(role.get("keyMasked", "?")),
+            ),
         ]
         if not ping:
             lines.append(
@@ -264,25 +272,39 @@ class SettingsScreen(DaijinScreen):
                 f"last recorded ping {ping.get('at', '-')}, HTTP {ping.get('httpStatus', '-')}, "
                 f"TTFT {ping.get('ttftMs', '-')} ms, latency {ping.get('latencyMs', '-')} ms"
             )
-            lines.append(
-                f"served model id [b]{ping.get('servedModelId') or 'none'}[/b] against requested {role.get('model')}"
-            )
+            # Both ids come back from the provider's own response.
+            lines.append(Content.from_markup(
+                "served model id [b]$served[/b] against requested $requested",
+                served=str(ping.get("servedModelId") or "none"),
+                requested=str(role.get("model")),
+            ))
             if ping.get("servedModelId") and ping.get("servedModelId") != role.get("model"):
                 lines.append(
                     "[yellow]The served id is not the requested id. The served id is the "
                     "authoritative one.[/yellow]"
                 )
             lines.append("[dim]recorded at that time, not a live reading[/dim]")
-        self.query_one("#role-detail", Static).update("\n".join(lines))
+        self.query_one("#role-detail", Static).update(Content("\n").join(
+            line if isinstance(line, Content) else Content.from_markup(line) for line in lines
+        ))
 
     def _show_file(self, role: str) -> None:
         record = self.agent_files.get(role) or {}
         badge = "MODIFIED from the shipped default" if record.get("modified") else "matches the shipped default"
-        self.query_one("#file-detail", Static).update(
-            f"[b].daijin/agents/{role}.md[/b]  {badge}\n"
-            f"[dim]current {record.get('currentHash', '?')}, default {record.get('defaultHash', '?')}[/dim]\n"
-            f"{record.get('content', '')}"
-        )
+        # content is the WHOLE instruction file, markdown the owner edits. A
+        # "[/...]" token anywhere in it - and these files are prose about this
+        # tool, which renders markup - is a closing tag with nothing open, and
+        # that MarkupError kills the app on a row highlight.
+        self.query_one("#file-detail", Static).update(Content.from_markup(
+            "[b].daijin/agents/$role.md[/b]  $badge\n"
+            "[dim]current $current, default $default[/dim]\n"
+            "$content",
+            role=str(role),
+            badge=badge,
+            current=str(record.get("currentHash", "?")),
+            default=str(record.get("defaultHash", "?")),
+            content=str(record.get("content", "")),
+        ))
 
     def _selected_key(self, table_id: str) -> str | None:
         table = self.query_one(f"#{table_id}", DataTable)

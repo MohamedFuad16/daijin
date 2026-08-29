@@ -168,6 +168,14 @@ export async function embedTexts(inputs, identity, {
   inputType = 'document',
   onBatch = async () => {},
 } = {}) {
+  // EMBEDDING_BATCH_SIZE=0 survives the || (the string "0" is truthy) and never advances
+  // offset, which is an infinite loop of EMPTY requests - against openai or voyage, a paid
+  // loop. A non-numeric value becomes NaN, and offset += NaN exits after one empty batch,
+  // silently returning no vectors. Same defect class as the adapter's batchSize guard;
+  // refused here at entry, naming the knob.
+  if (!Number.isInteger(batchSize) || batchSize < 1) {
+    throw new Error(`embedTexts needs a batch size of at least 1; received ${batchSize} (check EMBEDDING_BATCH_SIZE).`);
+  }
   const vectors = [];
   for (let offset = 0; offset < inputs.length; offset += batchSize) {
     const batch = inputs.slice(offset, offset + batchSize);

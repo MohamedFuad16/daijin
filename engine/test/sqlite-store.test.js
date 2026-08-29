@@ -109,6 +109,30 @@ test('one index per repo, in the state root, surviving a reopen', async () => {
   }
 });
 
+test('a zero-magnitude vector cannot outrank a real match or hold its KNN slot', async () => {
+  // vec0 returns distance NULL for a zero vector under cosine, and NULL sorts FIRST under
+  // ORDER BY ASC - measured before the fix: the zero vector sat above an exact match at
+  // the top of the pool AND consumed one of the k slots, evicting a real neighbour. The
+  // ANN query now excludes NULL distances, and the over-fetch loop refills the pool.
+  const store = await freshStore();
+  try {
+    await writeDocument(store, 'real', 'an ordinary embedded chunk', unitVector(0));
+    await writeDocument(store, 'other', 'a second ordinary chunk', unitVector(1));
+    await writeDocument(store, 'zero', 'a chunk whose vector is all zeros', new Array(DIMENSION).fill(0));
+
+    const hits = await store.semanticCandidates(unitVector(0), { project: null }, 2);
+    const ids = hits.map((hit) => hit.documentId ?? hit.document_id ?? hit.id);
+    assert.ok(!ids.some((id) => String(id).startsWith('zero')), `the zero vector must not appear: ${ids}`);
+    assert.equal(hits.length, 2, 'the pool refills after the NULL row is excluded');
+    assert.ok(String(ids[0]).startsWith('real'), `the exact match ranks first, got ${ids}`);
+    for (const hit of hits) {
+      assert.ok(Number.isFinite(hit.score), `every served score is a real number, got ${hit.score}`);
+    }
+  } finally {
+    await store.close();
+  }
+});
+
 test('the migration ledger records what it applied and refuses an edited migration', async () => {
   const root = repoRoot();
   const state = stateRoot();

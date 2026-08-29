@@ -164,3 +164,20 @@ test('a served Ollama digest that drifts from the pinned one is refused', async 
     /digest does not match/,
   );
 });
+
+test('embedTexts refuses a batch size that cannot advance', async () => {
+  // EMBEDDING_BATCH_SIZE=0 survives the || default (the string "0" is truthy) and never
+  // advances offset - an infinite loop of EMPTY requests against a possibly paid API. A
+  // non-numeric value becomes NaN and exits after one empty batch, silently returning no
+  // vectors. Both are refused at entry, naming the knob.
+  const identity = { provider: 'ollama', model: 'bge-m3', dimension: 4 };
+  const neverCalled = async () => { throw new Error('the request must never be issued'); };
+  await assert.rejects(
+    () => embedTexts(['one'], identity, { environment: { EMBEDDING_BATCH_SIZE: '0' }, fetchImpl: neverCalled }),
+    /batch size of at least 1.*EMBEDDING_BATCH_SIZE/,
+  );
+  await assert.rejects(
+    () => embedTexts(['one'], identity, { environment: { EMBEDDING_BATCH_SIZE: 'abc' }, fetchImpl: neverCalled }),
+    /batch size of at least 1/,
+  );
+});

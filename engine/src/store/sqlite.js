@@ -545,7 +545,19 @@ export class SqliteStore {
 
   // ---- read side: the four candidate arms -----------------------------------------
 
-  /** ANN pool. Ordered by distance ascending, which is cosine descending. */
+  /** ANN pool. Ordered by distance ascending, which is cosine descending.
+   *
+   *  NULL distances are excluded in the SQL: vec0 returns distance NULL for a stored
+   *  zero-magnitude vector under cosine (undefined there), and NULLs sort FIRST under
+   *  ASC - measured: a zero vector outranked an exact match at the top of the pool and
+   *  consumed one of the k slots, evicting a real neighbour. The exclusion starves the
+   *  pool by that slot, and the over-fetch loop below already widens k until the limit
+   *  fills, so the evicted neighbour comes back on the next round.
+   *
+   *  The unary + before v.distance is load-bearing: without it SQLite flattens the
+   *  predicate into the vec0 virtual-table query, which only accepts GT/GE/LT/LE on its
+   *  distance column and throws "Illegal WHERE constraint". The + disqualifies the
+   *  expression from constraint pushdown, so the filter runs OUTSIDE the KNN. */
   async semanticCandidates(vector, filters = {}, limit = 10) {
     const requested = Math.max(0, Number(limit) || 0);
     if (requested === 0 || !this.#hasVectorTable()) return [];
@@ -561,6 +573,7 @@ export class SqliteStore {
         JOIN ${CHUNKS} AS c ON c.id = v.chunk_id
         JOIN ${DOCUMENTS} AS d ON d.id = c.document_id
        WHERE ${filter.sql}
+         AND +v.distance IS NOT NULL
        ORDER BY v.distance ASC, c.id ASC
        LIMIT ?
     `);

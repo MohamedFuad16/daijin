@@ -1434,3 +1434,204 @@ that stored reason. Writing the instruction is itself the explicit act.
 What does NOT change: the engine still refuses unconsented spends, every
 paid run still shows its confirmation dialog, and the gate still re-blocks
 in each job's finally. The instruction moves one click, not one boundary.
+
+## D-0071 (2026-08-29) A guard that cannot fail is not a guard, and this repo grew four ways to fake a green
+
+A three-lane bug sweep found the same defect shape in engine, adapters and
+installer alike: a check whose failure mode and whose negative result produce
+the same status, so it reports PASS forever. Ruled: every gate ships with its
+negative control - plant the condition, watch it FAIL, remove it, watch it
+PASS - and a gate that cannot be demonstrated failing is not coverage and may
+not be counted as such.
+
+The four fake-green mechanisms measured on this machine, all of which produced
+a false PASS during the sweep itself:
+
+1. `timeout` is not installed on macOS. A command wrapped in it never runs and
+   the shell reports exit 0.
+2. `cmd | tail` returns tail's status under zsh, not the command's. A pytest
+   run with a real failure reported "exited with code 0".
+3. `! grep ...` collapses grep's exit 1 (clean) and exit 2 (input missing) into
+   a pass. Four installer sweeps and two check_fails sites were blind to their
+   own inputs vanishing; a renamed README would have reported a clean sweep of
+   nothing.
+4. pytest 9.1.1 SUPPRESSES the "N passed" summary at `-q`, and pyproject puts
+   `-q` in addopts. The documented `pytest -q` prints dots and no summary line
+   at all, pass or fail. Anyone judging by "no FAILED text appeared" gets a
+   green from the canonical command. Use `--verbosity=1`.
+
+Also ruled, from a near-miss caught inside the sweep: a length, a presence, or
+an exception count is a stand-in for the property you actually mean; assert the
+property. Counting the message text counted one report four times, because the
+report quoted its own failing source line three times in the traceback.
+
+## D-0072 (2026-08-29) The floor decision has one authority, and an unfit gauge outranks whatever it read
+
+`mcpUnlock` gained a `blocked` parameter, but no caller passed it and no test
+covered it, so the guard could never fire. Two live paths then disagreed about
+the same repo: `mcpSnippet` cleared 0.75 off a history row written by a bare
+`retrievalScore` over a gold set that init had refused to certify, and
+`serveStatus` re-decided the threshold by hand, ignoring both the block and the
+must-not-violations floor. A repo at 23 of 25 with 2 violations rendered
+health "ok" beside a snippet saying a wrong answer was being served.
+
+Ruled: `mcpUnlock` is the single authority. No caller re-derives the decision.
+`readInitBlock` supplies the block init already wrote, and the block's own
+reason and action are quoted rather than paraphrased, because they already name
+what is short and how to clear it. A measured case rate over a gold set that
+failed its integrity gates is not a floor and does not unlock anything.
+
+## D-0073 (2026-08-29) Gold provenance is walked from the gold commit, never from HEAD
+
+Gold-exclusion rule 3 ran `git log --diff-filter=A` with no revision, which
+walks HEAD. It therefore asked "was this file added on the branch that happens
+to be checked out" when the question is "did GOLD add it". Whenever the gold
+commit is unreachable from the working tree - a feature branch, a detached
+HEAD, a SHA orphaned by a squash-merge - the walk never sees gold, rule 3 finds
+nothing, and the record still stamps `computed: true` with a count of zero.
+Retrieval then hands the student the very lesson the gold commit wrote, and
+certify()'s gate passes, so the run certifies "the student never saw gold"
+about a run in which it did. Reproduced: same exam, same documents, only HEAD
+differs, ids ["lesson.x"] versus [].
+
+Ruled: the walk names `exam.goldCommit`. This also closes the delete-and-re-add
+case, since commits after gold are no longer in the walk.
+
+Blast radius on this machine, verified read-only: zero. The one attached repo's
+gym ledger is schema-migrated but empty (exam, run, cycle, certification all
+0), and no result artifacts exist anywhere in the home tree. The bug was live
+but never recorded a false claim. Recorded for the future: a record is
+auditable after the fact without HEAD, because rule 3 is a pure function of
+(goldCommit, document path) - compare `provenance.shownDocumentIds` against
+`git diff-tree --diff-filter=A --no-commit-id --name-only -r <goldCommit>` and
+flag any shown path that gold added yet `goldExclusion.ids` omits.
+
+## D-0074 (2026-08-29) Untrusted text reaches Textual only by variable substitution; escape() is not a defence
+
+state.md has claimed since the walkthrough that `rich.markup.escape` does not
+protect Textual's parser. That claim now has a mechanism, measured rather than
+read: escape() rewrites only COMPLETE bracket tokens, so a dangling `[/` at the
+end of untrusted text merges with the caller's own closing tag and raises the
+error the escape was meant to prevent. A 20,000-case fuzz over bracket-heavy
+strings produced 3,868 crashes and 4,740 silent plain-text corruptions,
+identical for textual and rich.
+
+Ruled: `Content.from_markup` with `$variable` substitution is the only fix, at
+every site that renders engine output, LLM prose, exam titles, gate commands,
+gate output tails, brain document titles, agents/*.md content, or a repo path.
+Twenty such sites were swept. DataTable is a second half of the same class -
+`default_cell_formatter` runs string cells through `Text.from_markup`, so a
+bracketed title raised while the table was DRAWING, where no caller can catch
+it; all 19 add_row sites now route through `cells()`.
+
+Also ruled: Banner and the dialog bodies are literal-only, permanently, and no
+optional styled-content hatch is added. No caller passes markup to them today,
+so the hatch would exist for zero callers while restoring the footgun. A
+genuine styling need gets added at its own site, with its own test.
+
+## D-0075 (2026-08-29) A conformance test that cannot run must skip loudly and name what it did not check
+
+`test_every_field_a_screen_reads_exists_on_the_live_engine` gated on the
+fixture init reaching `phase === 'done'`. But `done/failed` IS a done phase, so
+a failed init walked on, called `documents`, got an empty list, and reported an
+environment problem as a wire-conformance defect. The engine already emits
+`phase:'done', step:'failed', level:'error'`, and RESERVED_DONE_STEPS exists so
+a client can learn HOW a job ended.
+
+Ruled: the test skips when any done event carries `level === 'error'` or a
+reserved bad step, and its skip message quotes the engine's own words and then
+LISTS THE METHODS IT DID NOT CHECK. The gate is on level and bad step rather
+than on `step === 'finished'`, because jobs.js only fills in `done/finished`
+when the work announced no ending of its own - gatesDiscover ends
+`done/written`, and requiring 'finished' would falsely skip a job that
+succeeded and said so.
+
+The rule is extracted and unit-tested rather than only exercised through the
+integration path, because that path now skips on exactly the machines the rule
+exists to protect: a gate exercised only where it is not needed is not a gate.
+
+## D-0076 (2026-08-29) cosineFromDistance refuses a non-finite distance
+
+vec0 returns a NULL distance rather than an error when a stored vector has zero
+magnitude, because cosine is undefined there. In JavaScript `1 - null` is 1, so
+the unguarded conversion turned "this row has no comparable distance" into a
+PERFECT similarity, outranking every real match. The function now throws.
+
+This is a change to a PUBLIC surface, not an internal tidy: `cosineFromDistance`
+is re-exported at adapters/index.js, a barrel that exists so a backend swap is
+one file. It has no call site in this repo and no external consumer was found,
+so the blast radius is bounded here, but the decision is recorded as an API
+change rather than as a comment fix. Throwing beats a sentinel because every
+sentinel in [-1, 1] is a legal cosine that fusion would silently rank, and one
+outside that range would still flow through the rescale as a number; only an
+exception cannot be mistaken for a score.
+
+Not done, deliberately: `toFloat32` does NOT refuse zero-magnitude vectors.
+That would change indexing semantics for every caller to prevent a bug whose
+only reachable path (the SQL sqlite.js inlines) already propagates NULL
+correctly. If it ever becomes reachable, the place is the ingest path.
+
+Also corrected in place: vec.js's header claimed store-conformance asserts
+cosineFromDistance against a JS-computed cosine. It does not - that suite
+asserts the SQL expression sqlite.js inlines, a different arm. The identity is
+measured (agreement to 1.4e-8 on a scaled-vector fixture), not suite-asserted.
+
+## D-0077 (2026-08-29) A test that spawns a daemon stops it; measured time in tests comes from an injected clock
+
+Two rulings from the reverification pass.
+
+The daemon: SocketRpcClient.aclose deliberately leaves the daemon running,
+because in the app a shared engine outliving any one window is the point. A
+TEST that spawns a real daemon against a throwaway root therefore owns the
+kill: the state root is deleted in teardown, the socket with it, and an
+un-stopped daemon is unreachable forever. Measured cost of the missing
+teardown: 75 orphaned daemons, three more per suite run, the oldest almost
+seven days old. The teardown reads the spawned handle before aclose nulls it
+and SIGTERMs (daemon.js exits 0 on SIGTERM); the fix does NOT touch aclose,
+whose leave-it-running behaviour is correct and load-bearing.
+
+The clock: a test asserting on measured durations races the machine's load -
+init-rerank-ab's cold/warm comparison flaked 1 run in 5 under a busy suite.
+rerankAB now takes an injectable `now` (the same idiom as pipeline.js's
+`clock`), and the test advances a virtual clock by stated amounts. The
+property under test is how the harness prices the arms, not how the OS
+schedules timers. Wall-clock stays the default in production; only the test
+substitutes the source.
+
+## D-0078 (2026-08-29) The gate scanner matches any write-shaped identifier, and a call to the owner module's un-laundered export is licensed by construction
+
+The mutation guard's WRITE_CALL was a closed list of spellings requiring a
+bracket straight after each name. It was therefore blind to writeFileNative( -
+the alias spend-gate.js ITSELF imports and writes the gate with - and to
+writeJsonAtomic(. The owner file matched zero writes, `writes.length === 0`
+skipped it, and the licence apparatus never ran on the one module it exists to
+audit. The comment beside the blocked write claimed the regex "must SEE this
+call"; it did not. Demonstrated with two bypass strings before any change, per
+the rule that spend-guard hardening needs a failing case first.
+
+Ruled: WRITE_CALL matches any identifier CONTAINING write (plus the appendFile
+and outputFile families), with two principled exclusions:
+
+- A DEFINITION is not a call. The widened net matches `function
+  gateWriterOffenders(` - the scanner flagged itself - and the closer's own
+  definition line. Neither writes anything.
+- A call to a name imported UN-ALIASED from the owner module is safe by
+  construction: that module's writes are fully audited, so its exported closer
+  can only write a blocked gate. The exemption dies the moment the text stops
+  proving what the call reaches - `as` laundering the name (import { opener as
+  closer }) or a local rebinding disqualifies it. Both laundering routes are
+  pinned as plants.
+
+Five new plants (the two demonstrated bypasses, an owner-file unmarked opening
+write in the bypass spelling, the aliased-import laundering, the local shadow)
+and two controls (the sanctioned re-block call, a net-matching definition in a
+gate-naming file) live in the suite. Negative control run: under the old regex
+the plants are missed and the test fails; under the new one, 15/15 and the
+real tree is clean.
+
+Known bound, recorded not chased: the licence window is proximity-based, so a
+write planted within 500 chars of the legitimate ownerAction marker inherits
+it - partially self-guarded by the one-licence counter, which flags a second
+marked write. And any file NAMED spend-gate.js in the scan set is audited
+under owner rules, marker licence included; the scan set is the engine's own
+source tree, so a new file claiming that name is a reviewable event.

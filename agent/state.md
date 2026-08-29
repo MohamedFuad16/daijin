@@ -1,5 +1,155 @@
 # Daijin build state (authoritative)
 
+## 2026-08-29 (later) - Environment repaired, the wire test enforces, and two more defects closed
+
+The owner authorized proceeding. `ollama pull bge-m3` repaired the
+manifest-without-blobs state; /api/embed answers HTTP 200 with 1024-dim
+vectors and `ollama show` resolves again. With the environment whole, the
+wire-conformance test RAN for the first time in this sweep and PASSED - all 13
+serveStatus paths enforced live, the four newly promoted ones held, and the
+skip in the previous entry converted to a pass. TUI suite: 477 passed, 0
+skipped, 0 failed, EXIT=0. Verified by: `cd tui && .venv/bin/python -m pytest
+--verbosity=1 --tb=line -rs > /tmp/t.txt 2>&1; echo "EXIT=$?"`.
+
+DEFECT 42 CLOSED, the wall-clock flake. rerankAB gained an injectable `now`
+(pipeline.js's clock idiom), and the cold/warm pricing test now advances a
+virtual clock instead of racing the scheduler with real sleeps - the property
+under test is how the harness PRICES the arms, not how the OS schedules
+timers. 15 consecutive green runs where it flaked 1-in-5 under load; negative
+control run: with measure() regressed to performance.now the test fails with
+exactly the expected assertion, so the gate is live.
+
+DEFECT 43 FOUND BY REVERIFICATION, the daemon leak. test_socket.py's three
+spawning tests each start a REAL engine daemon against a /tmp mkdtemp root,
+then aclose() and delete the root. aclose deliberately never kills the daemon
+(in the app that is the point - MCP serving and the gym outlive any one
+window), so every suite run left 3 unreachable orphans. Measured: 75 leaked
+daemons, the oldest almost seven days old, including one from a control tree.
+Fixed with a test-side teardown that reads the spawned handle before aclose
+nulls it and SIGTERMs it (daemon.js exits 0 on SIGTERM). Negative control:
+old teardown leaks exactly 3 per run, new teardown leaks 0. The 75 orphans
+were culled by hand; none served a real state root.
+
+DEFECT 44, the spend-gate scanner's dead audit (D-0078). Reopened on the
+engine worker's demonstrated bypass: WRITE_CALL was blind to writeFileNative(
+and writeJsonAtomic(, the two spellings this codebase actually uses, so the
+owner file matched zero writes and the licence audit never ran on the module
+it exists to audit. Widened to any write-shaped identifier, with definitions
+excluded (the scanner had begun flagging its own function name) and calls to
+un-laundered owner-module imports licensed by construction. Five plants, two
+controls, negative control run both ways.
+
+Suites at close: ENGINE 813 pass / 0 fail EXIT=0. TUI 477 pass / 0 skip / 0
+fail EXIT=0 (478 collected: the wire test's former skip now passes). Adapters
+lane 61/61. All numbers from unpiped runs with real summary lines.
+
+DEFERRED PROPOSALS from the engine worker, answered and recorded so they are
+not lost: a goldAddedPaths anti-vacuity field on the run artifact (schema
+change); widening the spend-gate WRITE_CALL regex (owner-gated, no bypass
+demonstrated); where budgetEstimate prices relative to layer 1 (owner product
+decision); a per-repo spend gate on the wire (a frozen-contract methods.md
+amendment). Accepted bound: gold-provenance rule 3 keeps allowFailure: true,
+so a failed git log is indistinguishable from "not added by gold" - low risk
+because the :157 diff-tree already proves the gold commit resolvable
+fail-loud, first follow-up if wanted.
+
+## 2026-08-29 - Three-lane bug sweep: 42 defects, and four ways this repo faked a green
+
+A team of three workers swept engine, TUI, and adapters/installer on disjoint
+directories. Suites at close, every number run by the lead unpiped rather than
+taken from a worker: ENGINE 812 pass / 0 fail EXIT=0 (baseline 802/802);
+TUI 476 pass / 1 skip EXIT=0 (baseline 453 collected, 452 pass, 1 fail).
+Verified by: `cd engine && npm test > /tmp/e.txt 2>&1; echo "EXIT=$?"` and
+`cd tui && .venv/bin/python -m pytest --verbosity=1 --tb=line -rs > /tmp/t.txt
+2>&1; echo "EXIT=$?"`.
+
+CORRECTION TO THIS FILE. The 2026-08-23 entry records "TUI 453 pass, zero
+fail". That was already untrue by 2026-08-29: the suite carried one real
+failure, `test_wire_conformance`, and the count 453 is collected tests, not
+passes. The 452/1 split was itself initially derived by counting dots, because
+pytest 9.1.1 suppresses the summary line at `-q` and pyproject puts `-q` in
+addopts - see D-0071. Numbers in this file should come from `--verbosity=1`.
+
+THE HEADLINE CLASS (D-0071): a check whose failure mode and whose negative
+result produce the same status. Found in all three lanes. Four distinct
+mechanisms produced a false PASS during the sweep itself - a missing `timeout`
+binary, `| tail` masking a pipeline's exit code, `! grep` collapsing "clean"
+and "input missing", and pytest's suppressed summary at `-q`. The installer's
+version-stamp guard could not fire at all: `node -p` prints "undefined" and
+exits 0 for a version-less package.json, so `|| echo unknown` never ran and the
+die behind it was unreachable; the installer stamped `"tuiVersion": ""` on an
+install it had just declared unidentifiable.
+
+THE MOST CONSEQUENTIAL DEFECT (D-0073): gold-exclusion rule 3 walked HEAD
+rather than the gold commit, so the harness could certify "the student never
+saw gold" about a run in which it did. Blast radius on this machine verified as
+zero - the one attached repo's ledger is empty (exam, run, cycle, certification
+all 0) and no result artifacts exist. The bug was live but never recorded a
+false claim.
+
+ENGINE, 8 defects, all fixed, each proven by reverting the fix and watching its
+new test fail: the half-landed `mcpUnlock({blocked})` finished and its second
+half found (`serveStatus` re-deciding the floor by hand, D-0072); gold
+provenance walked from gold (D-0073); the rag supersession boost discarded
+order-dependently, so it was dead for normal ADR numbering (3.5 in id order vs
+5.7 reversed); `vec_distance_cosine` treating a LEFT JOIN NULL as an input
+error, so one vectorless chunk killed all of retrieve() and broke pgvector
+parity on the axis the two are compared over; sqlite `init()` leaking the
+handle on every error path (8 handles after 3 failed inits, `#database` private
+so nothing could close them, long-lived daemon into EMFILE); three spending
+jobs announcing `done` before the finally re-blocked the gate, breaking
+D-0060's "an authorization lives exactly as long as the run it authorized"; a
+damaged gold set read as an empty one and then overwritten.
+
+TUI, one class and two standalone defects. Twenty sites rendered untrusted text
+as Textual markup, including `Banner.set_notice` - the universal error path,
+109 call sites - the gates panel that renders raw stdout/stderr tails, the
+attach box that echoes what the user is TYPING, and the heading of every
+screen. DataTable was an undocumented second half. `escape()` measured as no
+defence (D-0074). Separately, `init_feed` read `panel.renderable`, absent on
+Textual 8.2.8, which exited the app inside a @work worker AFTER the owner had
+paid for the diagnoseNarrate generation - billed for advice that never reached
+the screen. And rpc dispatch did not guard handlers: an exception propagated
+out of `_on_message` into `_pump`, the read task itself, so the loop died and
+`_fail_pending` never ran, leaving every in-flight future hanging forever with
+the screens holding their last frame and nothing saying why.
+
+ADAPTERS AND INSTALLER, 9 defects. `uninstall.sh` ran `rm -rf "$PREFIX"` behind
+only a `-d` test, and DAIJIN_PREFIX is a documented knob with DAIJIN_YES=1
+removing the prompt; it now requires the VERSION stamp install.sh writes. Every
+embed failure was reported as "Ollama is down", discarding the server's own
+message: a model re-tagged mid-run answers HTTP 404 naming the actual fix, and
+the user was told to start a server that was never down. The install probe was
+looser than the client it predicts. A whitespace prefix built a daijin that
+could not start its own engine, because the client split `--engine` on
+whitespace - repaired properly on the TUI side with `shlex.split`, with the
+installer guard kept until the fix is proven in the field. Clean, with controls:
+FTS5 escaping fuzzed over ~50 hostile tokens with zero syntax errors,
+sqlite-vec cosine proven honored ([3,0,0,0] and [1,0,0,0] identical distance 0,
+false under L2), no connection leaks, and a suspected bash 3.2 `set -u` bug
+tested and DISPROVED.
+
+OWNER ACTION OUTSTANDING, not taken because it changes the machine: the local
+bge-m3 model is broken. `/api/tags` lists it and `ollama list` shows 1.2 GB,
+but `/api/embed` returns HTTP 404 for both `bge-m3` and `bge-m3:latest`,
+`ollama show` errors, and the manifest is present while the blob store holds
+only 2 blobs. The manifest survived and the blobs are gone. Until `ollama pull
+bge-m3`, daijin cannot ingest on this box, and the wire-conformance test skips
+rather than running - its skip message names the cause in the engine's own
+words and lists the ten methods it did not check.
+
+KNOWN BOUNDS, stated rather than papered over. The integration half of
+wire_conformance checks nothing on this machine; the four newly promoted
+serveStatus paths are evidenced by a direct daemon probe, not by that test, and
+only start being enforced once Ollama is repaired. `_resolve` is
+presence-based, so `ollama.hint` cannot distinguish "the engine sends this
+field" from "sends it as null forever" - null is its documented healthy value,
+so no honest value assertion exists. `test/init-rerank-ab.test.js:243` asserts
+on wall-clock and flakes about 1 run in 5 under load; left untouched, since
+widening the margin would remove the point of the test.
+
+Nothing committed. All changes are in the working tree.
+
 ## 2026-08-23 01:10 - The fresh-install walkthrough: reset, relaunched, driven as a user
 
 The owner asked for a clean-machine pass: every attached repo detached, all

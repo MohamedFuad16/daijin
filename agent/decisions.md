@@ -1635,3 +1635,31 @@ it - partially self-guarded by the one-licence counter, which flags a second
 marked write. And any file NAMED spend-gate.js in the scan set is audited
 under owner rules, marker licence included; the scan set is the engine's own
 source tree, so a new file claiming that name is a reviewable event.
+
+## D-0079 (2026-08-30) The handover findings held: the paid embed loop and the NULL-first KNN slot
+
+Two cross-lane defects reported by the adapters worker at shutdown, both
+verified live before fixing.
+
+embedTexts (rag/embed.js): EMBEDDING_BATCH_SIZE=0 survived the || default -
+the string "0" is truthy - and never advanced the loop offset: an infinite
+loop of EMPTY requests against a possibly PAID embedding API. A non-numeric
+value became NaN and exited after one empty batch, silently returning no
+vectors. Refused at entry, naming the knob; same class as the adapter's
+batchSize guard (the same bug in two layers, fixed in both).
+
+semanticCandidates (store/sqlite.js): vec0 returns distance NULL for a stored
+zero-magnitude vector under cosine, and NULL sorts FIRST under ORDER BY ASC.
+Measured with k=2: the zero vector sat ABOVE an exact match at the top of the
+ANN pool and consumed a KNN slot, evicting a real neighbour. The query now
+excludes NULL distances; the over-fetch loop refills the evicted slot. The
+predicate is written `+v.distance IS NOT NULL` - the unary + is load-bearing,
+because SQLite otherwise flattens the predicate into the vec0 virtual table,
+which accepts only GT/GE/LT/LE on distance and throws.
+
+CORRECTION TO D-0076, dated here because decisions.md is append-only: that
+entry claimed the SQL sqlite.js inlines "already propagates NULL correctly".
+False for the ranking arm - propagating NULL into ORDER BY ASC ranks the row
+FIRST. The bounded-gap disposition was wrong and the gap is now closed. Both
+fixes carry regression tests proven live by reverting each fix and watching
+its test fail. Suite: 815 pass / 0 fail.

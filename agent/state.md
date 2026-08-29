@@ -1,5 +1,21 @@
 # Daijin build state (authoritative)
 
+## 2026-08-30 - Defects 45 and 46, from the adapters worker's handover; team closed
+
+The adapters worker's shutdown note named two cross-lane bugs it could not fix
+from its lane. Both verified live, both fixed, both pinned (D-0079): the
+env-reachable EMBEDDING_BATCH_SIZE=0 infinite loop of empty PAID requests in
+embedTexts, and the zero-magnitude vector whose NULL distance sorted FIRST in
+the ANN pool, outranking an exact match and evicting a real neighbour from its
+KNN slot. The second corrects D-0076's wrong claim that NULL propagation in
+that arm was harmless. Engine suite: 815 pass / 0 fail EXIT=0. Verified by:
+`cd engine && npm test > /tmp/e.txt 2>&1; echo EXIT=$?`.
+
+All five teammates (three sweep workers, two peer-test agents) shut down by
+owner request. Peer-to-peer teammate messaging proven live before closing
+(direct A->B->A round trip, verbatim payloads). Uncommitted: these two fixes
+and their tests, awaiting the owner's word.
+
 ## 2026-08-29 (later) - Environment repaired, the wire test enforces, and two more defects closed
 
 The owner authorized proceeding. `ollama pull bge-m3` repaired the
